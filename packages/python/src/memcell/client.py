@@ -99,7 +99,7 @@ def _normalize_statement_type(val: Any) -> StatementType:
     if not val:
         return "fact"
     s = str(val).lower()
-    if s in ("directive", "fact", "preference", "observation"):
+    if s in ("guard", "directive", "fact", "preference", "observation"):
         return s  # type: ignore
     if s in ("invariant", "reflex"):
         return "directive"
@@ -116,10 +116,12 @@ def _parse_statement_item(data: dict[str, Any]) -> StatementItem:
     status = data.get("status", "active")
     is_guard = data.get("isGuard")
     if is_guard is None:
-        is_guard = ("guard" in tags) or ("convention" in tags)
+        is_guard = (stat_type == "guard") or ("guard" in tags) or ("convention" in tags)
     is_invariant = data.get("isInvariant")
     if is_invariant is None:
-        is_invariant = (stat_type == "directive") or (kind == "invariant") or (status == "pinned")
+        is_invariant = (
+            (stat_type in ("guard", "directive")) or (kind == "invariant") or (status == "pinned")
+        )
 
     return StatementItem(
         id=str(data.get("id") or data.get("statementId") or ""),
@@ -255,6 +257,9 @@ def _parse_owner_usage(data: dict[str, Any]) -> OwnerUsage:
     reqs_data = quotas_data.get("apiRequests", {}) or quotas_data.get("api_requests", {})
 
     types_quota = StatementTypeQuotas(
+        guard=int(types_data["guard"])
+        if "guard" in types_data and types_data["guard"] is not None
+        else None,
         directive=int(types_data.get("directive", 0)),
         fact=int(types_data.get("fact", 0)),
         preference=int(types_data.get("preference", 0)),

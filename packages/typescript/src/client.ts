@@ -200,10 +200,13 @@ export class MemCell {
       metadata: s.metadata,
       isGuard:
         s.isGuard ??
-        (s.tags?.includes("guard") || s.tags?.includes("convention")),
+        (s.type === "guard" ||
+          s.tags?.includes("guard") ||
+          s.tags?.includes("convention")),
       isInvariant:
         s.isInvariant ??
-        (s.type === "directive" ||
+        (s.type === "guard" ||
+          s.type === "directive" ||
           s.kind === "invariant" ||
           s.status === "pinned"),
       expiresAt: s.expiresAt ?? null,

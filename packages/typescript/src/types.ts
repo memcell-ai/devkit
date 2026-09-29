@@ -1,4 +1,5 @@
-export type StatementType = "directive" | "fact" | "preference" | "observation";
+export type StatementType =
+  "guard" | "directive" | "fact" | "preference" | "observation";
 
 /**
  * @deprecated Use `StatementType` per Rule 12. Retained for backward compatibility.
@@ -676,6 +677,7 @@ export interface OwnerUsage {
       limit: number;
       percent: number;
       types: {
+        guard?: number;
         directive: number;
         fact: number;
         preference: number;

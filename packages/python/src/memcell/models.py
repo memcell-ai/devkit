@@ -5,9 +5,9 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field, field_validator
 
-StatementType = Literal["directive", "fact", "preference", "observation"]
+StatementType = Literal["guard", "directive", "fact", "preference", "observation"]
 MemoryKind = Literal[
-    "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
+    "guard", "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
 ]
 StatementStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
 MemoryStatus = StatementStatus
@@ -336,6 +336,7 @@ class OrgInvitationItem(BaseModel):
 
 
 class StatementTypeQuotas(BaseModel):
+    guard: int | None = None
     directive: int = 0
     fact: int = 0
     preference: int = 0
