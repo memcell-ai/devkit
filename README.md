@@ -1,82 +1,90 @@
-# MemCell Client SDKs
+<p align="center">
+  <img src="https://memcell.ai/icon.svg" width="56" alt="MemCell Logo" />
+</p>
 
-The official multi-language client libraries for [MemCell](https://memcell.io)—the persistent cognitive memory and reasoning substrate for autonomous AI coding agents.
+<h1 align="center">MemCell Client SDKs</h1>
 
-This repository is organized as a multi-package monorepo housing client libraries for:
+<p align="center">
+  <strong>The official multi-language client libraries for <a href="https://memcell.ai">MemCell</a>.</strong><br />
+  Persistent, adaptive memory and reasoning substrate for AI agents, workflows, and pipelines.
+</p>
 
-- **TypeScript / JavaScript**: [`@memcell/sdk`](./packages/typescript) (Node $\ge 18$, Bun, Deno, Edge runtimes)
-- **Python**: [`memcell`](./packages/python) (Python $\ge 3.10$, sync and async with `httpx`)
+<p align="center">
+  <a href="https://github.com/memcell-ai/sdk/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0" /></a>
+  <a href="https://memcell.ai/docs"><img src="https://img.shields.io/badge/docs-memcell.ai-blue" alt="Documentation" /></a>
+</p>
+
+This monorepo houses the official client libraries for MemCell:
+
+| Language                 | Package                                 | Target                           | Package Link                                                                                                           |
+| :----------------------- | :-------------------------------------- | :------------------------------- | :--------------------------------------------------------------------------------------------------------------------- |
+| **TypeScript / Node.js** | [`@memcell/sdk`](./packages/typescript) | Node $\ge 18$, Bun, Deno, Edge   | [![npm version](https://img.shields.io/npm/v/@memcell/sdk.svg?style=flat)](https://www.npmjs.com/package/@memcell/sdk) |
+| **Python**               | [`memcell`](./packages/python)          | Python $\ge 3.10$ (Sync & Async) | [![PyPI version](https://img.shields.io/pypi/v/memcell.svg?style=flat)](https://pypi.org/project/memcell)              |
 
 ---
 
-## Installation
+## Direct Start
 
-### TypeScript / Node.js
+### TypeScript / JavaScript
 
 ```bash
-# npm
 npm install @memcell/sdk
-
-# pnpm
-pnpm add @memcell/sdk
-
-# yarn
-yarn add @memcell/sdk
 ```
 
-### Python
-
-```bash
-# pip
-pip install memcell
-
-# uv
-uv add memcell
-
-# poetry
-poetry add memcell
-```
-
----
-
-## Quickstart
-
-### TypeScript
-
-```ts
+```typescript
 import { MemCell } from "@memcell/sdk";
 
-const memory = new MemCell({
-  auth: { apiKey: process.env.MEMCELL_API_KEY! },
+const memory = new MemCell({ apiKey: process.env.MEMCELL_API_KEY! });
+
+// Recall relevant statements before an agent acts:
+const { promptContext } = await memory.recall({
+  namespace: "acme/support",
+  query: "refund verification and escalation thresholds",
 });
 
-// Recall invariants and reflexes before an agent acts
-const recall = await memory.recall({
-  namespace: "my-org/my-project",
-  query: "production deployment procedure",
-});
-
-console.log(recall.promptContext);
-// Outputs XML/Markdown prompt context containing active invariants and reflexes
+console.log(promptContext);
 ```
 
 ### Python
 
+```bash
+pip install memcell
+```
+
 ```python
+import asyncio
 from memcell import AsyncMemCell
 
-async with AsyncMemCell(api_key="mc_live_...") as memory:
-    # Recall invariants and reflexes before an agent acts
-    recall = await memory.recall(
-        namespace="my-org/my-project",
-        query="production deployment procedure"
-    )
-    print(recall.prompt_context)
+async def main():
+    async with AsyncMemCell(api_key="mc_live_...") as memory:
+        # Recall relevant statements before an agent acts:
+        recall = await memory.recall(
+            namespace="acme/support",
+            query="refund verification and escalation thresholds",
+        )
+        print(recall.prompt_context)
+
+asyncio.run(main())
 ```
 
 ---
 
-## Monorepo Architecture
+## The Closed-Loop Execution Wrapper
+
+Both SDKs provide an automated execution wrapper (`wrapExecution` in TypeScript, `wrap_execution` in Python) that implements the complete agent learning cycle:
+
+1. **Pre-Flight Recall**: Automatically retrieves relevant statements and directives before agent execution.
+2. **In-Flight Context**: Injects verified context into the execution callback.
+3. **Post-Flight Reinforcement**: Automatically reports execution outcomes (`worked` on success, `failed` on error) to update Bayesian confidence scores—with zero manual prompt maintenance.
+
+For full examples, see:
+
+- [TypeScript SDK Guide](./packages/typescript/README.md)
+- [Python SDK Guide](./packages/python/README.md)
+
+---
+
+## Repository Structure
 
 ```
 sdk/
@@ -89,20 +97,20 @@ sdk/
 
 ---
 
-## Development & Contribution
+## Development & Testing
 
 ### Prerequisites
 
-- Node.js $\ge 20$ & pnpm $\ge 9$
+- Node.js $\ge 20$ & pnpm $\ge 10$
 - Python $\ge 3.10$ & pytest / uv
 
-### Local Setup
+### Running Local Tests
 
 ```bash
-# Install Node dependencies
+# Install root Node dependencies
 pnpm install
 
-# Run TypeScript tests & typecheck
+# Run TypeScript tests & type checking
 pnpm test:ts
 pnpm typecheck
 
@@ -116,4 +124,4 @@ cd packages/python && pytest
 
 ## License
 
-Apache-2.0 © [MemCell](https://memcell.io)
+Apache License 2.0. See [LICENSE](LICENSE) for details.

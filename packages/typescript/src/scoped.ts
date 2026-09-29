@@ -1,16 +1,37 @@
 import type {
+  AdoptStatementResponse,
+  AgentItem,
+  CollaboratorRole,
+  CreateAgentKeyResponse,
+  CreateAgentParams,
+  CreateStatementParams,
   FeedbackParams,
   FeedbackResponse,
+  InviteCollaboratorParams,
   JobEvent,
+  ListAgentsParams,
+  ListCollaboratorsParams,
+  ListCollaboratorsResponse,
+  ListStatementsParams,
+  PaginatedResult,
+  PendingInvitationItem,
+  PromoteStatementParams,
+  PromoteStatementResponse,
   RecallParams,
   RecallResponse,
   RememberParams,
   RememberResponse,
   ReportParams,
   ReportResponse,
+  ScopeItem,
   ScopeOptions,
   ScopedExecutionContext,
   ScopedExecutionResult,
+  StatementHistoryResponse,
+  StatementItem,
+  StatementStarResponse,
+  UpdateAgentParams,
+  UpdateStatementParams,
   WaitForJobOptions,
   WrapExecutionOptions,
 } from "./types.js";
@@ -19,6 +40,94 @@ import type { MemCell } from "./client.js";
 export class ScopedMemCell {
   readonly defaultSubject: string | null;
   readonly defaultFormat: "xml" | "markdown" | "none";
+
+  /**
+   * Scoped statement operations bound to this namespace.
+   */
+  readonly statements = {
+    list: (
+      params?: ListStatementsParams,
+    ): Promise<PaginatedResult<StatementItem>> =>
+      this.client.statements.list(this.namespace, params),
+    get: (statementId: string): Promise<StatementItem> =>
+      this.client.statements.get(this.namespace, statementId),
+    create: (params: CreateStatementParams): Promise<StatementItem> =>
+      this.client.statements.create(this.namespace, {
+        subject: this.defaultSubject ?? undefined,
+        ...params,
+      }),
+    update: (
+      statementId: string,
+      params: UpdateStatementParams,
+    ): Promise<StatementItem> =>
+      this.client.statements.update(this.namespace, statementId, params),
+    delete: (statementId: string): Promise<void> =>
+      this.client.statements.delete(this.namespace, statementId),
+    star: (
+      statementId: string,
+      starred = true,
+    ): Promise<StatementStarResponse> =>
+      this.client.statements.star(this.namespace, statementId, starred),
+    history: (statementId: string): Promise<StatementHistoryResponse> =>
+      this.client.statements.history(this.namespace, statementId),
+    adopt: (
+      statementId: string,
+      params: { targetProjectIds: string[] },
+    ): Promise<AdoptStatementResponse> =>
+      this.client.statements.adopt(this.namespace, statementId, params),
+    promote: (
+      statementId: string,
+      params?: PromoteStatementParams,
+    ): Promise<PromoteStatementResponse> =>
+      this.client.statements.promote(this.namespace, statementId, params),
+  };
+
+  /**
+   * Scoped agent operations bound to this namespace.
+   */
+  readonly agents = {
+    list: (params?: ListAgentsParams): Promise<PaginatedResult<AgentItem>> =>
+      this.client.agents.list(this.namespace, params),
+    get: (agentId: string): Promise<AgentItem> =>
+      this.client.agents.get(this.namespace, agentId),
+    create: (params: CreateAgentParams): Promise<AgentItem> =>
+      this.client.agents.create(this.namespace, params),
+    update: (agentId: string, params: UpdateAgentParams): Promise<AgentItem> =>
+      this.client.agents.update(this.namespace, agentId, params),
+    delete: (agentId: string): Promise<void> =>
+      this.client.agents.delete(this.namespace, agentId),
+    createKey: (agentId: string): Promise<CreateAgentKeyResponse["key"]> =>
+      this.client.agents.createKey(this.namespace, agentId),
+    revokeKey: (agentId: string, keyId: string): Promise<void> =>
+      this.client.agents.revokeKey(this.namespace, agentId, keyId),
+  };
+
+  /**
+   * Scoped collaborator operations bound to this namespace.
+   */
+  readonly collaborators = {
+    list: (
+      params?: ListCollaboratorsParams,
+    ): Promise<ListCollaboratorsResponse> =>
+      this.client.collaborators.list(this.namespace, params),
+    invite: (
+      params: InviteCollaboratorParams,
+    ): Promise<PendingInvitationItem> =>
+      this.client.collaborators.invite(this.namespace, params),
+    updateRole: (userId: string, role: CollaboratorRole): Promise<void> =>
+      this.client.collaborators.updateRole(this.namespace, userId, role),
+    remove: (userId: string): Promise<void> =>
+      this.client.collaborators.remove(this.namespace, userId),
+    revokeInvitation: (invitationId: string): Promise<void> =>
+      this.client.collaborators.revokeInvitation(this.namespace, invitationId),
+  };
+
+  /**
+   * Scopes registered within this project namespace.
+   */
+  readonly scopes = {
+    list: (): Promise<ScopeItem[]> => this.client.scopes.list(this.namespace),
+  };
 
   constructor(
     private readonly client: MemCell,
@@ -63,7 +172,7 @@ export class ScopedMemCell {
   }
 
   /**
-   * Post-flight execution reporting & dynamic reflex reinforcement.
+   * Post-flight execution reporting & dynamic reinforcement.
    */
   async report(
     params: Omit<ReportParams, "namespace">,
@@ -89,8 +198,8 @@ export class ScopedMemCell {
   }
 
   /**
-   * Automated execution wrapper implementing the complete Dynamic Agentic Loop:
-   * 1. Pre-Flight Recall: Queries relevant invariants and learned reflexes for the action.
+   * Automated execution wrapper implementing the complete Agentic Closed-Loop:
+   * 1. Pre-Flight Recall: Queries relevant statements (directives, facts, preferences) for the action.
    * 2. In-Flight Execution: Runs the agent callback with promptContext and statements.
    * 3. Post-Flight Reinforcement: Automatically reports outcome ('worked' on resolution, 'failed' on exception)
    *    and attributes feedback before re-throwing any error.
@@ -106,6 +215,7 @@ export class ScopedMemCell {
     // 1. Pre-Flight Recall
     const recallResult = await this.recall(options.action, {
       subject: targetSubject,
+      type: options.type,
       kind: options.kind,
       minConfidence: options.minConfidence,
       limit: options.limit,

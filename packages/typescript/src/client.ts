@@ -1,15 +1,21 @@
 import { AuthManager } from "./auth.js";
 import { ScopedMemCell } from "./scoped.js";
-import { OrganizationMemCell } from "./organization.js";
+import { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
+import { StatementsNamespace } from "./statements.js";
+import { ProjectsNamespace } from "./projects.js";
+import { AgentsNamespace } from "./agents.js";
+import { CollaboratorsNamespace } from "./collaborators.js";
+import { UsageNamespace } from "./usage.js";
+import { AccountNamespace } from "./account.js";
+import { ScopesNamespace } from "./scopes.js";
 import {
   MemCellError,
   RateLimitError,
-  type CreateOrganizationParams,
   type FeedbackParams,
   type FeedbackResponse,
   type JobEvent,
+  type MemCellAuth,
   type MemCellConfig,
-  type OrganizationItem,
   type RecallParams,
   type RecallResponse,
   type RememberParams,
@@ -28,51 +34,46 @@ export class MemCell {
   private readonly customFetch?: typeof fetch;
 
   /**
-   * Organization lifecycle management APIs.
+   * Statements collection and lifecycle operations.
    */
-  readonly organizations = {
-    /**
-     * Lists organizations the authenticated user belongs to.
-     */
-    list: async (): Promise<OrganizationItem[]> => {
-      const json = await this.request<{
-        ok: boolean;
-        organizations: OrganizationItem[];
-      }>("/api/v1/organizations", { method: "GET" });
-      return json.organizations || [];
-    },
+  readonly statements: StatementsNamespace;
 
-    /**
-     * Creates a new organization with the caller as owner.
-     */
-    create: async (
-      params: CreateOrganizationParams,
-    ): Promise<OrganizationItem> => {
-      const json = await this.request<{
-        ok: boolean;
-        organization: OrganizationItem;
-      }>("/api/v1/organizations", {
-        method: "POST",
-        body: JSON.stringify(params),
-      });
-      return json.organization;
-    },
+  /**
+   * Project management APIs.
+   */
+  readonly projects: ProjectsNamespace;
 
-    /**
-     * Fetches details of an organization by its slug handle.
-     */
-    get: async (slug: string): Promise<OrganizationItem> => {
-      const json = await this.request<{
-        ok: boolean;
-        organization: OrganizationItem;
-      }>(`/api/v1/organizations/${encodeURIComponent(slug)}`, {
-        method: "GET",
-      });
-      return json.organization;
-    },
-  };
+  /**
+   * Registered agents and keys APIs.
+   */
+  readonly agents: AgentsNamespace;
 
-  constructor(config: MemCellConfig) {
+  /**
+   * Project collaborators and invitation APIs.
+   */
+  readonly collaborators: CollaboratorsNamespace;
+
+  /**
+   * Organization lifecycle and membership APIs.
+   */
+  readonly organizations: OrganizationsNamespace;
+
+  /**
+   * Account & organization usage and telemetry APIs.
+   */
+  readonly usage: UsageNamespace;
+
+  /**
+   * Authenticated caller account and personal access token APIs.
+   */
+  readonly account: AccountNamespace;
+
+  /**
+   * Scopes listing APIs.
+   */
+  readonly scopes: ScopesNamespace;
+
+  constructor(config: MemCellConfig = {}) {
     let base = config.baseUrl;
     if (
       !base &&
@@ -84,11 +85,35 @@ export class MemCell {
     this.baseUrl = (base || "https://api.memcell.io").replace(/\/+$/, "");
     this.config = config;
     this.customFetch = config.fetch;
-    this.authManager = new AuthManager(
-      config.auth,
-      this.baseUrl,
-      this.customFetch,
-    );
+
+    let auth: MemCellAuth | undefined = config.auth;
+    if (!auth) {
+      if (config.apiKey) {
+        auth = { apiKey: config.apiKey };
+      } else if (config.accessToken) {
+        auth = { accessToken: config.accessToken };
+      } else if (
+        typeof process !== "undefined" &&
+        process.env?.MEMCELL_API_KEY
+      ) {
+        auth = { apiKey: process.env.MEMCELL_API_KEY };
+      } else {
+        throw new Error(
+          "MemCell authentication required. Provide apiKey, accessToken, or auth configuration.",
+        );
+      }
+    }
+
+    this.authManager = new AuthManager(auth, this.baseUrl, this.customFetch);
+
+    this.statements = new StatementsNamespace(this);
+    this.projects = new ProjectsNamespace(this);
+    this.agents = new AgentsNamespace(this);
+    this.collaborators = new CollaboratorsNamespace(this);
+    this.organizations = new OrganizationsNamespace(this);
+    this.usage = new UsageNamespace(this);
+    this.account = new AccountNamespace(this);
+    this.scopes = new ScopesNamespace(this);
   }
 
   /**
@@ -124,12 +149,16 @@ export class MemCell {
    */
   async recall(params: RecallParams): Promise<RecallResponse> {
     const path = this.resolveEndpoint(params.namespace, "recall");
+    const effectiveType = params.type ?? params.kind;
 
     const payload: Record<string, unknown> = {
       query: params.query,
       intent: params.query,
       subject: params.subject,
-      kind: params.kind,
+      type: effectiveType,
+      kind: effectiveType,
+      scope: params.scope,
+      scopes: params.scopes,
       min_confidence: params.minConfidence,
       limit: params.limit,
       tags: params.tags,
@@ -149,24 +178,37 @@ export class MemCell {
     const rawStatements: any[] = json.statements || json.results || [];
     const statements: StatementItem[] = rawStatements.map((s) => ({
       id: s.id || s.statementId,
+      rootId: s.rootId,
       title: s.title,
       context: s.context ?? null,
       example: s.example ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
-      kind: s.kind,
+      type: s.type || s.kind,
+      kind: s.kind || s.type,
       status: s.status,
       confidence: s.confidence,
       score: s.score,
       relevance: s.relevance,
       decayFactor: s.decayFactor,
+      stability: s.stability,
+      reinforcementCount: s.reinforcementCount,
+      isPinned: s.isPinned,
+      starred: s.starred,
+      starCount: s.starCount,
+      scope: s.scope,
+      metadata: s.metadata,
       isGuard:
         s.isGuard ??
         (s.tags?.includes("guard") || s.tags?.includes("convention")),
       isInvariant:
-        s.isInvariant ?? (s.kind === "invariant" || s.status === "pinned"),
+        s.isInvariant ??
+        (s.type === "directive" ||
+          s.kind === "invariant" ||
+          s.status === "pinned"),
       expiresAt: s.expiresAt ?? null,
       createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
     }));
 
     return {
@@ -184,6 +226,7 @@ export class MemCell {
    */
   async remember(params: RememberParams): Promise<RememberResponse> {
     const path = this.resolveEndpoint(params.namespace, "remember");
+    const effectiveType = params.type ?? params.kind;
 
     const payload: Record<string, unknown> = {
       title: params.title,
@@ -191,9 +234,12 @@ export class MemCell {
       example: params.example,
       tags: params.tags,
       subject: params.subject,
-      kind: params.kind,
+      type: effectiveType,
+      kind: effectiveType,
       status: params.status,
       confidence: params.confidence,
+      scope: params.scope,
+      metadata: params.metadata,
       expires_at:
         params.expiresAt instanceof Date
           ? params.expiresAt.toISOString()
@@ -230,9 +276,12 @@ export class MemCell {
       example: s.example ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
-      kind: s.kind,
+      type: s.type || s.kind,
+      kind: s.kind || s.type,
       status: s.status,
       confidence: s.confidence,
+      scope: s.scope,
+      metadata: s.metadata,
       expiresAt: s.expiresAt ?? null,
     }));
 
@@ -290,7 +339,8 @@ export class MemCell {
         ? {
             id: json.distilledStatement.id,
             title: json.distilledStatement.title,
-            kind: json.distilledStatement.kind,
+            type: json.distilledStatement.type || json.distilledStatement.kind,
+            kind: json.distilledStatement.kind || json.distilledStatement.type,
             status: json.distilledStatement.status,
             confidence: json.distilledStatement.confidence,
             subject: json.distilledStatement.subject,
@@ -302,14 +352,6 @@ export class MemCell {
 
   /**
    * Waits for a background job to complete, streaming progress milestones.
-   *
-   * @example
-   * ```ts
-   * const res = await memory.remember({ raw: "...transcript...", async: true });
-   * const final = await memory.waitForJob(res.jobId!, {
-   *   onProgress: (e) => handleProgress(e.step, e.progress, e.message),
-   * });
-   * ```
    */
   async waitForJob(
     jobId: string,
@@ -465,7 +507,7 @@ export class MemCell {
   /**
    * Internal HTTP request handler adding authentication, rate limit resilience, and error parsing.
    */
-  private async request<T>(path: string, init: RequestInit): Promise<T> {
+  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const fetcher = this.customFetch ?? fetch;
     const maxRetries = this.config.maxRetries ?? 3;
     const initialDelay = this.config.initialRetryDelayMs ?? 1000;
@@ -581,8 +623,12 @@ export class MemCell {
     action: "recall" | "remember" | "report" | "feedback",
   ): string {
     if (namespace && namespace.includes("/")) {
-      const [owner, project] = namespace.split("/");
-      return `/api/v1/${owner}/${project}/${action}`;
+      const parts = namespace.split("/");
+      const owner = parts[0];
+      const project = parts[1];
+      if (owner && project) {
+        return `/api/v1/${encodeURIComponent(owner)}/${encodeURIComponent(project)}/${action}`;
+      }
     }
     return `/api/v1/${action}`;
   }

@@ -569,5 +569,904 @@ describe("MemCell SDK (cli package export)", () => {
       expect(memError.code).toBe("unauthorized");
       expect(memError.message).toContain("Invalid API key provided");
     });
+
+    it("initializes with direct apiKey and baseUrl without auth wrapper", async () => {
+      const mockFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({ recallId: "r1", promptContext: "", statements: [] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
+
+      const memcell = new MemCell({
+        apiKey: "mc_direct_123",
+        fetch: mockFetch as any,
+      });
+
+      await memcell.recall({ query: "test" });
+      const authHeader = await memcell.authManager.getAuthorizationHeader();
+      expect(authHeader).toBe("Bearer mc_direct_123");
+    });
+
+    describe("Statements Resource", () => {
+      it("lists statements with pagination and filters", async () => {
+        const mockFetch = vi.fn(async (url: string | URL | Request) => {
+          const u = String(url);
+          expect(u).toContain("/api/v1/acme/backend/statements?");
+          expect(u).toContain("page=2");
+          expect(u).toContain("per_page=15");
+          expect(u).toContain("type=directive");
+          return new Response(
+            JSON.stringify({
+              statements: [
+                {
+                  id: "stmt_1",
+                  title: "Direct connection pool setup",
+                  type: "directive",
+                  status: "active",
+                },
+              ],
+              pagination: { page: 2, perPage: 15, total: 25, hasMore: false },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        });
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const res = await memcell.statements.list("acme/backend", {
+          page: 2,
+          perPage: 15,
+          type: "directive",
+        });
+
+        expect(res.items).toHaveLength(1);
+        expect(res.items[0]!.id).toBe("stmt_1");
+        expect(res.pagination.total).toBe(25);
+      });
+
+      it("creates, retrieves, updates, and deletes statements", async () => {
+        const recorded: Array<{ method: string; url: string; body?: unknown }> =
+          [];
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const method = init?.method || "GET";
+            const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+            recorded.push({ method, url: String(url), body });
+
+            if (method === "POST" && String(url).endsWith("/statements")) {
+              return new Response(
+                JSON.stringify({
+                  statement: {
+                    id: "stmt_new",
+                    title: body.title,
+                    type: body.type,
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              method === "GET" &&
+              String(url).endsWith("/statements/stmt_new")
+            ) {
+              return new Response(
+                JSON.stringify({
+                  statement: {
+                    id: "stmt_new",
+                    title: "Existing",
+                    type: "directive",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              method === "PATCH" &&
+              String(url).endsWith("/statements/stmt_new")
+            ) {
+              return new Response(
+                JSON.stringify({
+                  statement: {
+                    id: "stmt_new",
+                    title: body.title,
+                    type: "directive",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              method === "DELETE" &&
+              String(url).endsWith("/statements/stmt_new")
+            ) {
+              return new Response(
+                JSON.stringify({ ok: true, statementId: "stmt_new" }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const created = await memcell.statements.create("acme/backend", {
+          title: "Statement A",
+          type: "directive",
+        });
+        expect(created.id).toBe("stmt_new");
+
+        const fetched = await memcell.statements.get(
+          "acme/backend",
+          "stmt_new",
+        );
+        expect(fetched.title).toBe("Existing");
+
+        const updated = await memcell.statements.update(
+          "acme/backend",
+          "stmt_new",
+          {
+            title: "Updated Title",
+          },
+        );
+        expect(updated.title).toBe("Updated Title");
+
+        await memcell.statements.delete("acme/backend", "stmt_new");
+        expect(recorded.find((r) => r.method === "DELETE")).toBeDefined();
+      });
+
+      it("handles stars, history, adopt, and promote", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (u.endsWith("/star") && method === "PUT") {
+              return new Response(
+                JSON.stringify({
+                  rootId: "root_1",
+                  starred: true,
+                  starCount: 1,
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/history")) {
+              return new Response(
+                JSON.stringify({
+                  rootId: "root_1",
+                  totalVersions: 2,
+                  history: [
+                    {
+                      id: "stmt_v2",
+                      rootId: "root_1",
+                      version: 2,
+                      title: "V2",
+                    },
+                    {
+                      id: "stmt_v1",
+                      rootId: "root_1",
+                      version: 1,
+                      title: "V1",
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/adopt") && method === "POST") {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  sourceStatementId: "stmt_1",
+                  adopted: [
+                    {
+                      projectId: "p2",
+                      statementId: "stmt_2",
+                      alreadyExisted: false,
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/promote") && method === "POST") {
+              return new Response(
+                JSON.stringify({
+                  promoted: true,
+                  statement: {
+                    id: "stmt_1",
+                    title: "Promoted",
+                    status: "active",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const starRes = await memcell.statements.star(
+          "acme/backend",
+          "stmt_1",
+          true,
+        );
+        expect(starRes.starred).toBe(true);
+
+        const historyRes = await memcell.statements.history(
+          "acme/backend",
+          "stmt_1",
+        );
+        expect(historyRes.history).toHaveLength(2);
+
+        const adoptRes = await memcell.statements.adopt(
+          "acme/backend",
+          "stmt_1",
+          {
+            targetProjectIds: ["p2"],
+          },
+        );
+        expect(adoptRes.adopted[0]!.statementId).toBe("stmt_2");
+
+        const promoteRes = await memcell.statements.promote(
+          "acme/backend",
+          "stmt_1",
+          {
+            toScope: "common",
+          },
+        );
+        expect(promoteRes.promoted).toBe(true);
+      });
+    });
+
+    describe("Projects Resource", () => {
+      it("lists caller projects and owner projects with pagination", async () => {
+        const mockFetch = vi.fn(async (url: string | URL | Request) => {
+          const u = String(url);
+          if (u.includes("/api/v1/projects?")) {
+            return new Response(
+              JSON.stringify({
+                projects: [
+                  {
+                    id: "p1",
+                    name: "Core",
+                    slug: "core",
+                    visibility: "public",
+                  },
+                ],
+                pagination: { page: 1, perPage: 30, total: 1, hasMore: false },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          if (u.includes("/api/v1/acme/projects?")) {
+            return new Response(
+              JSON.stringify({
+                owner: "acme",
+                projects: [
+                  {
+                    id: "p2",
+                    name: "Backend",
+                    slug: "backend",
+                    visibility: "private",
+                  },
+                ],
+                pagination: { page: 1, perPage: 10, total: 1, hasMore: false },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          return new Response("Not Found", { status: 404 });
+        });
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const callerProjects = await memcell.projects.list({
+          page: 1,
+          perPage: 30,
+        });
+        expect(callerProjects.items[0]!.slug).toBe("core");
+
+        const ownerProjects = await memcell.projects.listForOwner("acme", {
+          page: 1,
+          perPage: 10,
+        });
+        expect(ownerProjects.items[0]!.slug).toBe("backend");
+      });
+
+      it("creates, gets, updates, deletes, and transfers projects", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (u.endsWith("/api/v1/projects") && method === "POST") {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  project: {
+                    id: "p_new",
+                    name: "New Project",
+                    slug: "new-project",
+                    visibility: "private",
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/api/v1/acme/backend") && method === "GET") {
+              return new Response(
+                JSON.stringify({
+                  project: {
+                    id: "p1",
+                    name: "Backend",
+                    slug: "backend",
+                    visibility: "private",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/api/v1/acme/backend") && method === "PATCH") {
+              return new Response(
+                JSON.stringify({
+                  project: {
+                    id: "p1",
+                    name: "Backend V2",
+                    slug: "backend",
+                    visibility: "public",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/api/v1/acme/backend") && method === "DELETE") {
+              return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/transfer") &&
+              method === "POST"
+            ) {
+              return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const created = await memcell.projects.create({ name: "New Project" });
+        expect(created.id).toBe("p_new");
+
+        const got = await memcell.projects.get("acme/backend");
+        expect(got.name).toBe("Backend");
+
+        const updated = await memcell.projects.update("acme/backend", {
+          name: "Backend V2",
+        });
+        expect(updated.name).toBe("Backend V2");
+
+        await memcell.projects.delete("acme/backend");
+        await memcell.projects.transfer("acme/backend", {
+          targetOwner: "new-owner",
+        });
+      });
+    });
+
+    describe("Agents Resource", () => {
+      it("lists, creates, updates, and manages agent keys", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (
+              u.includes("/api/v1/acme/backend/agents") &&
+              !u.includes("/keys") &&
+              method === "GET"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  agents: [
+                    {
+                      id: "ag_1",
+                      name: "Agent Alpha",
+                      slug: "agent-alpha",
+                      status: "active",
+                    },
+                  ],
+                  pagination: {
+                    page: 1,
+                    perPage: 30,
+                    total: 1,
+                    hasMore: false,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/agents") &&
+              method === "POST"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  agent: {
+                    id: "ag_2",
+                    name: "Agent Beta",
+                    slug: "agent-beta",
+                    status: "active",
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/agents/ag_1/keys") &&
+              method === "POST"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  key: {
+                    id: "k_1",
+                    key: "mc_ag_secret",
+                    preview: "mc_ag_123...",
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/agents/ag_1/keys/k_1") &&
+              method === "DELETE"
+            ) {
+              return new Response(JSON.stringify({ revoked: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const list = await memcell.agents.list("acme/backend");
+        expect(list.items).toHaveLength(1);
+
+        const created = await memcell.agents.create("acme/backend", {
+          name: "Agent Beta",
+        });
+        expect(created.id).toBe("ag_2");
+
+        const key = await memcell.agents.createKey("acme/backend", "ag_1");
+        expect(key.key).toBe("mc_ag_secret");
+
+        await memcell.agents.revokeKey("acme/backend", "ag_1", "k_1");
+      });
+    });
+
+    describe("Collaborators Resource", () => {
+      it("lists, invites, updates role, and removes collaborators", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (
+              u.includes("/api/v1/acme/backend/collaborators") &&
+              method === "GET"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  collaborators: [
+                    {
+                      id: "c1",
+                      userId: "u1",
+                      name: "Alice",
+                      role: "write",
+                      source: "direct",
+                      inherited: false,
+                    },
+                  ],
+                  pendingInvitations: [],
+                  pagination: {
+                    page: 1,
+                    perPage: 30,
+                    total: 1,
+                    hasMore: false,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/collaborators") &&
+              method === "POST"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  invitation: {
+                    id: "inv_1",
+                    email: "bob@acme.com",
+                    role: "read",
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/collaborators/u1") &&
+              method === "PATCH"
+            ) {
+              return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            if (
+              u.endsWith("/api/v1/acme/backend/collaborators/u1") &&
+              method === "DELETE"
+            ) {
+              return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const list = await memcell.collaborators.list("acme/backend");
+        expect(list.collaborators).toHaveLength(1);
+
+        const invite = await memcell.collaborators.invite("acme/backend", {
+          identifier: "bob@acme.com",
+          role: "read",
+        });
+        expect(invite.id).toBe("inv_1");
+
+        await memcell.collaborators.updateRole("acme/backend", "u1", "admin");
+        await memcell.collaborators.remove("acme/backend", "u1");
+      });
+    });
+
+    describe("Organizations Expanded Resource", () => {
+      it("manages members and invitations", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (
+              u.includes("/api/v1/organizations/acme/members") &&
+              method === "GET"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  members: [
+                    { id: "m1", userId: "u1", name: "Alice", role: "owner" },
+                  ],
+                  pagination: {
+                    page: 1,
+                    perPage: 30,
+                    total: 1,
+                    hasMore: false,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/organizations/acme/invitations") &&
+              method === "GET"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  invitations: [
+                    { id: "inv_1", email: "charlie@acme.com", role: "member" },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const members = await memcell.organizations.listMembers("acme");
+        expect(members.items).toHaveLength(1);
+
+        const invitations = await memcell.organizations.listInvitations("acme");
+        expect(invitations).toHaveLength(1);
+      });
+    });
+
+    describe("Usage Resource", () => {
+      it("retrieves usage with canonical statement type quotas", async () => {
+        const mockFetch = vi.fn(async (url: string | URL | Request) => {
+          expect(String(url)).toContain("/api/v1/acme/usage?timeframe=30d");
+          return new Response(
+            JSON.stringify({
+              owner: { type: "org", slug: "acme", name: "Acme Corp" },
+              timeframe: "30d",
+              quotas: {
+                statements: {
+                  total: 100,
+                  limit: 1000,
+                  percent: 10,
+                  types: {
+                    directive: 40,
+                    fact: 30,
+                    preference: 20,
+                    observation: 10,
+                    provisional: 5,
+                  },
+                },
+                apiRequests: {
+                  total: 500,
+                  limit: 10000,
+                  percent: 5,
+                  windowDays: 30,
+                },
+              },
+              rateLimits: {
+                tier: "pro",
+                recallRpm: 600,
+                rememberRpm: 300,
+                defaultRpm: 300,
+                concurrentLimit: 20,
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        });
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const usage = await memcell.usage.get("acme", { timeframe: "30d" });
+        expect(usage.quotas.statements.types.directive).toBe(40);
+        expect(usage.quotas.statements.types.fact).toBe(30);
+      });
+    });
+
+    describe("Account Resource", () => {
+      it("retrieves profile, updates profile, and manages personal tokens", async () => {
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method || "GET";
+
+            if (u.endsWith("/api/v1/account/profile") && method === "GET") {
+              return new Response(
+                JSON.stringify({
+                  profile: {
+                    id: "u1",
+                    email: "user@test.com",
+                    name: "User One",
+                    role: "member",
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/api/v1/account/tokens") && method === "GET") {
+              return new Response(
+                JSON.stringify({
+                  tokens: [
+                    {
+                      id: "tok_1",
+                      name: "CLI Token",
+                      preview: "mc_pat_123...",
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (u.endsWith("/api/v1/account/tokens") && method === "POST") {
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  token: {
+                    id: "tok_2",
+                    name: "New Token",
+                    token: "mc_pat_secret",
+                    preview: "mc_pat_456...",
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            if (
+              u.endsWith("/api/v1/account/tokens/tok_1") &&
+              method === "DELETE"
+            ) {
+              return new Response(JSON.stringify({ success: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const profile = await memcell.account.get();
+        expect(profile.email).toBe("user@test.com");
+
+        const tokens = await memcell.account.tokens.list();
+        expect(tokens).toHaveLength(1);
+
+        const created = await memcell.account.tokens.create({
+          name: "New Token",
+        });
+        expect(created.token).toBe("mc_pat_secret");
+
+        await memcell.account.tokens.revoke("tok_1");
+      });
+    });
+
+    describe("ScopedMemCell Bound Namespaces", () => {
+      it("invokes statements, agents, collaborators, and scopes with bound namespace", async () => {
+        const calls: string[] = [];
+        const mockFetch = vi.fn(async (url: string | URL | Request) => {
+          const u = String(url);
+          calls.push(u);
+
+          if (u.includes("/statements")) {
+            return new Response(
+              JSON.stringify({
+                statements: [],
+                pagination: { page: 1, perPage: 30, total: 0, hasMore: false },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          if (u.includes("/agents")) {
+            return new Response(
+              JSON.stringify({
+                agents: [],
+                pagination: { page: 1, perPage: 30, total: 0, hasMore: false },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          if (u.includes("/collaborators")) {
+            return new Response(
+              JSON.stringify({
+                collaborators: [],
+                pendingInvitations: [],
+                pagination: { page: 1, perPage: 30, total: 0, hasMore: false },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          if (u.includes("/scopes")) {
+            return new Response(
+              JSON.stringify({ scopes: [{ name: "common", count: 5 }] }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          return new Response("Not Found", { status: 404 });
+        });
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const scoped = memcell.scope("acme/backend");
+
+        await scoped.statements.list();
+        await scoped.agents.list();
+        await scoped.collaborators.list();
+        const scopes = await scoped.scopes.list();
+
+        expect(scopes[0]!.name).toBe("common");
+        expect(calls.every((c) => c.includes("/acme/backend/"))).toBe(true);
+      });
+    });
   });
 });

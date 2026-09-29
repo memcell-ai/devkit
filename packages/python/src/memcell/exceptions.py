@@ -10,10 +10,12 @@ class MemCellError(Exception):
         status: int = 0,
         code: str | None = None,
         details: Any | None = None,
+        status_code: int | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
-        self.status = status
+        self.status = status_code if status_code is not None else status
+        self.status_code = self.status
         self.code = code
         self.details = details
 

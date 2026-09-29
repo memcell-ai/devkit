@@ -1,17 +1,31 @@
+from __future__ import annotations
+
 import contextlib
+import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
 from .models import (
+    AdoptStatementResponse,
+    AgentItem,
+    CreateAgentKeyResult,
     FeedbackResponse,
     JobEvent,
+    ListCollaboratorsResponse,
     OutcomeVerdict,
+    PaginatedResult,
+    PendingInvitationItem,
+    PromoteStatementResponse,
     RecallResponse,
     RememberResponse,
     ReportResponse,
     ScopedExecutionContext,
+    ScopeItem,
+    StatementHistoryResponse,
+    StatementItem,
+    StatementStarResponse,
 )
 
 T = TypeVar("T")
@@ -23,6 +37,204 @@ class ScopedExecutionResult(BaseModel, Generic[T]):
     result: T
     report: ReportResponse
     recall: RecallResponse
+
+
+class _ScopedStatementsSync:
+    def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
+        self._client = client
+        self._namespace = namespace
+        self._default_subject = default_subject
+
+    def list(self, **kwargs: Any) -> PaginatedResult[StatementItem]:
+        return self._client.statements.list(self._namespace, **kwargs)
+
+    def get(self, statement_id: str) -> StatementItem:
+        return self._client.statements.get(self._namespace, statement_id)
+
+    def create(self, title: str, **kwargs: Any) -> StatementItem:
+        if "subject" not in kwargs or kwargs["subject"] is None:
+            kwargs["subject"] = self._default_subject
+        return self._client.statements.create(self._namespace, title, **kwargs)
+
+    def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
+        return self._client.statements.update(self._namespace, statement_id, **kwargs)
+
+    def delete(self, statement_id: str) -> None:
+        self._client.statements.delete(self._namespace, statement_id)
+
+    def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
+        return self._client.statements.star(self._namespace, statement_id, starred=starred)
+
+    def history(self, statement_id: str) -> StatementHistoryResponse:
+        return self._client.statements.history(self._namespace, statement_id)
+
+    def adopt(self, statement_id: str, target_project_ids: list[str]) -> AdoptStatementResponse:
+        return self._client.statements.adopt(self._namespace, statement_id, target_project_ids)
+
+    def promote(
+        self, statement_id: str, to_scope: str = "common", reason: str | None = None
+    ) -> PromoteStatementResponse:
+        return self._client.statements.promote(
+            self._namespace, statement_id, to_scope=to_scope, reason=reason
+        )
+
+
+class _ScopedAgentsSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(self, **kwargs: Any) -> PaginatedResult[AgentItem]:
+        return self._client.agents.list(self._namespace, **kwargs)
+
+    def get(self, agent_id: str) -> AgentItem:
+        return self._client.agents.get(self._namespace, agent_id)
+
+    def create(self, name: str, **kwargs: Any) -> AgentItem:
+        return self._client.agents.create(self._namespace, name, **kwargs)
+
+    def update(self, agent_id: str, **kwargs: Any) -> AgentItem:
+        return self._client.agents.update(self._namespace, agent_id, **kwargs)
+
+    def delete(self, agent_id: str) -> None:
+        self._client.agents.delete(self._namespace, agent_id)
+
+    def create_key(self, agent_id: str) -> CreateAgentKeyResult:
+        return self._client.agents.create_key(self._namespace, agent_id)
+
+    def revoke_key(self, agent_id: str, key_id: str) -> None:
+        self._client.agents.revoke_key(self._namespace, agent_id, key_id)
+
+
+class _ScopedCollaboratorsSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(self, **kwargs: Any) -> ListCollaboratorsResponse:
+        return self._client.collaborators.list(self._namespace, **kwargs)
+
+    def invite(self, identifier: str, role: str = "read") -> PendingInvitationItem:
+        return self._client.collaborators.invite(self._namespace, identifier, role=role)
+
+    def update_role(self, user_id: str, role: str) -> None:
+        self._client.collaborators.update_role(self._namespace, user_id, role)
+
+    def remove(self, user_id: str) -> None:
+        self._client.collaborators.remove(self._namespace, user_id)
+
+    def revoke_invitation(self, invitation_id: str) -> None:
+        self._client.collaborators.revoke_invitation(self._namespace, invitation_id)
+
+
+class _ScopedScopesSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(self) -> list[ScopeItem]:
+        return self._client.scopes.list(self._namespace)
+
+
+class _ScopedStatementsAsync:
+    def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
+        self._client = client
+        self._namespace = namespace
+        self._default_subject = default_subject
+
+    async def list(self, **kwargs: Any) -> PaginatedResult[StatementItem]:
+        return await self._client.statements.list(self._namespace, **kwargs)
+
+    async def get(self, statement_id: str) -> StatementItem:
+        return await self._client.statements.get(self._namespace, statement_id)
+
+    async def create(self, title: str, **kwargs: Any) -> StatementItem:
+        if "subject" not in kwargs or kwargs["subject"] is None:
+            kwargs["subject"] = self._default_subject
+        return await self._client.statements.create(self._namespace, title, **kwargs)
+
+    async def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
+        return await self._client.statements.update(self._namespace, statement_id, **kwargs)
+
+    async def delete(self, statement_id: str) -> None:
+        await self._client.statements.delete(self._namespace, statement_id)
+
+    async def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
+        return await self._client.statements.star(self._namespace, statement_id, starred=starred)
+
+    async def history(self, statement_id: str) -> StatementHistoryResponse:
+        return await self._client.statements.history(self._namespace, statement_id)
+
+    async def adopt(
+        self, statement_id: str, target_project_ids: list[str]
+    ) -> AdoptStatementResponse:
+        return await self._client.statements.adopt(
+            self._namespace, statement_id, target_project_ids
+        )
+
+    async def promote(
+        self, statement_id: str, to_scope: str = "common", reason: str | None = None
+    ) -> PromoteStatementResponse:
+        return await self._client.statements.promote(
+            self._namespace, statement_id, to_scope=to_scope, reason=reason
+        )
+
+
+class _ScopedAgentsAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(self, **kwargs: Any) -> PaginatedResult[AgentItem]:
+        return await self._client.agents.list(self._namespace, **kwargs)
+
+    async def get(self, agent_id: str) -> AgentItem:
+        return await self._client.agents.get(self._namespace, agent_id)
+
+    async def create(self, name: str, **kwargs: Any) -> AgentItem:
+        return await self._client.agents.create(self._namespace, name, **kwargs)
+
+    async def update(self, agent_id: str, **kwargs: Any) -> AgentItem:
+        return await self._client.agents.update(self._namespace, agent_id, **kwargs)
+
+    async def delete(self, agent_id: str) -> None:
+        await self._client.agents.delete(self._namespace, agent_id)
+
+    async def create_key(self, agent_id: str) -> CreateAgentKeyResult:
+        return await self._client.agents.create_key(self._namespace, agent_id)
+
+    async def revoke_key(self, agent_id: str, key_id: str) -> None:
+        await self._client.agents.revoke_key(self._namespace, agent_id, key_id)
+
+
+class _ScopedCollaboratorsAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(self, **kwargs: Any) -> ListCollaboratorsResponse:
+        return await self._client.collaborators.list(self._namespace, **kwargs)
+
+    async def invite(self, identifier: str, role: str = "read") -> PendingInvitationItem:
+        return await self._client.collaborators.invite(self._namespace, identifier, role=role)
+
+    async def update_role(self, user_id: str, role: str) -> None:
+        await self._client.collaborators.update_role(self._namespace, user_id, role)
+
+    async def remove(self, user_id: str) -> None:
+        await self._client.collaborators.remove(self._namespace, user_id)
+
+    async def revoke_invitation(self, invitation_id: str) -> None:
+        await self._client.collaborators.revoke_invitation(self._namespace, invitation_id)
+
+
+class _ScopedScopesAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(self) -> list[ScopeItem]:
+        return await self._client.scopes.list(self._namespace)
 
 
 class ScopedMemCell:
@@ -38,10 +250,16 @@ class ScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
+        self.statements = _ScopedStatementsSync(client, namespace, subject)
+        self.agents = _ScopedAgentsSync(client, namespace)
+        self.collaborators = _ScopedCollaboratorsSync(client, namespace)
+        self.scopes = _ScopedScopesSync(client, namespace)
+
     def recall(
         self,
         query: str,
         subject: str | None = None,
+        type: str | list[str] | None = None,
         kind: str | list[str] | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
@@ -53,6 +271,7 @@ class ScopedMemCell:
             query=query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
+            type=type,
             kind=kind,
             min_confidence=min_confidence,
             limit=limit,
@@ -68,9 +287,12 @@ class ScopedMemCell:
         example: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
+        type: str | None = None,
         kind: str | None = None,
         status: str | None = None,
         confidence: float | None = None,
+        scope: str | None = None,
+        metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
         session_id: str | None = None,
@@ -82,9 +304,12 @@ class ScopedMemCell:
             example=example,
             tags=tags,
             subject=subject or self.default_subject,
+            type=type,
             kind=kind,
             status=status,
             confidence=confidence,
+            scope=scope,
+            metadata=metadata,
             expires_at=expires_at,
             raw=raw,
             session_id=session_id,
@@ -108,29 +333,29 @@ class ScopedMemCell:
         return self._client.report(
             action_taken=action_taken,
             outcome=outcome,
-            namespace=self.namespace,
             subject=subject or self.default_subject,
             reason=reason,
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
             statement_id=statement_id,
+            namespace=self.namespace,
             auto_distill=auto_distill,
             async_=async_,
         )
 
     def feedback(
         self,
-        statement_id: str,
         outcome: OutcomeVerdict,
+        statement_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> FeedbackResponse:
         return self._client.feedback(
-            statement_id=statement_id,
             outcome=outcome,
+            statement_id=statement_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,
@@ -209,10 +434,16 @@ class AsyncScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
+        self.statements = _ScopedStatementsAsync(client, namespace, subject)
+        self.agents = _ScopedAgentsAsync(client, namespace)
+        self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
+        self.scopes = _ScopedScopesAsync(client, namespace)
+
     async def recall(
         self,
         query: str,
         subject: str | None = None,
+        type: str | list[str] | None = None,
         kind: str | list[str] | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
@@ -224,6 +455,7 @@ class AsyncScopedMemCell:
             query=query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
+            type=type,
             kind=kind,
             min_confidence=min_confidence,
             limit=limit,
@@ -239,9 +471,12 @@ class AsyncScopedMemCell:
         example: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
+        type: str | None = None,
         kind: str | None = None,
         status: str | None = None,
         confidence: float | None = None,
+        scope: str | None = None,
+        metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
         session_id: str | None = None,
@@ -253,9 +488,12 @@ class AsyncScopedMemCell:
             example=example,
             tags=tags,
             subject=subject or self.default_subject,
+            type=type,
             kind=kind,
             status=status,
             confidence=confidence,
+            scope=scope,
+            metadata=metadata,
             expires_at=expires_at,
             raw=raw,
             session_id=session_id,
@@ -279,29 +517,29 @@ class AsyncScopedMemCell:
         return await self._client.report(
             action_taken=action_taken,
             outcome=outcome,
-            namespace=self.namespace,
             subject=subject or self.default_subject,
             reason=reason,
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
             statement_id=statement_id,
+            namespace=self.namespace,
             auto_distill=auto_distill,
             async_=async_,
         )
 
     async def feedback(
         self,
-        statement_id: str,
         outcome: OutcomeVerdict,
+        statement_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> FeedbackResponse:
         return await self._client.feedback(
-            statement_id=statement_id,
             outcome=outcome,
+            statement_id=statement_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,
@@ -326,7 +564,7 @@ class AsyncScopedMemCell:
     async def wrap_execution(
         self,
         action: str,
-        fn: Callable[[ScopedExecutionContext], T | Awaitable[T]],
+        fn: Callable[[ScopedExecutionContext], Awaitable[T] | T],
         subject: str | None = None,
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
@@ -343,12 +581,11 @@ class AsyncScopedMemCell:
         )
 
         try:
-            res = fn(context)
-            if hasattr(res, "__await__"):
-                result = await res  # type: ignore
+            fn_res = fn(context)
+            if inspect.isawaitable(fn_res):
+                result = await fn_res
             else:
-                result = res  # type: ignore
-
+                result = fn_res
             report = await self.report(
                 action_taken=action,
                 outcome="worked",

@@ -1,6 +1,18 @@
-export type MemoryKind = "invariant" | "reflex" | "episodic";
-export type MemoryStatus =
+export type StatementType = "directive" | "fact" | "preference" | "observation";
+
+/**
+ * @deprecated Use `StatementType` per Rule 12. Retained for backward compatibility.
+ */
+export type MemoryKind = StatementType | "invariant" | "reflex" | "episodic";
+
+export type StatementStatus =
   "provisional" | "active" | "pinned" | "decayed" | "refuted";
+
+/**
+ * @deprecated Use `StatementStatus`. Retained for backward compatibility.
+ */
+export type MemoryStatus = StatementStatus;
+
 export type OutcomeVerdict = "worked" | "failed" | "avoided";
 
 export type MemCellAuth =
@@ -59,7 +71,9 @@ export class RateLimitError extends MemCellError {
 }
 
 export interface MemCellConfig {
-  auth: MemCellAuth;
+  auth?: MemCellAuth;
+  apiKey?: string;
+  accessToken?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
   maxRetries?: number;
@@ -68,30 +82,183 @@ export interface MemCellConfig {
   onRateLimitWarning?: (warning: string, response: Response) => void;
 }
 
+// ─── Standard Pagination Types ───
+
+export interface PaginationParams {
+  page?: number;
+  perPage?: number;
+}
+
+export interface PaginationMetadata {
+  page: number;
+  perPage: number;
+  total: number;
+  hasMore: boolean;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  pagination: PaginationMetadata;
+}
+
+// ─── Statements Domain ───
+
+export interface StatementAuthor {
+  type: "agent" | "user";
+  id?: string | null;
+  name?: string | null;
+}
+
 export interface StatementItem {
   id: string;
+  rootId?: string;
   title: string;
   context?: string | null;
   example?: string | null;
   tags?: string[];
   subject?: string | null;
-  kind?: MemoryKind;
-  status?: MemoryStatus;
+  type?: StatementType;
+  /** @deprecated Use `type` instead per Rule 12. */
+  kind?: string;
+  status?: StatementStatus;
   confidence?: number;
   score?: number;
   relevance?: number;
   decayFactor?: number;
+  stability?: number;
+  reinforcementCount?: number;
+  isPinned?: boolean;
+  starred?: boolean;
+  starCount?: number;
   isGuard?: boolean;
   isInvariant?: boolean;
+  scope?: string;
+  metadata?: Record<string, unknown>;
+  author?: StatementAuthor;
+  source?: string | null;
   expiresAt?: string | null;
   createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
+
+export interface ListStatementsParams extends PaginationParams {
+  type?: StatementType;
+  /** @deprecated Use `type` */
+  kind?: string;
+  status?: StatementStatus;
+  scope?: string;
+  q?: string;
+  semantic?: string;
+  sort?: "created" | "confidence" | "stars" | "title";
+  order?: "asc" | "desc";
+  starred?: boolean;
+  tag?: string;
+  authorType?: "agent" | "user";
+  subject?: string;
+}
+
+export interface CreateStatementParams {
+  title: string;
+  context?: string | null;
+  example?: string | null;
+  source?: string | null;
+  tags?: string[];
+  confidence?: number;
+  subject?: string | null;
+  type?: StatementType;
+  /** @deprecated Use `type` */
+  kind?: string;
+  status?: StatementStatus;
+  isPinned?: boolean;
+  expiresAt?: string | Date | null;
+  scope?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateStatementParams {
+  title?: string;
+  context?: string | null;
+  example?: string | null;
+  tags?: string[];
+  confidence?: number;
+  status?: StatementStatus;
+  type?: StatementType;
+  /** @deprecated Use `type` */
+  kind?: string;
+  subject?: string | null;
+  isPinned?: boolean;
+  scope?: string;
+  metadata?: Record<string, unknown>;
+  reason?: string;
+}
+
+export interface StatementHistoryItem {
+  id: string;
+  rootId: string;
+  version: number;
+  title: string;
+  context?: string | null;
+  example?: string | null;
+  tags?: string[];
+  confidence: number;
+  status: StatementStatus;
+  type?: StatementType;
+  kind?: string;
+  subject?: string | null;
+  scope?: string;
+  authorType: "agent" | "user";
+  authorId?: string | null;
+  authorName?: string | null;
+  mutationType?: string | null;
+  changeReason?: string | null;
+  createdAt: string | Date;
+}
+
+export interface StatementHistoryResponse {
+  rootId: string;
+  totalVersions: number;
+  history: StatementHistoryItem[];
+}
+
+export interface StatementStarResponse {
+  rootId: string;
+  starred: boolean;
+  starCount: number;
+}
+
+export interface AdoptedTarget {
+  projectId: string;
+  statementId: string;
+  alreadyExisted: boolean;
+}
+
+export interface AdoptStatementResponse {
+  ok: boolean;
+  sourceStatementId: string;
+  adopted: AdoptedTarget[];
+}
+
+export interface PromoteStatementParams {
+  toScope?: string;
+  reason?: string;
+}
+
+export interface PromoteStatementResponse {
+  promoted: boolean;
+  statement: StatementItem;
+}
+
+// ─── Memory Operations (Recall, Remember, Report, Feedback) ───
 
 export interface RecallParams {
   namespace?: string;
   query: string;
   subject?: string | null;
+  type?: StatementType | StatementType[];
+  /** @deprecated Use `type` */
   kind?: MemoryKind | MemoryKind[];
+  scope?: string;
+  scopes?: string[];
   minConfidence?: number;
   limit?: number;
   tags?: string[];
@@ -115,10 +282,14 @@ export interface RememberParams {
   example?: string | null;
   tags?: string[];
   subject?: string | null;
+  type?: StatementType;
+  /** @deprecated Use `type` */
   kind?: MemoryKind;
-  status?: MemoryStatus;
+  status?: StatementStatus;
   confidence?: number;
+  scope?: string;
   expiresAt?: string | Date | null;
+  metadata?: Record<string, unknown>;
   raw?: string;
   sessionId?: string;
   async?: boolean;
@@ -207,6 +378,8 @@ export interface FeedbackResponse {
 export interface WrapExecutionOptions {
   action: string;
   subject?: string | null;
+  type?: StatementType | StatementType[];
+  /** @deprecated Use `type` */
   kind?: MemoryKind | MemoryKind[];
   minConfidence?: number;
   limit?: number;
@@ -238,6 +411,187 @@ export interface ScopeOptions {
   minConfidence?: number;
 }
 
+// ─── Projects Domain ───
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  website?: string | null;
+  tags?: string[];
+  visibility: "public" | "private";
+  ownership?: "personal" | "organization";
+  owner?: {
+    type: "user" | "org";
+    slug: string;
+    name: string;
+  };
+  stateRoot?: string | null;
+  instruction?: string | null;
+  guardMode?: "strict" | "advisory";
+  tagPrompt?: string | null;
+  profile?: string | null;
+  vitals?: Record<string, unknown>;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface ListProjectsParams extends PaginationParams {
+  visibility?: "public" | "private" | "all";
+  q?: string;
+  sort?: "created" | "updated" | "name";
+  order?: "asc" | "desc";
+}
+
+export interface CreateProjectParams {
+  name: string;
+  slug?: string;
+  description?: string;
+  website?: string;
+  visibility?: "public" | "private";
+  owner?: string;
+}
+
+export interface UpdateProjectParams {
+  name?: string;
+  slug?: string;
+  description?: string;
+  website?: string;
+  visibility?: "public" | "private";
+  tags?: string[];
+  instruction?: string;
+  guardMode?: "strict" | "advisory";
+  tagPrompt?: string;
+  profile?: string;
+}
+
+export interface TransferProjectParams {
+  targetOwner: string;
+}
+
+// ─── Agents & Keys Domain ───
+
+export type AgentKind =
+  "coding_assistant" | "custom_pipeline" | "inference_engine" | "ci_evaluator";
+
+export type AgentStatus = "active" | "inactive" | "revoked";
+
+export interface AgentItem {
+  id: string;
+  projectId: string;
+  name: string;
+  slug: string;
+  kind: AgentKind | string;
+  model?: string | null;
+  description?: string | null;
+  status: AgentStatus;
+  metadata?: Record<string, unknown>;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  keyCount?: number;
+  activeKeyCount?: number;
+  lastActiveAt?: string | Date | null;
+  telemetry?: {
+    totalRecalls: number;
+    totalRemembers: number;
+    totalReports: number;
+  };
+}
+
+export interface ListAgentsParams extends PaginationParams {
+  status?: AgentStatus;
+  kind?: AgentKind;
+  q?: string;
+  sort?: "created" | "name" | "last_active";
+  order?: "asc" | "desc";
+}
+
+export interface CreateAgentParams {
+  name: string;
+  slug?: string;
+  kind?: AgentKind;
+  model?: string | null;
+  description?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateAgentParams {
+  name?: string;
+  model?: string | null;
+  description?: string | null;
+  status?: AgentStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AgentKeyItem {
+  id: string;
+  agentId: string;
+  name?: string;
+  preview: string;
+  createdAt: string | Date;
+  lastUsedAt?: string | Date | null;
+  expiresAt?: string | Date | null;
+}
+
+export interface CreateAgentKeyResponse {
+  ok: boolean;
+  key: {
+    id: string;
+    key: string;
+    preview: string;
+    name?: string;
+  };
+}
+
+// ─── Collaborators Domain ───
+
+export type CollaboratorRole = "admin" | "write" | "read";
+
+export interface CollaboratorItem {
+  id: string;
+  userId: string;
+  name: string;
+  handle: string | null;
+  email: string;
+  image: string | null;
+  role: CollaboratorRole;
+  source: "direct" | "owner" | "organization";
+  inherited: boolean;
+  createdAt?: string | Date;
+}
+
+export interface PendingInvitationItem {
+  id: string;
+  email: string;
+  role: CollaboratorRole;
+  invitedBy: {
+    name?: string;
+    email: string;
+  };
+  expiresAt: string | Date;
+  createdAt: string | Date;
+}
+
+export interface ListCollaboratorsParams extends PaginationParams {
+  role?: CollaboratorRole | "all";
+  affiliation?: "outside" | "direct" | "all";
+  q?: string;
+}
+
+export interface ListCollaboratorsResponse {
+  collaborators: CollaboratorItem[];
+  pendingInvitations: PendingInvitationItem[];
+  pagination: PaginationMetadata;
+}
+
+export interface InviteCollaboratorParams {
+  identifier: string;
+  role?: CollaboratorRole;
+}
+
+// ─── Organizations Domain ───
+
 export interface OrganizationItem {
   id: string;
   name: string;
@@ -257,4 +611,139 @@ export interface CreateOrganizationParams {
   bio?: string | null;
   website?: string | null;
   logo?: string | null;
+}
+
+export interface UpdateOrganizationParams {
+  name?: string;
+  bio?: string | null;
+  website?: string | null;
+  logo?: string | null;
+}
+
+export type OrgRole = "owner" | "admin" | "member";
+
+export interface OrgMemberItem {
+  id: string;
+  userId: string;
+  name: string;
+  handle: string | null;
+  email: string;
+  image: string | null;
+  role: OrgRole;
+  joinedAt: string | Date;
+}
+
+export interface ListMembersParams extends PaginationParams {
+  role?: OrgRole | "all";
+  q?: string;
+  sort?: "created" | "name" | "role";
+  order?: "asc" | "desc";
+}
+
+export interface OrgInvitationItem {
+  id: string;
+  email: string;
+  role: OrgRole;
+  teamId?: string | null;
+  expiresAt: string | Date;
+  createdAt: string | Date;
+  invitedBy?: {
+    name?: string;
+    email: string;
+  };
+}
+
+export interface InviteMemberParams {
+  email: string;
+  role?: OrgRole;
+  teamId?: string | null;
+}
+
+// ─── Usage Domain ───
+
+export type UsageTimeframe = "30d" | "90d";
+
+export interface OwnerUsage {
+  owner: {
+    type: "user" | "org";
+    slug: string;
+    name: string;
+  };
+  timeframe: UsageTimeframe;
+  quotas: {
+    statements: {
+      total: number;
+      limit: number;
+      percent: number;
+      types: {
+        directive: number;
+        fact: number;
+        preference: number;
+        observation: number;
+        provisional: number;
+      };
+    };
+    apiRequests: {
+      total: number;
+      limit: number;
+      percent: number;
+      windowDays: number;
+    };
+  };
+  rateLimits: {
+    tier: string;
+    recallRpm: number;
+    rememberRpm: number;
+    defaultRpm: number;
+    concurrentLimit: number;
+  };
+}
+
+// ─── Account Domain ───
+
+export interface AccountProfile {
+  id: string;
+  email: string;
+  name?: string;
+  handle?: string;
+  image?: string;
+  bio?: string;
+  website?: string;
+  role: string;
+  createdAt: string | Date;
+}
+
+export interface UpdateProfileParams {
+  name?: string;
+  handle?: string;
+  bio?: string;
+  website?: string;
+}
+
+export interface PersonalAccessTokenItem {
+  id: string;
+  name: string;
+  preview: string;
+  createdAt: string | Date;
+  expiresAt?: string | Date | null;
+  lastUsedAt?: string | Date | null;
+}
+
+export interface CreateTokenParams {
+  name: string;
+  expiresAt?: string | Date | null;
+}
+
+export interface CreateTokenResponse {
+  ok: boolean;
+  token: PersonalAccessTokenItem;
+  secret: string;
+}
+
+// ─── Scopes Domain ───
+
+export interface ScopeItem {
+  name: string;
+  count: number;
+  isPrivate?: boolean;
 }
