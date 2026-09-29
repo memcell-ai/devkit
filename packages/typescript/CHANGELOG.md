@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/memcell-ai/sdk/compare/typescript-v1.1.0...typescript-v1.2.0) (2026-09-29)
+
+
+### Features
+
+* **types:** add first-class guard statement type to TypeScript and Python SDKs ([#7](https://github.com/memcell-ai/sdk/issues/7)) ([557ab1b](https://github.com/memcell-ai/sdk/commit/557ab1b0554f92956c2677a35891833f6dfae0d6))
+
 ## [1.1.0](https://github.com/memcell-ai/sdk/compare/typescript-v1.0.1...typescript-v1.1.0) (2026-09-29)
 
 
