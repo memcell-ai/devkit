@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/memcell-ai/sdk/compare/typescript-v1.0.1...typescript-v1.1.0) (2026-09-29)
+
+
+### Features
+
+* expand TypeScript and Python SDKs to 100% platform API parity ([#5](https://github.com/memcell-ai/sdk/issues/5)) ([c856d27](https://github.com/memcell-ai/sdk/commit/c856d27b9fa180463540513207bbee21ce783ed2))
+
 ## [1.0.1](https://github.com/memcell-ai/sdk/compare/typescript-v1.0.0...typescript-v1.0.1) (2026-09-17)
 
 ### Bug Fixes

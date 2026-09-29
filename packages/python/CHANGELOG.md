@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/memcell-ai/sdk/compare/python-v0.1.2...python-v0.1.3) (2026-09-29)
+
+
+### Features
+
+* expand TypeScript and Python SDKs to 100% platform API parity ([#5](https://github.com/memcell-ai/sdk/issues/5)) ([c856d27](https://github.com/memcell-ai/sdk/commit/c856d27b9fa180463540513207bbee21ce783ed2))
+
 ## [0.1.2](https://github.com/memcell-ai/sdk/compare/python-v0.1.1...python-v0.1.2) (2026-09-17)
 
 ### Bug Fixes
