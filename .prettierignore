@@ -1,0 +1,6 @@
+# Owned by release-please, written in its own formatting.
+**/CHANGELOG.md
+.release-please-manifest.json
+dist
+node_modules
+.venv
