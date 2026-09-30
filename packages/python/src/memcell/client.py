@@ -20,6 +20,7 @@ from .models import (
     AgentItem,
     ApiRequestQuotas,
     CollaboratorItem,
+    ConsolidateSweepResponse,
     CreateAgentKeyResult,
     CreatedPersonalTokenResult,
     FeedbackResponse,
@@ -45,6 +46,8 @@ from .models import (
     StatementHistoryResponse,
     StatementItem,
     StatementQuotas,
+    StatementRelationItem,
+    StatementRelationsResponse,
     StatementStarResponse,
     StatementType,
     StatementTypeQuotas,
@@ -108,6 +111,24 @@ def _normalize_statement_type(val: Any) -> StatementType:
     return "fact"
 
 
+def _parse_statement_relation_item(data: dict[str, Any]) -> StatementRelationItem:
+    source_stmt = data.get("sourceStatement")
+    target_stmt = data.get("targetStatement")
+    return StatementRelationItem(
+        id=str(data.get("id") or ""),
+        project_id=str(data.get("projectId") or data.get("project_id") or ""),
+        source_id=str(data.get("sourceId") or data.get("source_id") or ""),
+        target_id=str(data.get("targetId") or data.get("target_id") or ""),
+        relation_type=data.get("relationType") or data.get("relation_type") or "constrains",
+        confidence=float(data.get("confidence", 0.9)),
+        metadata=data.get("metadata") or {},
+        created_at=data.get("createdAt") or data.get("created_at"),
+        updated_at=data.get("updatedAt") or data.get("updated_at"),
+        source_statement=_parse_statement_item(source_stmt) if source_stmt else None,
+        target_statement=_parse_statement_item(target_stmt) if target_stmt else None,
+    )
+
+
 def _parse_statement_item(data: dict[str, Any]) -> StatementItem:
     tags = data.get("tags") or []
     raw_type = data.get("type") or data.get("kind") or "fact"
@@ -122,6 +143,11 @@ def _parse_statement_item(data: dict[str, Any]) -> StatementItem:
         is_invariant = (
             (stat_type in ("guard", "directive")) or (kind == "invariant") or (status == "pinned")
         )
+
+    raw_relations = data.get("relations")
+    relations = (
+        [_parse_statement_relation_item(r) for r in raw_relations] if raw_relations else None
+    )
 
     return StatementItem(
         id=str(data.get("id") or data.get("statementId") or ""),
@@ -149,6 +175,7 @@ def _parse_statement_item(data: dict[str, Any]) -> StatementItem:
         metadata=data.get("metadata") or {},
         author=data.get("author"),
         source=data.get("source"),
+        relations=relations,
         expires_at=data.get("expiresAt") or data.get("expires_at"),
         created_at=data.get("createdAt") or data.get("created_at"),
         updated_at=data.get("updatedAt") or data.get("updated_at"),
@@ -294,6 +321,7 @@ def _parse_owner_usage(data: dict[str, Any]) -> OwnerUsage:
 class _StatementsNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
+        self.relations = _StatementRelationsNamespaceSync(client)
 
     def list(
         self,
@@ -529,6 +557,100 @@ class _StatementsNamespaceSync:
             promoted=bool(resp.get("promoted", True)),
             statement=_parse_statement_item(resp.get("statement", {})),
         )
+
+    def list_relations(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
+        return self.relations.list(namespace, statement_id)
+
+    def create_relation(
+        self,
+        namespace: str,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        return self.relations.create(
+            namespace, statement_id, target_id, relation_type, confidence, metadata
+        )
+
+    def delete_relation(self, namespace: str, statement_id: str, relation_id: str) -> None:
+        return self.relations.delete(namespace, statement_id, relation_id)
+
+    def list_project_relations(
+        self,
+        namespace: str,
+        page: int | None = None,
+        per_page: int | None = None,
+        relation_type: str | None = None,
+    ) -> PaginatedResult[StatementRelationItem]:
+        return self.relations.list_project(namespace, page, per_page, relation_type)
+
+
+class _StatementRelationsNamespaceSync:
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def list(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
+        owner, project = _parse_namespace(namespace)
+        resp = self._client._request(
+            "GET", f"/api/v1/{owner}/{project}/statements/{statement_id}/relations"
+        )
+        return StatementRelationsResponse(
+            incoming=[_parse_statement_relation_item(r) for r in resp.get("incoming", [])],
+            outgoing=[_parse_statement_relation_item(r) for r in resp.get("outgoing", [])],
+        )
+
+    def create(
+        self,
+        namespace: str,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        owner, project = _parse_namespace(namespace)
+        payload = {
+            "targetId": target_id,
+            "relationType": relation_type,
+            "confidence": confidence,
+            "metadata": metadata or {},
+        }
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/statements/{statement_id}/relations",
+            json=payload,
+        )
+        return _parse_statement_relation_item(resp.get("relation", {}))
+
+    def delete(self, namespace: str, statement_id: str, relation_id: str) -> None:
+        owner, project = _parse_namespace(namespace)
+        self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{project}/statements/{statement_id}/relations/{relation_id}",
+        )
+
+    def list_project(
+        self,
+        namespace: str,
+        page: int | None = None,
+        per_page: int | None = None,
+        relation_type: str | None = None,
+    ) -> PaginatedResult[StatementRelationItem]:
+        owner, project = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "page": page,
+                "per_page": per_page,
+                "relation_type": relation_type,
+            }
+        )
+        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/relations", params=params)
+        raw_items = resp.get("relations") or []
+        items = [_parse_statement_relation_item(r) for r in raw_items]
+        pagination = _parse_pagination(resp.get("pagination", {}))
+        return PaginatedResult(items=items, pagination=pagination)
 
 
 class _ProjectsNamespaceSync:
@@ -1115,6 +1237,37 @@ class _ScopesNamespaceSync:
         ]
 
 
+class _SweepNamespaceSync:
+    """Sweep & autonomous consolidation APIs (ADR 0075: The Cognitive Sleep Cycle)."""
+
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def consolidate(
+        self,
+        namespace: str,
+        *,
+        min_similarity: float | None = None,
+        min_cluster_size: int | None = None,
+        max_cluster_size: int | None = None,
+    ) -> ConsolidateSweepResponse:
+        owner, project = _parse_namespace(namespace)
+        body: dict[str, Any] = {}
+        if min_similarity is not None:
+            body["minSimilarity"] = min_similarity
+        if min_cluster_size is not None:
+            body["minClusterSize"] = min_cluster_size
+        if max_cluster_size is not None:
+            body["maxClusterSize"] = max_cluster_size
+
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/lifecycle/sweep/consolidate",
+            json=body if body else None,
+        )
+        return ConsolidateSweepResponse.model_validate(resp)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ASYNC NAMESPACES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1123,6 +1276,7 @@ class _ScopesNamespaceSync:
 class _StatementsNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
+        self.relations = _StatementRelationsNamespaceAsync(client)
 
     async def list(
         self,
@@ -1364,6 +1518,102 @@ class _StatementsNamespaceAsync:
             promoted=bool(resp.get("promoted", True)),
             statement=_parse_statement_item(resp.get("statement", {})),
         )
+
+    async def list_relations(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
+        return await self.relations.list(namespace, statement_id)
+
+    async def create_relation(
+        self,
+        namespace: str,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        return await self.relations.create(
+            namespace, statement_id, target_id, relation_type, confidence, metadata
+        )
+
+    async def delete_relation(self, namespace: str, statement_id: str, relation_id: str) -> None:
+        return await self.relations.delete(namespace, statement_id, relation_id)
+
+    async def list_project_relations(
+        self,
+        namespace: str,
+        page: int | None = None,
+        per_page: int | None = None,
+        relation_type: str | None = None,
+    ) -> PaginatedResult[StatementRelationItem]:
+        return await self.relations.list_project(namespace, page, per_page, relation_type)
+
+
+class _StatementRelationsNamespaceAsync:
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def list(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
+        owner, project = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "GET", f"/api/v1/{owner}/{project}/statements/{statement_id}/relations"
+        )
+        return StatementRelationsResponse(
+            incoming=[_parse_statement_relation_item(r) for r in resp.get("incoming", [])],
+            outgoing=[_parse_statement_relation_item(r) for r in resp.get("outgoing", [])],
+        )
+
+    async def create(
+        self,
+        namespace: str,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        owner, project = _parse_namespace(namespace)
+        payload = {
+            "targetId": target_id,
+            "relationType": relation_type,
+            "confidence": confidence,
+            "metadata": metadata or {},
+        }
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/statements/{statement_id}/relations",
+            json=payload,
+        )
+        return _parse_statement_relation_item(resp.get("relation", {}))
+
+    async def delete(self, namespace: str, statement_id: str, relation_id: str) -> None:
+        owner, project = _parse_namespace(namespace)
+        await self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{project}/statements/{statement_id}/relations/{relation_id}",
+        )
+
+    async def list_project(
+        self,
+        namespace: str,
+        page: int | None = None,
+        per_page: int | None = None,
+        relation_type: str | None = None,
+    ) -> PaginatedResult[StatementRelationItem]:
+        owner, project = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "page": page,
+                "per_page": per_page,
+                "relation_type": relation_type,
+            }
+        )
+        resp = await self._client._request(
+            "GET", f"/api/v1/{owner}/{project}/relations", params=params
+        )
+        raw_items = resp.get("relations") or []
+        items = [_parse_statement_relation_item(r) for r in raw_items]
+        pagination = _parse_pagination(resp.get("pagination", {}))
+        return PaginatedResult(items=items, pagination=pagination)
 
 
 class _ProjectsNamespaceAsync:
@@ -1966,6 +2216,37 @@ class _ScopesNamespaceAsync:
         ]
 
 
+class _SweepNamespaceAsync:
+    """Async sweep & autonomous consolidation APIs (ADR 0075: The Cognitive Sleep Cycle)."""
+
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def consolidate(
+        self,
+        namespace: str,
+        *,
+        min_similarity: float | None = None,
+        min_cluster_size: int | None = None,
+        max_cluster_size: int | None = None,
+    ) -> ConsolidateSweepResponse:
+        owner, project = _parse_namespace(namespace)
+        body: dict[str, Any] = {}
+        if min_similarity is not None:
+            body["minSimilarity"] = min_similarity
+        if min_cluster_size is not None:
+            body["minClusterSize"] = min_cluster_size
+        if max_cluster_size is not None:
+            body["maxClusterSize"] = max_cluster_size
+
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/lifecycle/sweep/consolidate",
+            json=body if body else None,
+        )
+        return ConsolidateSweepResponse.model_validate(resp)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN CLIENTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2018,6 +2299,7 @@ class MemCell:
         self.usage = _UsageNamespaceSync(self)
         self.account = _AccountNamespaceSync(self)
         self.scopes = _ScopesNamespaceSync(self)
+        self.sweep = _SweepNamespaceSync(self)
 
     def close(self) -> None:
         if not self._custom_client:
@@ -2437,6 +2719,7 @@ class AsyncMemCell:
         self.usage = _UsageNamespaceAsync(self)
         self.account = _AccountNamespaceAsync(self)
         self.scopes = _ScopesNamespaceAsync(self)
+        self.sweep = _SweepNamespaceAsync(self)
 
     async def aclose(self) -> None:
         if not self._custom_client:

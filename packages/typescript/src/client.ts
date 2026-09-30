@@ -8,6 +8,7 @@ import { CollaboratorsNamespace } from "./collaborators.js";
 import { UsageNamespace } from "./usage.js";
 import { AccountNamespace } from "./account.js";
 import { ScopesNamespace } from "./scopes.js";
+import { SweepNamespace } from "./sweep.js";
 import {
   MemCellError,
   RateLimitError,
@@ -73,6 +74,11 @@ export class MemCell {
    */
   readonly scopes: ScopesNamespace;
 
+  /**
+   * Sweep & autonomous consolidation APIs (ADR 0075).
+   */
+  readonly sweep: SweepNamespace;
+
   constructor(config: MemCellConfig = {}) {
     let base = config.baseUrl;
     if (
@@ -114,6 +120,7 @@ export class MemCell {
     this.usage = new UsageNamespace(this);
     this.account = new AccountNamespace(this);
     this.scopes = new ScopesNamespace(this);
+    this.sweep = new SweepNamespace(this);
   }
 
   /**

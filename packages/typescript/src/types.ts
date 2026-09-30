@@ -137,6 +137,7 @@ export interface StatementItem {
   metadata?: Record<string, unknown>;
   author?: StatementAuthor;
   source?: string | null;
+  relations?: StatementRelationItem[];
   expiresAt?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -247,6 +248,41 @@ export interface PromoteStatementParams {
 export interface PromoteStatementResponse {
   promoted: boolean;
   statement: StatementItem;
+}
+
+// ─── Statement Relations Domain ───
+
+export type RelationType =
+  "constrains" | "justifies" | "refines" | "depends_on" | "tensions_with";
+
+export interface StatementRelationItem {
+  id: string;
+  projectId: string;
+  sourceId: string;
+  targetId: string;
+  relationType: RelationType;
+  confidence: number;
+  metadata?: Record<string, unknown>;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  sourceStatement?: StatementItem;
+  targetStatement?: StatementItem;
+}
+
+export interface CreateRelationParams {
+  targetId: string;
+  relationType: RelationType;
+  confidence?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StatementRelationsResponse {
+  incoming: StatementRelationItem[];
+  outgoing: StatementRelationItem[];
+}
+
+export interface ListProjectRelationsParams extends PaginationParams {
+  relationType?: RelationType;
 }
 
 // ─── Memory Operations (Recall, Remember, Report, Feedback) ───
@@ -749,3 +785,10 @@ export interface ScopeItem {
   count: number;
   isPrivate?: boolean;
 }
+
+// ─── Sweep Domain (ADR 0075) ───
+
+export type {
+  ConsolidateSweepParams,
+  ConsolidateSweepResponse,
+} from "./sweep.js";

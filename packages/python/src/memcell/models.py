@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 StatementType = Literal["guard", "directive", "fact", "preference", "observation"]
 MemoryKind = Literal[
     "guard", "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
 ]
+RelationType = Literal["constrains", "justifies", "refines", "depends_on", "tensions_with"]
 StatementStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
 MemoryStatus = StatementStatus
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
@@ -32,6 +33,25 @@ class StatementAuthor(BaseModel):
     type: str
     id: str | None = None
     name: str | None = None
+
+
+class StatementRelationItem(BaseModel):
+    id: str
+    project_id: str
+    source_id: str
+    target_id: str
+    relation_type: RelationType
+    confidence: float = 0.9
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    source_statement: StatementItem | None = None
+    target_statement: StatementItem | None = None
+
+
+class StatementRelationsResponse(BaseModel):
+    incoming: list[StatementRelationItem] = Field(default_factory=list)
+    outgoing: list[StatementRelationItem] = Field(default_factory=list)
 
 
 class StatementItem(BaseModel):
@@ -62,6 +82,7 @@ class StatementItem(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     author: StatementAuthor | None = None
     source: str | None = None
+    relations: list[StatementRelationItem] | None = None
     expires_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -72,7 +93,7 @@ class StatementItem(BaseModel):
         if not v:
             return "fact"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference", "observation"):
+        if s in ("guard", "directive", "fact", "preference", "observation"):
             return s
         if s in ("invariant", "reflex"):
             return "directive"
@@ -195,6 +216,18 @@ class JobEvent(BaseModel):
     progress: int
     message: str | None = None
     metadata: Any | None = None
+
+
+class ConsolidateSweepResponse(BaseModel):
+    """Consolidation sweep job trigger response (ADR 0075)."""
+
+    ok: bool = True
+    job_id: str = Field(alias="jobId")
+    status: str
+    message: str
+    phases: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # ─── Projects Models ───

@@ -2,8 +2,11 @@ import type {
   AdoptStatementResponse,
   AgentItem,
   CollaboratorRole,
+  ConsolidateSweepParams,
+  ConsolidateSweepResponse,
   CreateAgentKeyResponse,
   CreateAgentParams,
+  CreateRelationParams,
   CreateStatementParams,
   FeedbackParams,
   FeedbackResponse,
@@ -12,6 +15,7 @@ import type {
   ListAgentsParams,
   ListCollaboratorsParams,
   ListCollaboratorsResponse,
+  ListProjectRelationsParams,
   ListStatementsParams,
   PaginatedResult,
   PendingInvitationItem,
@@ -29,6 +33,8 @@ import type {
   ScopedExecutionResult,
   StatementHistoryResponse,
   StatementItem,
+  StatementRelationItem,
+  StatementRelationsResponse,
   StatementStarResponse,
   UpdateAgentParams,
   UpdateStatementParams,
@@ -80,6 +86,29 @@ export class ScopedMemCell {
       params?: PromoteStatementParams,
     ): Promise<PromoteStatementResponse> =>
       this.client.statements.promote(this.namespace, statementId, params),
+    relations: {
+      list: (statementId: string): Promise<StatementRelationsResponse> =>
+        this.client.statements.relations.list(this.namespace, statementId),
+      create: (
+        statementId: string,
+        params: CreateRelationParams,
+      ): Promise<StatementRelationItem> =>
+        this.client.statements.relations.create(
+          this.namespace,
+          statementId,
+          params,
+        ),
+      delete: (statementId: string, relationId: string): Promise<void> =>
+        this.client.statements.relations.delete(
+          this.namespace,
+          statementId,
+          relationId,
+        ),
+      listProject: (
+        params?: ListProjectRelationsParams,
+      ): Promise<PaginatedResult<StatementRelationItem>> =>
+        this.client.statements.relations.listProject(this.namespace, params),
+    },
   };
 
   /**
@@ -282,5 +311,14 @@ export class ScopedMemCell {
     options?: WaitForJobOptions,
   ): Promise<JobEvent> {
     return await this.client.waitForJob(jobId, options);
+  }
+
+  /**
+   * Triggers an asynchronous consolidation sweep in this project space (ADR 0075).
+   */
+  async consolidateSweep(
+    params?: ConsolidateSweepParams,
+  ): Promise<ConsolidateSweepResponse> {
+    return await this.client.sweep.consolidate(this.namespace, params);
   }
 }

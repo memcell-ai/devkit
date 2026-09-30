@@ -1,13 +1,17 @@
 import type { MemCell } from "./client.js";
 import type {
   AdoptStatementResponse,
+  CreateRelationParams,
   CreateStatementParams,
+  ListProjectRelationsParams,
   ListStatementsParams,
   PaginatedResult,
   PromoteStatementParams,
   PromoteStatementResponse,
   StatementHistoryResponse,
   StatementItem,
+  StatementRelationItem,
+  StatementRelationsResponse,
   StatementStarResponse,
   UpdateStatementParams,
 } from "./types.js";
@@ -48,7 +52,11 @@ function buildQuery(params?: ListStatementsParams): string {
 }
 
 export class StatementsNamespace {
-  constructor(private readonly client: MemCell) {}
+  readonly relations: StatementRelationsNamespace;
+
+  constructor(private readonly client: MemCell) {
+    this.relations = new StatementRelationsNamespace(client);
+  }
 
   /**
    * Lists statements in a project with filtering and pagination.
@@ -221,5 +229,90 @@ export class StatementsNamespace {
         body: JSON.stringify(params || {}),
       },
     );
+  }
+}
+
+export class StatementRelationsNamespace {
+  constructor(private readonly client: MemCell) {}
+
+  /**
+   * Lists incoming and outgoing relations for a specific statement.
+   */
+  async list(
+    namespace: string,
+    statementId: string,
+  ): Promise<StatementRelationsResponse> {
+    const { owner, project } = parseNamespace(namespace);
+    return await this.client.request<StatementRelationsResponse>(
+      `/api/v1/${owner}/${project}/statements/${encodeURIComponent(statementId)}/relations`,
+      { method: "GET" },
+    );
+  }
+
+  /**
+   * Creates an epistemic relation between this statement and a target statement.
+   */
+  async create(
+    namespace: string,
+    statementId: string,
+    params: CreateRelationParams,
+  ): Promise<StatementRelationItem> {
+    const { owner, project } = parseNamespace(namespace);
+    const json = await this.client.request<{ relation: StatementRelationItem }>(
+      `/api/v1/${owner}/${project}/statements/${encodeURIComponent(statementId)}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify(params),
+      },
+    );
+    return json.relation;
+  }
+
+  /**
+   * Deletes a statement relation by its ID.
+   */
+  async delete(
+    namespace: string,
+    statementId: string,
+    relationId: string,
+  ): Promise<void> {
+    const { owner, project } = parseNamespace(namespace);
+    await this.client.request<{ ok: boolean }>(
+      `/api/v1/${owner}/${project}/statements/${encodeURIComponent(statementId)}/relations/${encodeURIComponent(relationId)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /**
+   * Lists all statement relations project-wide with optional relationType filter and pagination.
+   */
+  async listProject(
+    namespace: string,
+    params?: ListProjectRelationsParams,
+  ): Promise<PaginatedResult<StatementRelationItem>> {
+    const { owner, project } = parseNamespace(namespace);
+    const q = new URLSearchParams();
+    if (params?.page !== undefined) q.set("page", String(params.page));
+    if (params?.perPage !== undefined)
+      q.set("per_page", String(params.perPage));
+    if (params?.relationType) q.set("relation_type", params.relationType);
+    const query = q.toString() ? `?${q.toString()}` : "";
+
+    const json = await this.client.request<{
+      relations: StatementRelationItem[];
+      pagination: {
+        page: number;
+        perPage: number;
+        total: number;
+        hasMore: boolean;
+      };
+    }>(`/api/v1/${owner}/${project}/relations${query}`, {
+      method: "GET",
+    });
+
+    return {
+      items: json.relations || [],
+      pagination: json.pagination,
+    };
   }
 }

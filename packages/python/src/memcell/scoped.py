@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from .models import (
     AdoptStatementResponse,
     AgentItem,
+    ConsolidateSweepResponse,
     CreateAgentKeyResult,
     FeedbackResponse,
     JobEvent,
@@ -25,6 +26,8 @@ from .models import (
     ScopeItem,
     StatementHistoryResponse,
     StatementItem,
+    StatementRelationItem,
+    StatementRelationsResponse,
     StatementStarResponse,
 )
 
@@ -77,6 +80,55 @@ class _ScopedStatementsSync:
         return self._client.statements.promote(
             self._namespace, statement_id, to_scope=to_scope, reason=reason
         )
+
+    def list_relations(self, statement_id: str) -> StatementRelationsResponse:
+        return self._client.statements.list_relations(self._namespace, statement_id)
+
+    def create_relation(
+        self,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        return self._client.statements.create_relation(
+            self._namespace, statement_id, target_id, relation_type, confidence, metadata
+        )
+
+    def delete_relation(self, statement_id: str, relation_id: str) -> None:
+        self._client.statements.delete_relation(self._namespace, statement_id, relation_id)
+
+    def list_project_relations(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+        return self._client.statements.list_project_relations(self._namespace, **kwargs)
+
+    @property
+    def relations(self) -> Any:
+        scoped = self
+
+        class _ScopedRelationsProxy:
+            def list(self, statement_id: str) -> StatementRelationsResponse:
+                return scoped.list_relations(statement_id)
+
+            def create(
+                self,
+                statement_id: str,
+                target_id: str,
+                relation_type: str,
+                confidence: float = 0.9,
+                metadata: dict[str, Any] | None = None,
+            ) -> StatementRelationItem:
+                return scoped.create_relation(
+                    statement_id, target_id, relation_type, confidence, metadata
+                )
+
+            def delete(self, statement_id: str, relation_id: str) -> None:
+                scoped.delete_relation(statement_id, relation_id)
+
+            def list_project(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+                return scoped.list_project_relations(**kwargs)
+
+        return _ScopedRelationsProxy()
 
 
 class _ScopedAgentsSync:
@@ -178,6 +230,55 @@ class _ScopedStatementsAsync:
         return await self._client.statements.promote(
             self._namespace, statement_id, to_scope=to_scope, reason=reason
         )
+
+    async def list_relations(self, statement_id: str) -> StatementRelationsResponse:
+        return await self._client.statements.list_relations(self._namespace, statement_id)
+
+    async def create_relation(
+        self,
+        statement_id: str,
+        target_id: str,
+        relation_type: str,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+    ) -> StatementRelationItem:
+        return await self._client.statements.create_relation(
+            self._namespace, statement_id, target_id, relation_type, confidence, metadata
+        )
+
+    async def delete_relation(self, statement_id: str, relation_id: str) -> None:
+        await self._client.statements.delete_relation(self._namespace, statement_id, relation_id)
+
+    async def list_project_relations(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+        return await self._client.statements.list_project_relations(self._namespace, **kwargs)
+
+    @property
+    def relations(self) -> Any:
+        scoped = self
+
+        class _AsyncScopedRelationsProxy:
+            async def list(self, statement_id: str) -> StatementRelationsResponse:
+                return await scoped.list_relations(statement_id)
+
+            async def create(
+                self,
+                statement_id: str,
+                target_id: str,
+                relation_type: str,
+                confidence: float = 0.9,
+                metadata: dict[str, Any] | None = None,
+            ) -> StatementRelationItem:
+                return await scoped.create_relation(
+                    statement_id, target_id, relation_type, confidence, metadata
+                )
+
+            async def delete(self, statement_id: str, relation_id: str) -> None:
+                await scoped.delete_relation(statement_id, relation_id)
+
+            async def list_project(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+                return await scoped.list_project_relations(**kwargs)
+
+        return _AsyncScopedRelationsProxy()
 
 
 class _ScopedAgentsAsync:
@@ -420,6 +521,21 @@ class ScopedMemCell:
                 )
             raise
 
+    def consolidate_sweep(
+        self,
+        *,
+        min_similarity: float | None = None,
+        min_cluster_size: int | None = None,
+        max_cluster_size: int | None = None,
+    ) -> ConsolidateSweepResponse:
+        """Trigger an asynchronous consolidation sweep in this project namespace (ADR 0075)."""
+        return self._client.sweep.consolidate(
+            self.namespace,
+            min_similarity=min_similarity,
+            min_cluster_size=min_cluster_size,
+            max_cluster_size=max_cluster_size,
+        )
+
 
 class AsyncScopedMemCell:
     """Asynchronous memory handle scoped to a specific project namespace and default subject."""
@@ -607,3 +723,18 @@ class AsyncScopedMemCell:
                     payload=payload,
                 )
             raise
+
+    async def consolidate_sweep(
+        self,
+        *,
+        min_similarity: float | None = None,
+        min_cluster_size: int | None = None,
+        max_cluster_size: int | None = None,
+    ) -> ConsolidateSweepResponse:
+        """Trigger an asynchronous consolidation sweep in this project namespace (ADR 0075)."""
+        return await self._client.sweep.consolidate(
+            self.namespace,
+            min_similarity=min_similarity,
+            min_cluster_size=min_cluster_size,
+            max_cluster_size=max_cluster_size,
+        )
