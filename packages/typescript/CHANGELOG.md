@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/memcell-ai/sdk/compare/typescript-v1.2.0...typescript-v1.3.0) (2026-09-30)
+
+
+### Features
+
+* **sweep:** implement epistemic graph and consolidation sweep support in TS and Python SDKs ([#10](https://github.com/memcell-ai/sdk/issues/10)) ([a422afd](https://github.com/memcell-ai/sdk/commit/a422afd3d41a8d4f9b6c9918450a918e43b6e407))
+
 ## [1.2.0](https://github.com/memcell-ai/sdk/compare/typescript-v1.1.0...typescript-v1.2.0) (2026-09-29)
 
 

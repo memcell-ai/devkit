@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/memcell-ai/sdk/compare/python-v0.1.4...python-v0.1.5) (2026-09-30)
+
+
+### Features
+
+* **sweep:** implement epistemic graph and consolidation sweep support in TS and Python SDKs ([#10](https://github.com/memcell-ai/sdk/issues/10)) ([a422afd](https://github.com/memcell-ai/sdk/commit/a422afd3d41a8d4f9b6c9918450a918e43b6e407))
+
 ## [0.1.4](https://github.com/memcell-ai/sdk/compare/python-v0.1.3...python-v0.1.4) (2026-09-29)
 
 

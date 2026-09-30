@@ -51,7 +51,7 @@ from .models import (
 from .organization import AsyncOrganizationMemCell, OrganizationMemCell
 from .scoped import AsyncScopedMemCell, ScopedExecutionResult, ScopedMemCell
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     "AccountProfile",
