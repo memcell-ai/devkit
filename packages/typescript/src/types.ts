@@ -1,6 +1,17 @@
 export type StatementType =
   "guard" | "directive" | "fact" | "preference" | "observation";
 
+export const STATEMENT_SCOPES = [
+  "organization",
+  "team",
+  "project",
+  "user",
+] as const;
+
+export type StatementScope = (typeof STATEMENT_SCOPES)[number] | (string & {});
+
+export type PromotionStatus = "pending" | "approved" | "rejected";
+
 /**
  * @deprecated Use `StatementType` per Rule 12. Retained for backward compatibility.
  */
@@ -133,7 +144,10 @@ export interface StatementItem {
   starCount?: number;
   isGuard?: boolean;
   isInvariant?: boolean;
-  scope?: string;
+  scope?: StatementScope;
+  requiredRoles?: string[];
+  scopePromotedAt?: string | Date | null;
+  scopePromotedBy?: string | null;
   metadata?: Record<string, unknown>;
   author?: StatementAuthor;
   source?: string | null;
@@ -148,7 +162,7 @@ export interface ListStatementsParams extends PaginationParams {
   /** @deprecated Use `type` */
   kind?: string;
   status?: StatementStatus;
-  scope?: string;
+  scope?: StatementScope;
   q?: string;
   semantic?: string;
   sort?: "created" | "confidence" | "stars" | "title";
@@ -173,7 +187,8 @@ export interface CreateStatementParams {
   status?: StatementStatus;
   isPinned?: boolean;
   expiresAt?: string | Date | null;
-  scope?: string;
+  scope?: StatementScope;
+  requiredRoles?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -189,7 +204,8 @@ export interface UpdateStatementParams {
   kind?: string;
   subject?: string | null;
   isPinned?: boolean;
-  scope?: string;
+  scope?: StatementScope;
+  requiredRoles?: string[];
   metadata?: Record<string, unknown>;
   reason?: string;
 }
@@ -241,13 +257,36 @@ export interface AdoptStatementResponse {
 }
 
 export interface PromoteStatementParams {
-  toScope?: string;
+  toScope?: StatementScope;
   reason?: string;
 }
 
 export interface PromoteStatementResponse {
   promoted: boolean;
   statement: StatementItem;
+  promotionRequest?: StatementPromotionRequest;
+}
+
+export interface StatementPromotionRequest {
+  id: string;
+  statementId: string;
+  fromScope: StatementScope;
+  toScope: StatementScope;
+  status: PromotionStatus;
+  requesterId: string;
+  requesterReason?: string | null;
+  reviewerId?: string | null;
+  reviewReason?: string | null;
+  reviewedAt?: string | Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface ListPromotionsParams extends PaginationParams {
+  status?: PromotionStatus;
+  statementId?: string;
+  limit?: number;
+  offset?: number;
 }
 
 // ─── Statement Relations Domain ───
@@ -294,8 +333,9 @@ export interface RecallParams {
   type?: StatementType | StatementType[];
   /** @deprecated Use `type` */
   kind?: MemoryKind | MemoryKind[];
-  scope?: string;
-  scopes?: string[];
+  scope?: StatementScope;
+  scopes?: StatementScope[];
+  myMemory?: boolean;
   minConfidence?: number;
   limit?: number;
   tags?: string[];
@@ -324,7 +364,8 @@ export interface RememberParams {
   kind?: MemoryKind;
   status?: StatementStatus;
   confidence?: number;
-  scope?: string;
+  scope?: StatementScope;
+  requiredRoles?: string[];
   expiresAt?: string | Date | null;
   metadata?: Record<string, unknown>;
   raw?: string;
@@ -792,3 +833,298 @@ export type {
   ConsolidateSweepParams,
   ConsolidateSweepResponse,
 } from "./sweep.js";
+
+// ─── Enterprise SSO Domain ───
+
+export interface SSOProviderSummary {
+  id: string;
+  providerId: string;
+  issuer: string;
+  domain: string;
+  protocol: "saml" | "oidc";
+  domainVerified: boolean;
+  organizationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConfigureSSOInput {
+  providerId?: string;
+  domain: string;
+  issuer: string;
+  protocol: "saml" | "oidc";
+  samlConfig?: {
+    entryPoint: string;
+    cert?: string;
+    idpMetadata?: {
+      metadata?: string;
+      entityID?: string;
+      cert?: string | string[];
+    };
+    spMetadata?: {
+      entityID?: string;
+      metadata?: string;
+    };
+  };
+  oidcConfig?: {
+    clientId: string;
+    clientSecret: string;
+    authorizationEndpoint?: string;
+    tokenEndpoint?: string;
+    jwksEndpoint?: string;
+    discoveryEndpoint?: string;
+  };
+}
+
+export interface SSOVerificationToken {
+  token: string;
+  dnsRecordName: string;
+  dnsRecordType: string;
+  domain: string;
+}
+
+export interface SSODomainLookupResult {
+  ssoAvailable: boolean;
+  providerId?: string;
+  organizationId?: string;
+  organizationSlug?: string;
+  organizationName?: string;
+  ssoEnforced: boolean;
+}
+
+export interface OrganizationSSOResult {
+  ok: boolean;
+  providers: SSOProviderSummary[];
+  ssoEnforced: boolean;
+}
+
+// ─── Fleet Management Domain ───
+
+export interface FleetAgent {
+  id: string;
+  name: string;
+  slug: string;
+  scope: "project" | "team" | "organization";
+  framework: string | null;
+  model: string | null;
+  status: "active" | "suspended" | "revoked";
+  health: "healthy" | "degraded" | "suspended" | "offline";
+  description: string | null;
+  organizationId: string | null;
+  teamId: string | null;
+  teamName?: string | null;
+  projectId: string | null;
+  projectName?: string | null;
+  lastActiveAt: string | null;
+  activeKeyCount: number;
+  projectGrantCount: number;
+  suspensionReason: string | null;
+  suspendedAt: string | null;
+  createdAt: string;
+}
+
+export interface ListFleetAgentsParams {
+  q?: string;
+  status?: "active" | "suspended" | "revoked";
+  scope?: "project" | "team" | "organization";
+  framework?: string;
+  teamId?: string;
+  projectId?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface CreateFleetAgentParams {
+  name: string;
+  slug?: string;
+  scope?: "project" | "team" | "organization";
+  framework?: string | null;
+  model?: string | null;
+  description?: string | null;
+  teamId?: string | null;
+  projectId?: string | null;
+  generateKey?: boolean;
+}
+
+export interface FleetAgentKeyCreated {
+  key: string;
+  keyPrefix: string;
+  keyId: string;
+}
+
+export interface CreateFleetAgentResult {
+  agent: FleetAgent;
+  key: FleetAgentKeyCreated | null;
+}
+
+export interface FleetAgentDetail {
+  agent: FleetAgent;
+  teamName?: string | null;
+  projectName?: string | null;
+  keys: Array<{
+    id: string;
+    keyPrefix: string;
+    createdAt: string;
+    lastUsedAt: string | null;
+  }>;
+  grants: Array<{
+    id: string;
+    projectId: string;
+    projectSlug: string;
+    permission: string;
+    createdAt: string;
+  }>;
+}
+
+export interface AgentProjectGrant {
+  id: string;
+  agentId: string;
+  projectId: string;
+  permission: "read" | "write" | "admin";
+  grantedBy: string | null;
+  createdAt: string;
+}
+
+// ─── Audit & SIEM Domain ───
+
+export interface AuditEvent {
+  id: string;
+  organizationId: string;
+  projectId: string | null;
+  teamId: string | null;
+  actorType: "user" | "agent" | "system";
+  actorId: string | null;
+  actorName: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ListAuditEventsParams {
+  actorId?: string;
+  actorType?: "user" | "agent" | "system";
+  action?: string;
+  targetType?: string;
+  targetId?: string;
+  projectId?: string;
+  teamId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface SiemDestination {
+  id: string;
+  organizationId: string;
+  name: string;
+  destinationType:
+    "webhook" | "splunk" | "datadog" | "cloudwatch" | "gcp_logging";
+  url: string;
+  secretToken?: string | null;
+  format: "json" | "cef";
+  enabled: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateSiemDestinationParams {
+  name: string;
+  destinationType?:
+    "webhook" | "splunk" | "datadog" | "cloudwatch" | "gcp_logging";
+  url: string;
+  secretToken?: string | null;
+  format?: "json" | "cef";
+  enabled?: boolean;
+}
+
+// ─── Enterprise Insights Domain ───
+
+export interface EnterpriseInsights {
+  timeframe: string;
+  kpis: {
+    deadEndAvoidanceRate: number;
+    recallUtilizationRate: number;
+    recallPrecisionRate: number;
+    memoryConvergenceRate: number;
+    tokensSaved: number;
+    estimatedCostSavedUsd: number;
+    latencyMs: {
+      p50: number;
+      p95: number;
+      p99: number;
+    };
+  };
+  metrics: {
+    totalRecalls: number;
+    workedRecalls: number;
+    failedRecalls: number;
+    pendingRecalls: number;
+    totalStatements: number;
+    convergedStatements: number;
+  };
+  timeseries: Array<{
+    date: string;
+    recalls: number;
+    worked: number;
+    failed: number;
+  }>;
+}
+
+export interface GetInsightsParams {
+  timeframe?: "24h" | "7d" | "30d" | "all";
+  teamId?: string;
+  projectId?: string;
+}
+
+// ─── Team Management Domain ───
+
+export interface OrgTeam {
+  id: string;
+  name: string;
+  organizationId: string;
+  memberCount: number;
+  projectCount: number;
+  agentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrgTeamDetail {
+  team: {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  projects: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    visibility: string;
+  }>;
+  agents: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    scope: string;
+    status: string;
+    health: string;
+  }>;
+}
+
+export interface TeamMemberItem {
+  id: string;
+  userId: string;
+  role: "manager" | "member";
+  name: string | null;
+  email: string;
+  handle: string | null;
+  image: string | null;
+  createdAt: string;
+}

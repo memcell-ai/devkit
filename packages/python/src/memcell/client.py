@@ -11,8 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from .audit import AsyncOrganizationAuditNamespace, OrganizationAuditNamespace
 from .auth import AuthManager
 from .exceptions import MemCellError, RateLimitError
+from .fleet import AsyncOrganizationFleetNamespace, OrganizationFleetNamespace
+from .insights import AsyncOrganizationInsightsNamespace, OrganizationInsightsNamespace
 from .models import (
     AccountProfile,
     AdoptedTarget,
@@ -27,6 +30,7 @@ from .models import (
     JobEvent,
     ListCollaboratorsResponse,
     OrganizationItem,
+    OrganizationSSOResult,
     OrgInvitationItem,
     OrgMemberItem,
     OutcomeVerdict,
@@ -42,9 +46,13 @@ from .models import (
     RememberResponse,
     ReportResponse,
     ScopeItem,
+    SSODomainLookupResult,
+    SSOProviderSummary,
+    SSOVerificationToken,
     StatementHistoryItem,
     StatementHistoryResponse,
     StatementItem,
+    StatementPromotionRequest,
     StatementQuotas,
     StatementRelationItem,
     StatementRelationsResponse,
@@ -53,6 +61,7 @@ from .models import (
     StatementTypeQuotas,
     UsageQuotas,
 )
+from .teams import AsyncOrganizationTeamsNamespace, OrganizationTeamsNamespace
 
 if TYPE_CHECKING:
     from .organization import AsyncOrganizationMemCell, OrganizationMemCell
@@ -171,12 +180,39 @@ def _parse_statement_item(data: dict[str, Any]) -> StatementItem:
         star_count=data.get("starCount") or data.get("star_count"),
         is_guard=is_guard,
         is_invariant=is_invariant,
-        scope=data.get("scope", "common"),
+        scope=data.get("scope", "project"),
+        required_roles=data.get("requiredRoles") or data.get("required_roles") or [],
+        scope_promoted_at=data.get("scopePromotedAt") or data.get("scope_promoted_at"),
+        scope_promoted_by=data.get("scopePromotedBy") or data.get("scope_promoted_by"),
         metadata=data.get("metadata") or {},
         author=data.get("author"),
         source=data.get("source"),
         relations=relations,
         expires_at=data.get("expiresAt") or data.get("expires_at"),
+        created_at=data.get("createdAt") or data.get("created_at"),
+        updated_at=data.get("updatedAt") or data.get("updated_at"),
+    )
+
+
+def _parse_promotion_request(data: dict[str, Any]) -> StatementPromotionRequest:
+    stmt_data = data.get("statement")
+    stmt = _parse_statement_item(stmt_data) if stmt_data else None
+    return StatementPromotionRequest(
+        id=str(data.get("id") or ""),
+        statement_id=str(data.get("statementId") or data.get("statement_id") or ""),
+        from_scope=str(data.get("fromScope") or data.get("from_scope") or "user"),
+        to_scope=str(data.get("toScope") or data.get("to_scope") or "project"),
+        status=data.get("status", "pending"),
+        requester_id=data.get("requesterId") or data.get("requester_id") or data.get("requestedBy"),
+        requester_reason=data.get("requesterReason")
+        or data.get("requester_reason")
+        or data.get("reason"),
+        reviewer_id=data.get("reviewerId") or data.get("reviewer_id") or data.get("reviewedBy"),
+        review_reason=data.get("reviewReason")
+        or data.get("review_reason")
+        or data.get("reviewComment"),
+        reviewed_at=data.get("reviewedAt") or data.get("reviewed_at"),
+        statement=stmt,
         created_at=data.get("createdAt") or data.get("created_at"),
         updated_at=data.get("updatedAt") or data.get("updated_at"),
     )
@@ -541,7 +577,7 @@ class _StatementsNamespaceSync:
         self,
         namespace: str,
         statement_id: str,
-        to_scope: str = "common",
+        to_scope: str = "project",
         reason: str | None = None,
     ) -> PromoteStatementResponse:
         owner, project = _parse_namespace(namespace)
@@ -553,9 +589,12 @@ class _StatementsNamespaceSync:
             f"/api/v1/{owner}/{project}/statements/{statement_id}/promote",
             json=body,
         )
+        stmt_data = resp.get("statement")
+        promo_data = resp.get("promotionRequest") or resp.get("promotion_request")
         return PromoteStatementResponse(
             promoted=bool(resp.get("promoted", True)),
-            statement=_parse_statement_item(resp.get("statement", {})),
+            statement=_parse_statement_item(stmt_data) if stmt_data else None,
+            promotion_request=_parse_promotion_request(promo_data) if promo_data else None,
         )
 
     def list_relations(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
@@ -955,6 +994,11 @@ class _CollaboratorsNamespaceSync:
 class _OrganizationsNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
+        self.sso = _OrganizationSsoNamespaceSync(client)
+        self.fleet = OrganizationFleetNamespace(client)
+        self.audit = OrganizationAuditNamespace(client)
+        self.insights = OrganizationInsightsNamespace(client)
+        self.teams = OrganizationTeamsNamespace(client)
 
     def list(self) -> list[OrganizationItem]:
         resp = self._client._request("GET", "/api/v1/organizations")
@@ -1117,6 +1161,109 @@ class _OrganizationsNamespaceSync:
         self._client._request("DELETE", f"/api/v1/organizations/{slug}/invitations/{invitation_id}")
 
 
+def _parse_sso_provider(data: dict[str, Any]) -> SSOProviderSummary:
+    return SSOProviderSummary(
+        id=str(data.get("id", "")),
+        provider_id=str(data.get("providerId", "")),
+        issuer=str(data.get("issuer", "")),
+        domain=str(data.get("domain", "")),
+        protocol=str(data.get("protocol", "saml")),
+        domain_verified=bool(data.get("domainVerified", False)),
+        organization_id=data.get("organizationId"),
+        created_at=data.get("createdAt"),
+        updated_at=data.get("updatedAt"),
+    )
+
+
+class _OrganizationSsoNamespaceSync:
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def get(self, org_slug: str) -> OrganizationSSOResult:
+        resp = self._client._request("GET", f"/api/v1/organizations/{org_slug}/sso")
+        providers = [_parse_sso_provider(p) for p in (resp.get("providers") or [])]
+        return OrganizationSSOResult(
+            ok=resp.get("ok", True),
+            providers=providers,
+            sso_enforced=bool(resp.get("ssoEnforced", False)),
+        )
+
+    def configure(
+        self,
+        org_slug: str,
+        domain: str,
+        issuer: str,
+        protocol: str = "saml",
+        saml_config: dict[str, Any] | None = None,
+        oidc_config: dict[str, Any] | None = None,
+        provider_id: str | None = None,
+    ) -> SSOProviderSummary:
+        body: dict[str, Any] = {
+            "domain": domain,
+            "issuer": issuer,
+            "protocol": protocol,
+        }
+        if provider_id:
+            body["providerId"] = provider_id
+        if saml_config:
+            body["samlConfig"] = saml_config
+        if oidc_config:
+            body["oidcConfig"] = oidc_config
+        resp = self._client._request("POST", f"/api/v1/organizations/{org_slug}/sso", json=body)
+        return _parse_sso_provider(resp.get("provider", {}))
+
+    def delete(self, org_slug: str, provider_id: str) -> None:
+        self._client._request(
+            "DELETE",
+            f"/api/v1/organizations/{org_slug}/sso",
+            params={"providerId": provider_id},
+        )
+
+    def get_verification_token(self, org_slug: str, provider_id: str) -> SSOVerificationToken:
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/organizations/{org_slug}/sso/token",
+            json={"providerId": provider_id},
+        )
+        return SSOVerificationToken(
+            token=str(resp.get("token", "")),
+            dns_record_name=str(resp.get("dnsRecordName", "")),
+            dns_record_type=str(resp.get("dnsRecordType", "TXT")),
+            domain=str(resp.get("domain", "")),
+        )
+
+    def verify_domain(self, org_slug: str, provider_id: str) -> dict[str, Any]:
+        return self._client._request(
+            "POST",
+            f"/api/v1/organizations/{org_slug}/sso/verify-domain",
+            json={"providerId": provider_id},
+        )
+
+    def set_enforcement(self, org_slug: str, sso_enforced: bool) -> dict[str, Any]:
+        return self._client._request(
+            "PATCH",
+            f"/api/v1/organizations/{org_slug}/sso/enforce",
+            json={"ssoEnforced": sso_enforced},
+        )
+
+    def lookup(self, domain_or_email: str) -> SSODomainLookupResult:
+        is_email = "@" in domain_or_email
+        param = "email" if is_email else "domain"
+        resp = self._client._request(
+            "GET",
+            "/api/v1/auth/sso/lookup",
+            params={param: domain_or_email},
+        )
+        return SSODomainLookupResult(
+            sso_available=bool(resp.get("ssoAvailable", False)),
+            sso_enforced=bool(resp.get("ssoEnforced", False)),
+            provider_id=resp.get("providerId"),
+            organization_id=resp.get("organizationId"),
+            organization_slug=resp.get("organizationSlug"),
+            organization_name=resp.get("organizationName"),
+        )
+
+
 class _UsageNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
@@ -1266,6 +1413,102 @@ class _SweepNamespaceSync:
             json=body if body else None,
         )
         return ConsolidateSweepResponse.model_validate(resp)
+
+
+class _PromotionsNamespaceSync:
+    """Statement promotion pipeline operations (ADR 0076)."""
+
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def list(
+        self,
+        namespace: str,
+        status: str | None = None,
+        statement_id: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[StatementPromotionRequest]:
+        owner, project = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "status": status,
+                "statementId": statement_id,
+                "page": page,
+                "per_page": per_page,
+            }
+        )
+        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/promotions", params=params)
+        raw_items = resp.get("requests") or resp.get("items") or resp.get("promotionRequests") or []
+        items = [_parse_promotion_request(r) for r in raw_items]
+        pagination = (
+            _parse_pagination(resp.get("pagination", {}))
+            if "pagination" in resp
+            else PaginationMetadata(
+                page=page or 1,
+                per_page=per_page or len(items),
+                total=int(resp.get("total", len(items))),
+                has_more=False,
+            )
+        )
+        return PaginatedResult[StatementPromotionRequest](
+            items=items,
+            pagination=pagination,
+        )
+
+    def approve(
+        self,
+        namespace: str,
+        promotion_id: str,
+        reason: str | None = None,
+        review_comment: str | None = None,
+    ) -> dict[str, Any]:
+        owner, project = _parse_namespace(namespace)
+        review_reason = reason or review_comment
+        body = {"reviewReason": review_reason} if review_reason else None
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/approve",
+            json=body,
+        )
+        promotion_req = (
+            _parse_promotion_request(resp["promotionRequest"])
+            if resp.get("promotionRequest")
+            else None
+        )
+        stmt = _parse_statement_item(resp["statement"]) if resp.get("statement") else None
+        return {
+            "approved": bool(resp.get("approved", True)),
+            "promotion_request": promotion_req,
+            "promotionRequest": promotion_req,
+            "statement": stmt,
+        }
+
+    def reject(
+        self,
+        namespace: str,
+        promotion_id: str,
+        reason: str | None = None,
+        review_comment: str | None = None,
+    ) -> dict[str, Any]:
+        owner, project = _parse_namespace(namespace)
+        review_reason = reason or review_comment
+        body = {"reviewReason": review_reason} if review_reason else None
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/reject",
+            json=body,
+        )
+        promotion_req = (
+            _parse_promotion_request(resp["promotionRequest"])
+            if resp.get("promotionRequest")
+            else None
+        )
+        return {
+            "rejected": bool(resp.get("rejected", True)),
+            "promotion_request": promotion_req,
+            "promotionRequest": promotion_req,
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1502,7 +1745,7 @@ class _StatementsNamespaceAsync:
         self,
         namespace: str,
         statement_id: str,
-        to_scope: str = "common",
+        to_scope: str = "project",
         reason: str | None = None,
     ) -> PromoteStatementResponse:
         owner, project = _parse_namespace(namespace)
@@ -1514,9 +1757,12 @@ class _StatementsNamespaceAsync:
             f"/api/v1/{owner}/{project}/statements/{statement_id}/promote",
             json=body,
         )
+        stmt_data = resp.get("statement")
+        promo_data = resp.get("promotionRequest") or resp.get("promotion_request")
         return PromoteStatementResponse(
             promoted=bool(resp.get("promoted", True)),
-            statement=_parse_statement_item(resp.get("statement", {})),
+            statement=_parse_statement_item(stmt_data) if stmt_data else None,
+            promotion_request=_parse_promotion_request(promo_data) if promo_data else None,
         )
 
     async def list_relations(self, namespace: str, statement_id: str) -> StatementRelationsResponse:
@@ -1925,6 +2171,11 @@ class _CollaboratorsNamespaceAsync:
 class _OrganizationsNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
+        self.sso = _OrganizationSsoNamespaceAsync(client)
+        self.fleet = AsyncOrganizationFleetNamespace(client)
+        self.audit = AsyncOrganizationAuditNamespace(client)
+        self.insights = AsyncOrganizationInsightsNamespace(client)
+        self.teams = AsyncOrganizationTeamsNamespace(client)
 
     async def list(self) -> list[OrganizationItem]:
         resp = await self._client._request("GET", "/api/v1/organizations")
@@ -2094,6 +2345,97 @@ class _OrganizationsNamespaceAsync:
         )
 
 
+class _OrganizationSsoNamespaceAsync:
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def get(self, org_slug: str) -> OrganizationSSOResult:
+        resp = await self._client._request("GET", f"/api/v1/organizations/{org_slug}/sso")
+        providers = [_parse_sso_provider(p) for p in (resp.get("providers") or [])]
+        return OrganizationSSOResult(
+            ok=resp.get("ok", True),
+            providers=providers,
+            sso_enforced=bool(resp.get("ssoEnforced", False)),
+        )
+
+    async def configure(
+        self,
+        org_slug: str,
+        domain: str,
+        issuer: str,
+        protocol: str = "saml",
+        saml_config: dict[str, Any] | None = None,
+        oidc_config: dict[str, Any] | None = None,
+        provider_id: str | None = None,
+    ) -> SSOProviderSummary:
+        body: dict[str, Any] = {
+            "domain": domain,
+            "issuer": issuer,
+            "protocol": protocol,
+        }
+        if provider_id:
+            body["providerId"] = provider_id
+        if saml_config:
+            body["samlConfig"] = saml_config
+        if oidc_config:
+            body["oidcConfig"] = oidc_config
+        resp = await self._client._request(
+            "POST", f"/api/v1/organizations/{org_slug}/sso", json=body
+        )
+        return _parse_sso_provider(resp.get("provider", {}))
+
+    async def delete(self, org_slug: str, provider_id: str) -> None:
+        await self._client._request(
+            "DELETE",
+            f"/api/v1/organizations/{org_slug}/sso",
+            params={"providerId": provider_id},
+        )
+
+    async def get_verification_token(self, org_slug: str, provider_id: str) -> SSOVerificationToken:
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/organizations/{org_slug}/sso/token",
+            json={"providerId": provider_id},
+        )
+        return SSOVerificationToken(
+            token=str(resp.get("token", "")),
+            dns_record_name=str(resp.get("dnsRecordName", "")),
+            dns_record_type=str(resp.get("dnsRecordType", "TXT")),
+            domain=str(resp.get("domain", "")),
+        )
+
+    async def verify_domain(self, org_slug: str, provider_id: str) -> dict[str, Any]:
+        return await self._client._request(
+            "POST",
+            f"/api/v1/organizations/{org_slug}/sso/verify-domain",
+            json={"providerId": provider_id},
+        )
+
+    async def set_enforcement(self, org_slug: str, sso_enforced: bool) -> dict[str, Any]:
+        return await self._client._request(
+            "PATCH",
+            f"/api/v1/organizations/{org_slug}/sso/enforce",
+            json={"ssoEnforced": sso_enforced},
+        )
+
+    async def lookup(self, domain_or_email: str) -> SSODomainLookupResult:
+        is_email = "@" in domain_or_email
+        param = "email" if is_email else "domain"
+        resp = await self._client._request(
+            "GET",
+            "/api/v1/auth/sso/lookup",
+            params={param: domain_or_email},
+        )
+        return SSODomainLookupResult(
+            sso_available=bool(resp.get("ssoAvailable", False)),
+            sso_enforced=bool(resp.get("ssoEnforced", False)),
+            provider_id=resp.get("providerId"),
+            organization_id=resp.get("organizationId"),
+            organization_slug=resp.get("organizationSlug"),
+            organization_name=resp.get("organizationName"),
+        )
+
+
 class _UsageNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
@@ -2247,6 +2589,104 @@ class _SweepNamespaceAsync:
         return ConsolidateSweepResponse.model_validate(resp)
 
 
+class _PromotionsNamespaceAsync:
+    """Async statement promotion pipeline operations (ADR 0076)."""
+
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def list(
+        self,
+        namespace: str,
+        status: str | None = None,
+        statement_id: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[StatementPromotionRequest]:
+        owner, project = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "status": status,
+                "statementId": statement_id,
+                "page": page,
+                "per_page": per_page,
+            }
+        )
+        resp = await self._client._request(
+            "GET", f"/api/v1/{owner}/{project}/promotions", params=params
+        )
+        raw_items = resp.get("requests") or resp.get("items") or resp.get("promotionRequests") or []
+        items = [_parse_promotion_request(r) for r in raw_items]
+        pagination = (
+            _parse_pagination(resp.get("pagination", {}))
+            if "pagination" in resp
+            else PaginationMetadata(
+                page=page or 1,
+                per_page=per_page or len(items),
+                total=int(resp.get("total", len(items))),
+                has_more=False,
+            )
+        )
+        return PaginatedResult[StatementPromotionRequest](
+            items=items,
+            pagination=pagination,
+        )
+
+    async def approve(
+        self,
+        namespace: str,
+        promotion_id: str,
+        reason: str | None = None,
+        review_comment: str | None = None,
+    ) -> dict[str, Any]:
+        owner, project = _parse_namespace(namespace)
+        review_reason = reason or review_comment
+        body = {"reviewReason": review_reason} if review_reason else None
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/approve",
+            json=body,
+        )
+        promotion_req = (
+            _parse_promotion_request(resp["promotionRequest"])
+            if resp.get("promotionRequest")
+            else None
+        )
+        stmt = _parse_statement_item(resp["statement"]) if resp.get("statement") else None
+        return {
+            "approved": bool(resp.get("approved", True)),
+            "promotion_request": promotion_req,
+            "promotionRequest": promotion_req,
+            "statement": stmt,
+        }
+
+    async def reject(
+        self,
+        namespace: str,
+        promotion_id: str,
+        reason: str | None = None,
+        review_comment: str | None = None,
+    ) -> dict[str, Any]:
+        owner, project = _parse_namespace(namespace)
+        review_reason = reason or review_comment
+        body = {"reviewReason": review_reason} if review_reason else None
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/reject",
+            json=body,
+        )
+        promotion_req = (
+            _parse_promotion_request(resp["promotionRequest"])
+            if resp.get("promotionRequest")
+            else None
+        )
+        return {
+            "rejected": bool(resp.get("rejected", True)),
+            "promotion_request": promotion_req,
+            "promotionRequest": promotion_req,
+        }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN CLIENTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2300,6 +2740,7 @@ class MemCell:
         self.account = _AccountNamespaceSync(self)
         self.scopes = _ScopesNamespaceSync(self)
         self.sweep = _SweepNamespaceSync(self)
+        self.promotions = _PromotionsNamespaceSync(self)
 
     def close(self) -> None:
         if not self._custom_client:
@@ -2315,6 +2756,9 @@ class MemCell:
         from .organization import OrganizationMemCell
 
         return OrganizationMemCell(self, org_slug)
+
+    for_org = for_organization
+    organization = for_organization
 
     def scope(self, namespace: str, subject: str | None = None) -> ScopedMemCell:
         from .scoped import ScopedMemCell
@@ -2409,6 +2853,20 @@ class MemCell:
 
             return response.json() if response.content else {}
 
+    def _request_raw(self, method: str, path: str, **kwargs: Any) -> str:
+        headers = kwargs.pop("headers", {}) or {}
+        auth_header = self.auth_manager.get_authorization_header(self._http)
+        if auth_header:
+            headers["Authorization"] = auth_header
+        url = f"{self.base_url}{path}"
+        response = self._http.request(method, url, headers=headers, **kwargs)
+        if response.status_code >= 400:
+            raise MemCellError(
+                f"MemCell API Error ({response.status_code}): {response.text}",
+                status_code=response.status_code,
+            )
+        return response.text
+
     def recall(
         self,
         query: str,
@@ -2418,6 +2876,7 @@ class MemCell:
         kind: str | list[str] | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
+        my_memory: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -2434,6 +2893,7 @@ class MemCell:
             "kind": effective_type,
             "scope": scope,
             "scopes": scopes,
+            "my_memory": my_memory,
             "min_confidence": min_confidence,
             "limit": limit,
             "tags": tags,
@@ -2468,6 +2928,7 @@ class MemCell:
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
@@ -2493,6 +2954,7 @@ class MemCell:
             "status": status,
             "confidence": confidence,
             "scope": scope,
+            "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
             "raw": raw,
@@ -2720,6 +3182,7 @@ class AsyncMemCell:
         self.account = _AccountNamespaceAsync(self)
         self.scopes = _ScopesNamespaceAsync(self)
         self.sweep = _SweepNamespaceAsync(self)
+        self.promotions = _PromotionsNamespaceAsync(self)
 
     async def aclose(self) -> None:
         if not self._custom_client:
@@ -2735,6 +3198,9 @@ class AsyncMemCell:
         from .organization import AsyncOrganizationMemCell
 
         return AsyncOrganizationMemCell(self, org_slug)
+
+    for_org = for_organization
+    organization = for_organization
 
     def scope(self, namespace: str, subject: str | None = None) -> AsyncScopedMemCell:
         from .scoped import AsyncScopedMemCell
@@ -2829,6 +3295,20 @@ class AsyncMemCell:
 
             return response.json() if response.content else {}
 
+    async def _request_raw(self, method: str, path: str, **kwargs: Any) -> str:
+        headers = kwargs.pop("headers", {}) or {}
+        auth_header = await self.auth_manager.get_authorization_header_async(self._http)
+        if auth_header:
+            headers["Authorization"] = auth_header
+        url = f"{self.base_url}{path}"
+        response = await self._http.request(method, url, headers=headers, **kwargs)
+        if response.status_code >= 400:
+            raise MemCellError(
+                f"MemCell API Error ({response.status_code}): {response.text}",
+                status_code=response.status_code,
+            )
+        return response.text
+
     async def recall(
         self,
         query: str,
@@ -2838,6 +3318,7 @@ class AsyncMemCell:
         kind: str | list[str] | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
+        my_memory: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -2854,6 +3335,7 @@ class AsyncMemCell:
             "kind": effective_type,
             "scope": scope,
             "scopes": scopes,
+            "my_memory": my_memory,
             "min_confidence": min_confidence,
             "limit": limit,
             "tags": tags,
@@ -2890,6 +3372,7 @@ class AsyncMemCell:
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
@@ -2915,6 +3398,7 @@ class AsyncMemCell:
             "status": status,
             "confidence": confidence,
             "scope": scope,
+            "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
             "raw": raw,

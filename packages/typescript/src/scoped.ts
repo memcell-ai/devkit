@@ -16,6 +16,7 @@ import type {
   ListCollaboratorsParams,
   ListCollaboratorsResponse,
   ListProjectRelationsParams,
+  ListPromotionsParams,
   ListStatementsParams,
   PaginatedResult,
   PendingInvitationItem,
@@ -33,6 +34,7 @@ import type {
   ScopedExecutionResult,
   StatementHistoryResponse,
   StatementItem,
+  StatementPromotionRequest,
   StatementRelationItem,
   StatementRelationsResponse,
   StatementStarResponse,
@@ -156,6 +158,26 @@ export class ScopedMemCell {
    */
   readonly scopes = {
     list: (): Promise<ScopeItem[]> => this.client.scopes.list(this.namespace),
+  };
+
+  /**
+   * Scoped statement promotion pipeline operations bound to this namespace.
+   */
+  readonly promotions = {
+    list: (
+      params?: ListPromotionsParams,
+    ): Promise<PaginatedResult<StatementPromotionRequest>> =>
+      this.client.promotions.list(this.namespace, params),
+    approve: (
+      promotionId: string,
+      params?: { reason?: string },
+    ): Promise<{ approved: boolean; statement: StatementItem }> =>
+      this.client.promotions.approve(this.namespace, promotionId, params),
+    reject: (
+      promotionId: string,
+      params?: { reason?: string },
+    ): Promise<{ rejected: boolean }> =>
+      this.client.promotions.reject(this.namespace, promotionId, params),
   };
 
   constructor(

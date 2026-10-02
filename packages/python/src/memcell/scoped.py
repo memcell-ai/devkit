@@ -26,6 +26,7 @@ from .models import (
     ScopeItem,
     StatementHistoryResponse,
     StatementItem,
+    StatementPromotionRequest,
     StatementRelationItem,
     StatementRelationsResponse,
     StatementStarResponse,
@@ -75,7 +76,7 @@ class _ScopedStatementsSync:
         return self._client.statements.adopt(self._namespace, statement_id, target_project_ids)
 
     def promote(
-        self, statement_id: str, to_scope: str = "common", reason: str | None = None
+        self, statement_id: str, to_scope: str = "project", reason: str | None = None
     ) -> PromoteStatementResponse:
         return self._client.statements.promote(
             self._namespace, statement_id, to_scope=to_scope, reason=reason
@@ -188,6 +189,33 @@ class _ScopedScopesSync:
         return self._client.scopes.list(self._namespace)
 
 
+class _ScopedPromotionsSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(
+        self,
+        status: str | None = None,
+        statement_id: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[StatementPromotionRequest]:
+        return self._client.promotions.list(
+            self._namespace,
+            status=status,
+            statement_id=statement_id,
+            page=page,
+            per_page=per_page,
+        )
+
+    def approve(self, promotion_id: str, reason: str | None = None) -> dict[str, Any]:
+        return self._client.promotions.approve(self._namespace, promotion_id, reason=reason)
+
+    def reject(self, promotion_id: str, reason: str | None = None) -> dict[str, Any]:
+        return self._client.promotions.reject(self._namespace, promotion_id, reason=reason)
+
+
 class _ScopedStatementsAsync:
     def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
         self._client = client
@@ -225,7 +253,7 @@ class _ScopedStatementsAsync:
         )
 
     async def promote(
-        self, statement_id: str, to_scope: str = "common", reason: str | None = None
+        self, statement_id: str, to_scope: str = "project", reason: str | None = None
     ) -> PromoteStatementResponse:
         return await self._client.statements.promote(
             self._namespace, statement_id, to_scope=to_scope, reason=reason
@@ -338,6 +366,33 @@ class _ScopedScopesAsync:
         return await self._client.scopes.list(self._namespace)
 
 
+class _ScopedPromotionsAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(
+        self,
+        status: str | None = None,
+        statement_id: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[StatementPromotionRequest]:
+        return await self._client.promotions.list(
+            self._namespace,
+            status=status,
+            statement_id=statement_id,
+            page=page,
+            per_page=per_page,
+        )
+
+    async def approve(self, promotion_id: str, reason: str | None = None) -> dict[str, Any]:
+        return await self._client.promotions.approve(self._namespace, promotion_id, reason=reason)
+
+    async def reject(self, promotion_id: str, reason: str | None = None) -> dict[str, Any]:
+        return await self._client.promotions.reject(self._namespace, promotion_id, reason=reason)
+
+
 class ScopedMemCell:
     """Synchronous memory handle scoped to a specific project namespace and default subject."""
 
@@ -355,6 +410,7 @@ class ScopedMemCell:
         self.agents = _ScopedAgentsSync(client, namespace)
         self.collaborators = _ScopedCollaboratorsSync(client, namespace)
         self.scopes = _ScopedScopesSync(client, namespace)
+        self.promotions = _ScopedPromotionsSync(client, namespace)
 
     def recall(
         self,
@@ -362,6 +418,9 @@ class ScopedMemCell:
         subject: str | None = None,
         type: str | list[str] | None = None,
         kind: str | list[str] | None = None,
+        scope: str | None = None,
+        scopes: list[str] | None = None,
+        my_memory: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -374,6 +433,9 @@ class ScopedMemCell:
             subject=subject or self.default_subject,
             type=type,
             kind=kind,
+            scope=scope,
+            scopes=scopes,
+            my_memory=my_memory,
             min_confidence=min_confidence,
             limit=limit,
             tags=tags,
@@ -393,6 +455,7 @@ class ScopedMemCell:
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
@@ -410,6 +473,7 @@ class ScopedMemCell:
             status=status,
             confidence=confidence,
             scope=scope,
+            required_roles=required_roles,
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,
@@ -554,6 +618,7 @@ class AsyncScopedMemCell:
         self.agents = _ScopedAgentsAsync(client, namespace)
         self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
         self.scopes = _ScopedScopesAsync(client, namespace)
+        self.promotions = _ScopedPromotionsAsync(client, namespace)
 
     async def recall(
         self,
@@ -561,6 +626,9 @@ class AsyncScopedMemCell:
         subject: str | None = None,
         type: str | list[str] | None = None,
         kind: str | list[str] | None = None,
+        scope: str | None = None,
+        scopes: list[str] | None = None,
+        my_memory: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -573,6 +641,9 @@ class AsyncScopedMemCell:
             subject=subject or self.default_subject,
             type=type,
             kind=kind,
+            scope=scope,
+            scopes=scopes,
+            my_memory=my_memory,
             min_confidence=min_confidence,
             limit=limit,
             tags=tags,
@@ -592,6 +663,7 @@ class AsyncScopedMemCell:
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
@@ -609,6 +681,7 @@ class AsyncScopedMemCell:
             status=status,
             confidence=confidence,
             scope=scope,
+            required_roles=required_roles,
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,

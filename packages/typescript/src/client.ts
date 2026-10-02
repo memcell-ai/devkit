@@ -9,6 +9,7 @@ import { UsageNamespace } from "./usage.js";
 import { AccountNamespace } from "./account.js";
 import { ScopesNamespace } from "./scopes.js";
 import { SweepNamespace } from "./sweep.js";
+import { PromotionsNamespace } from "./promotions.js";
 import {
   MemCellError,
   RateLimitError,
@@ -79,6 +80,11 @@ export class MemCell {
    */
   readonly sweep: SweepNamespace;
 
+  /**
+   * Statement promotion pipeline operations across 4-tier scopes.
+   */
+  readonly promotions: PromotionsNamespace;
+
   constructor(config: MemCellConfig = {}) {
     let base = config.baseUrl;
     if (
@@ -121,6 +127,7 @@ export class MemCell {
     this.account = new AccountNamespace(this);
     this.scopes = new ScopesNamespace(this);
     this.sweep = new SweepNamespace(this);
+    this.promotions = new PromotionsNamespace(this);
   }
 
   /**
@@ -134,6 +141,20 @@ export class MemCell {
    */
   forOrganization(orgSlug: string): OrganizationMemCell {
     return new OrganizationMemCell(this, orgSlug);
+  }
+
+  /**
+   * Semantic shorthand alias for `forOrganization(orgSlug)`.
+   */
+  forOrg(orgSlug: string): OrganizationMemCell {
+    return this.forOrganization(orgSlug);
+  }
+
+  /**
+   * Semantic shorthand alias for `forOrganization(orgSlug)`.
+   */
+  organization(orgSlug: string): OrganizationMemCell {
+    return this.forOrganization(orgSlug);
   }
 
   /**
@@ -166,6 +187,7 @@ export class MemCell {
       kind: effectiveType,
       scope: params.scope,
       scopes: params.scopes,
+      my_memory: params.myMemory,
       min_confidence: params.minConfidence,
       limit: params.limit,
       tags: params.tags,
@@ -204,6 +226,9 @@ export class MemCell {
       starred: s.starred,
       starCount: s.starCount,
       scope: s.scope,
+      requiredRoles: s.requiredRoles ?? s.required_roles,
+      scopePromotedAt: s.scopePromotedAt ?? s.scope_promoted_at ?? null,
+      scopePromotedBy: s.scopePromotedBy ?? s.scope_promoted_by ?? null,
       metadata: s.metadata,
       isGuard:
         s.isGuard ??
@@ -249,6 +274,7 @@ export class MemCell {
       status: params.status,
       confidence: params.confidence,
       scope: params.scope,
+      required_roles: params.requiredRoles,
       metadata: params.metadata,
       expires_at:
         params.expiresAt instanceof Date
@@ -626,6 +652,33 @@ export class MemCell {
 
       return (await response.json()) as T;
     }
+  }
+
+  /**
+   * Internal HTTP request handler returning raw Response for non-JSON or streaming formats (e.g. CEF, CSV).
+   */
+  async requestRaw(path: string, init: RequestInit = {}): Promise<Response> {
+    const fetcher = this.customFetch ?? fetch;
+    const authHeader = await this.authManager.getAuthorizationHeader();
+    const headers: Record<string, string> = {
+      Authorization: authHeader,
+      ...(init.headers as Record<string, string>),
+    };
+
+    const response = await fetcher(`${this.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new MemCellError(
+        `MemCell API Error (${response.status}): ${response.statusText}`,
+        response.status,
+        `HTTP_${response.status}`,
+      );
+    }
+
+    return response;
   }
 
   private resolveEndpoint(

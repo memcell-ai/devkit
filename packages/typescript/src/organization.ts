@@ -1,5 +1,22 @@
 import type { MemCell } from "./client.js";
 import type { ScopedMemCell } from "./scoped.js";
+import { OrganizationSsoNamespace, ScopedOrganizationSso } from "./sso.js";
+import {
+  OrganizationFleetNamespace,
+  ScopedOrganizationFleet,
+} from "./fleet.js";
+import {
+  OrganizationAuditNamespace,
+  ScopedOrganizationAudit,
+} from "./audit.js";
+import {
+  OrganizationInsightsNamespace,
+  ScopedOrganizationInsights,
+} from "./insights.js";
+import {
+  OrganizationTeamsNamespace,
+  ScopedOrganizationTeams,
+} from "./teams.js";
 import type {
   CreateOrganizationParams,
   FeedbackParams,
@@ -36,7 +53,38 @@ function buildMembersQuery(params?: ListMembersParams): string {
 }
 
 export class OrganizationsNamespace {
-  constructor(private readonly client: MemCell) {}
+  /**
+   * Enterprise Single Sign-On (SSO) and IdP management.
+   */
+  readonly sso: OrganizationSsoNamespace;
+
+  /**
+   * Centralized agent fleet governance, credentials, and emergency kill-switch.
+   */
+  readonly fleet: OrganizationFleetNamespace;
+
+  /**
+   * Enterprise immutable audit logs and SIEM log forwarders.
+   */
+  readonly audit: OrganizationAuditNamespace;
+
+  /**
+   * Enterprise cognitive KPIs, token avoidance economics, and latency telemetry.
+   */
+  readonly insights: OrganizationInsightsNamespace;
+
+  /**
+   * Enterprise teams, member rosters, and RBAC hierarchies.
+   */
+  readonly teams: OrganizationTeamsNamespace;
+
+  constructor(private readonly client: MemCell) {
+    this.sso = new OrganizationSsoNamespace(client);
+    this.fleet = new OrganizationFleetNamespace(client);
+    this.audit = new OrganizationAuditNamespace(client);
+    this.insights = new OrganizationInsightsNamespace(client);
+    this.teams = new OrganizationTeamsNamespace(client);
+  }
 
   /**
    * Lists organizations the authenticated user belongs to.
@@ -207,10 +255,35 @@ export class OrganizationsNamespace {
 export class OrganizationMemCell {
   readonly memcell: MemCell;
   readonly orgSlug: string;
+  readonly sso: ScopedOrganizationSso;
+  readonly fleet: ScopedOrganizationFleet;
+  readonly audit: ScopedOrganizationAudit;
+  readonly insights: ScopedOrganizationInsights;
+  readonly teams: ScopedOrganizationTeams;
 
   constructor(memcell: MemCell, orgSlug: string) {
     this.memcell = memcell;
     this.orgSlug = orgSlug.toLowerCase().trim();
+    this.sso = new ScopedOrganizationSso(
+      this.memcell.organizations.sso,
+      this.orgSlug,
+    );
+    this.fleet = new ScopedOrganizationFleet(
+      this.memcell.organizations.fleet,
+      this.orgSlug,
+    );
+    this.audit = new ScopedOrganizationAudit(
+      this.memcell.organizations.audit,
+      this.orgSlug,
+    );
+    this.insights = new ScopedOrganizationInsights(
+      this.memcell.organizations.insights,
+      this.orgSlug,
+    );
+    this.teams = new ScopedOrganizationTeams(
+      this.memcell.organizations.teams,
+      this.orgSlug,
+    );
   }
 
   /**

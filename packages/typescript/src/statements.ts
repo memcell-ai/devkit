@@ -118,6 +118,7 @@ export class StatementsNamespace {
       status: params.status,
       isPinned: params.isPinned,
       scope: params.scope,
+      requiredRoles: params.requiredRoles,
       metadata: params.metadata,
       expiresAt:
         params.expiresAt instanceof Date

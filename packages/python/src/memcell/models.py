@@ -6,6 +6,9 @@ from typing import Any, Generic, Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 StatementType = Literal["guard", "directive", "fact", "preference", "observation"]
+STATEMENT_SCOPES = ("organization", "team", "project", "user")
+StatementScope = Literal["organization", "team", "project", "user", str]
+PromotionStatus = Literal["pending", "approved", "rejected"]
 MemoryKind = Literal[
     "guard", "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
 ]
@@ -78,7 +81,10 @@ class StatementItem(BaseModel):
     star_count: int | None = None
     is_guard: bool = False
     is_invariant: bool = False
-    scope: str = "common"
+    scope: str = "project"
+    required_roles: list[str] = Field(default_factory=list)
+    scope_promoted_at: datetime | None = None
+    scope_promoted_by: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     author: StatementAuthor | None = None
     source: str | None = None
@@ -162,9 +168,26 @@ class AdoptStatementResponse(BaseModel):
     adopted: list[AdoptedTarget] = Field(default_factory=list)
 
 
+class StatementPromotionRequest(BaseModel):
+    id: str
+    statement_id: str
+    from_scope: str
+    to_scope: str
+    status: PromotionStatus = "pending"
+    requester_id: str | None = None
+    requester_reason: str | None = None
+    reviewer_id: str | None = None
+    review_reason: str | None = None
+    reviewed_at: datetime | None = None
+    statement: StatementItem | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class PromoteStatementResponse(BaseModel):
-    promoted: bool
-    statement: StatementItem
+    promoted: bool = True
+    statement: StatementItem | None = None
+    promotion_request: StatementPromotionRequest | None = None
 
 
 class RecallResponse(BaseModel):
@@ -456,3 +479,192 @@ class ScopedExecutionContext(BaseModel):
     statements: list[StatementItem] = Field(default_factory=list)
     action: str
     subject: str | None = None
+
+
+# ─── Enterprise SSO Models ───
+
+
+class SSOProviderSummary(BaseModel):
+    id: str
+    provider_id: str
+    issuer: str
+    domain: str
+    protocol: str
+    domain_verified: bool = False
+    organization_id: str | None = None
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class SSOVerificationToken(BaseModel):
+    token: str
+    dns_record_name: str
+    dns_record_type: str = "TXT"
+    domain: str
+
+
+class SSODomainLookupResult(BaseModel):
+    sso_available: bool = False
+    sso_enforced: bool = False
+    provider_id: str | None = None
+    organization_id: str | None = None
+    organization_slug: str | None = None
+    organization_name: str | None = None
+
+
+class OrganizationSSOResult(BaseModel):
+    ok: bool = True
+    providers: list[SSOProviderSummary] = Field(default_factory=list)
+    sso_enforced: bool = False
+
+
+def _to_camel(string: str) -> str:
+    components = string.split("_")
+    return components[0] + "".join(x.title() for x in components[1:])
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, alias_generator=_to_camel)
+
+
+# ─── Fleet Management Models ───
+
+
+class FleetAgent(CamelModel):
+    id: str
+    name: str
+    slug: str
+    scope: str = "organization"
+    framework: str | None = None
+    model: str | None = None
+    status: str = "active"
+    health: str = "healthy"
+    description: str | None = None
+    organization_id: str | None = None
+    team_id: str | None = None
+    team_name: str | None = None
+    project_id: str | None = None
+    project_name: str | None = None
+    last_active_at: datetime | str | None = None
+    active_key_count: int = 0
+    project_grant_count: int = 0
+    suspension_reason: str | None = None
+    suspended_at: datetime | str | None = None
+    created_at: datetime | str | None = None
+
+
+class FleetAgentDetail(CamelModel):
+    agent: FleetAgent
+    team_name: str | None = None
+    project_name: str | None = None
+    keys: list[dict[str, Any]] = Field(default_factory=list)
+    grants: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class FleetAgentKeyCreated(CamelModel):
+    key: str
+    key_prefix: str
+    key_id: str
+
+
+class CreateFleetAgentResult(CamelModel):
+    agent: FleetAgent
+    key: FleetAgentKeyCreated | None = None
+
+
+# ─── Audit & SIEM Models ───
+
+
+class AuditEvent(CamelModel):
+    id: str
+    organization_id: str
+    project_id: str | None = None
+    team_id: str | None = None
+    actor_type: str = "user"
+    actor_id: str | None = None
+    actor_name: str | None = None
+    action: str
+    target_type: str
+    target_id: str
+    ip_address: str | None = None
+    user_agent: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | str | None = None
+
+
+class SiemDestination(CamelModel):
+    id: str
+    organization_id: str
+    name: str
+    destination_type: str = "webhook"
+    url: str
+    secret_token: str | None = None
+    format: str = "json"
+    enabled: bool = True
+    created_at: datetime | str | None = None
+
+
+# ─── Enterprise Insights Models ───
+
+
+class LatencyMs(CamelModel):
+    p50: float = 0.0
+    p95: float = 0.0
+    p99: float = 0.0
+
+
+class EnterpriseKpis(CamelModel):
+    dead_end_avoidance_rate: float = 100.0
+    recall_utilization_rate: float = 0.0
+    recall_precision_rate: float = 100.0
+    memory_convergence_rate: float = 0.0
+    tokens_saved: int = 0
+    estimated_cost_saved_usd: float = 0.0
+    latency_ms: LatencyMs = Field(default_factory=LatencyMs)
+
+
+class EnterpriseMetrics(CamelModel):
+    total_recalls: int = 0
+    worked_recalls: int = 0
+    failed_recalls: int = 0
+    pending_recalls: int = 0
+    total_statements: int = 0
+    converged_statements: int = 0
+
+
+class EnterpriseInsights(CamelModel):
+    timeframe: str = "30d"
+    kpis: EnterpriseKpis = Field(default_factory=EnterpriseKpis)
+    metrics: EnterpriseMetrics = Field(default_factory=EnterpriseMetrics)
+    timeseries: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ─── Team Management Models ───
+
+
+class OrgTeam(CamelModel):
+    id: str
+    name: str
+    organization_id: str
+    member_count: int = 0
+    project_count: int = 0
+    agent_count: int = 0
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class OrgTeamDetail(CamelModel):
+    team: dict[str, Any]
+    projects: list[dict[str, Any]] = Field(default_factory=list)
+    agents: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TeamMemberItem(CamelModel):
+    id: str
+    user_id: str
+    role: str = "member"
+    name: str | None = None
+    email: str | None = None
+    handle: str | None = None
+    image: str | None = None
+    created_at: datetime | str | None = None

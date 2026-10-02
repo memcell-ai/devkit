@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from .audit import (
+    ScopedOrganizationAuditAsync,
+    ScopedOrganizationAuditSync,
+)
+from .fleet import (
+    ScopedOrganizationFleetAsync,
+    ScopedOrganizationFleetSync,
+)
+from .insights import (
+    ScopedOrganizationInsightsAsync,
+    ScopedOrganizationInsightsSync,
+)
 from .models import (
     FeedbackResponse,
     OrganizationItem,
+    OrganizationSSOResult,
     OrgInvitationItem,
     OrgMemberItem,
     OutcomeVerdict,
@@ -12,6 +25,12 @@ from .models import (
     RecallResponse,
     RememberResponse,
     ReportResponse,
+    SSOProviderSummary,
+    SSOVerificationToken,
+)
+from .teams import (
+    ScopedOrganizationTeamsAsync,
+    ScopedOrganizationTeamsSync,
 )
 
 
@@ -21,6 +40,31 @@ class OrganizationMemCell:
     def __init__(self, client: Any, org_slug: str) -> None:
         self._client = client
         self.org_slug = org_slug.strip().lower()
+
+    @property
+    def sso(self) -> _ScopedOrganizationSsoSync:
+        """Scoped Enterprise SSO handle for this organization."""
+        return _ScopedOrganizationSsoSync(self._client.organizations.sso, self.org_slug)
+
+    @property
+    def fleet(self) -> ScopedOrganizationFleetSync:
+        """Scoped agent fleet management handle for this organization."""
+        return ScopedOrganizationFleetSync(self._client.organizations.fleet, self.org_slug)
+
+    @property
+    def audit(self) -> ScopedOrganizationAuditSync:
+        """Scoped audit logs and SIEM forwarders handle for this organization."""
+        return ScopedOrganizationAuditSync(self._client.organizations.audit, self.org_slug)
+
+    @property
+    def insights(self) -> ScopedOrganizationInsightsSync:
+        """Scoped enterprise cognitive insights handle for this organization."""
+        return ScopedOrganizationInsightsSync(self._client.organizations.insights, self.org_slug)
+
+    @property
+    def teams(self) -> ScopedOrganizationTeamsSync:
+        """Scoped teams handle for this organization."""
+        return ScopedOrganizationTeamsSync(self._client.organizations.teams, self.org_slug)
 
     def scope(self, project_slug: str, subject: str | None = None) -> Any:
         from .scoped import ScopedMemCell
@@ -195,6 +239,31 @@ class AsyncOrganizationMemCell:
         self._client = client
         self.org_slug = org_slug.strip().lower()
 
+    @property
+    def sso(self) -> _ScopedOrganizationSsoAsync:
+        """Scoped Enterprise SSO handle for this organization."""
+        return _ScopedOrganizationSsoAsync(self._client.organizations.sso, self.org_slug)
+
+    @property
+    def fleet(self) -> ScopedOrganizationFleetAsync:
+        """Scoped agent fleet management handle for this organization."""
+        return ScopedOrganizationFleetAsync(self._client.organizations.fleet, self.org_slug)
+
+    @property
+    def audit(self) -> ScopedOrganizationAuditAsync:
+        """Scoped audit logs and SIEM forwarders handle for this organization."""
+        return ScopedOrganizationAuditAsync(self._client.organizations.audit, self.org_slug)
+
+    @property
+    def insights(self) -> ScopedOrganizationInsightsAsync:
+        """Scoped enterprise cognitive insights handle for this organization."""
+        return ScopedOrganizationInsightsAsync(self._client.organizations.insights, self.org_slug)
+
+    @property
+    def teams(self) -> ScopedOrganizationTeamsAsync:
+        """Scoped teams handle for this organization."""
+        return ScopedOrganizationTeamsAsync(self._client.organizations.teams, self.org_slug)
+
     def scope(self, project_slug: str, subject: str | None = None) -> Any:
         from .scoped import AsyncScopedMemCell
 
@@ -359,3 +428,83 @@ class AsyncOrganizationMemCell:
             payload=payload,
             namespace=self._resolve_namespace(namespace),
         )
+
+
+class _ScopedOrganizationSsoSync:
+    def __init__(self, sso_ns: Any, org_slug: str) -> None:
+        self._sso_ns = sso_ns
+        self.org_slug = org_slug
+
+    def get(self) -> OrganizationSSOResult:
+        return self._sso_ns.get(self.org_slug)
+
+    def configure(
+        self,
+        domain: str,
+        issuer: str,
+        protocol: str = "saml",
+        saml_config: dict[str, Any] | None = None,
+        oidc_config: dict[str, Any] | None = None,
+        provider_id: str | None = None,
+    ) -> SSOProviderSummary:
+        return self._sso_ns.configure(
+            self.org_slug,
+            domain=domain,
+            issuer=issuer,
+            protocol=protocol,
+            saml_config=saml_config,
+            oidc_config=oidc_config,
+            provider_id=provider_id,
+        )
+
+    def delete(self, provider_id: str) -> None:
+        self._sso_ns.delete(self.org_slug, provider_id)
+
+    def get_verification_token(self, provider_id: str) -> SSOVerificationToken:
+        return self._sso_ns.get_verification_token(self.org_slug, provider_id)
+
+    def verify_domain(self, provider_id: str) -> dict[str, Any]:
+        return self._sso_ns.verify_domain(self.org_slug, provider_id)
+
+    def set_enforcement(self, sso_enforced: bool) -> dict[str, Any]:
+        return self._sso_ns.set_enforcement(self.org_slug, sso_enforced)
+
+
+class _ScopedOrganizationSsoAsync:
+    def __init__(self, sso_ns: Any, org_slug: str) -> None:
+        self._sso_ns = sso_ns
+        self.org_slug = org_slug
+
+    async def get(self) -> OrganizationSSOResult:
+        return await self._sso_ns.get(self.org_slug)
+
+    async def configure(
+        self,
+        domain: str,
+        issuer: str,
+        protocol: str = "saml",
+        saml_config: dict[str, Any] | None = None,
+        oidc_config: dict[str, Any] | None = None,
+        provider_id: str | None = None,
+    ) -> SSOProviderSummary:
+        return await self._sso_ns.configure(
+            self.org_slug,
+            domain=domain,
+            issuer=issuer,
+            protocol=protocol,
+            saml_config=saml_config,
+            oidc_config=oidc_config,
+            provider_id=provider_id,
+        )
+
+    async def delete(self, provider_id: str) -> None:
+        await self._sso_ns.delete(self.org_slug, provider_id)
+
+    async def get_verification_token(self, provider_id: str) -> SSOVerificationToken:
+        return await self._sso_ns.get_verification_token(self.org_slug, provider_id)
+
+    async def verify_domain(self, provider_id: str) -> dict[str, Any]:
+        return await self._sso_ns.verify_domain(self.org_slug, provider_id)
+
+    async def set_enforcement(self, sso_enforced: bool) -> dict[str, Any]:
+        return await self._sso_ns.set_enforcement(self.org_slug, sso_enforced)
