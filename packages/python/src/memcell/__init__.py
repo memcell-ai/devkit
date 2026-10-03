@@ -22,9 +22,12 @@ from .insights import (
     ScopedOrganizationInsightsSync,
 )
 from .models import (
+    MEMORY_SCOPES,
+    MEMORY_TYPES,
     STATEMENT_SCOPES,
     AccountProfile,
     AdoptedTarget,
+    AdoptMemoryResponse,
     AdoptStatementResponse,
     AgentItem,
     AgentKeyItem,
@@ -45,8 +48,13 @@ from .models import (
     JobEvent,
     LatencyMs,
     ListCollaboratorsResponse,
+    MemoryItem,
     MemoryKind,
+    MemoryRelationItem,
+    MemoryRelationsResponse,
+    MemoryScope,
     MemoryStatus,
+    MemoryType,
     OrganizationItem,
     OrganizationSSOResult,
     OrgInvitationItem,
@@ -61,6 +69,7 @@ from .models import (
     PersonalAccessTokenItem,
     ProjectItem,
     ProjectOwner,
+    PromoteMemoryResponse,
     PromoteStatementResponse,
     PromotionStatus,
     RecallResponse,
@@ -88,6 +97,8 @@ from .models import (
     StatementTypeQuotas,
     TeamMemberItem,
     UsageQuotas,
+    WorkspaceItem,
+    WorkspaceOwner,
 )
 from .organization import AsyncOrganizationMemCell, OrganizationMemCell
 from .scoped import AsyncScopedMemCell, ScopedExecutionResult, ScopedMemCell
@@ -103,8 +114,11 @@ from .teams import (
 __version__ = "0.1.5"
 
 __all__ = [
+    "MEMORY_SCOPES",
+    "MEMORY_TYPES",
     "STATEMENT_SCOPES",
     "AccountProfile",
+    "AdoptMemoryResponse",
     "AdoptStatementResponse",
     "AdoptedTarget",
     "AgentItem",
@@ -138,8 +152,13 @@ __all__ = [
     "ListCollaboratorsResponse",
     "MemCell",
     "MemCellError",
+    "MemoryItem",
     "MemoryKind",
+    "MemoryRelationItem",
+    "MemoryRelationsResponse",
+    "MemoryScope",
     "MemoryStatus",
+    "MemoryType",
     "OrgInvitationItem",
     "OrgMemberItem",
     "OrgTeam",
@@ -159,6 +178,7 @@ __all__ = [
     "PersonalAccessTokenItem",
     "ProjectItem",
     "ProjectOwner",
+    "PromoteMemoryResponse",
     "PromoteStatementResponse",
     "PromotionStatus",
     "RateLimitError",
@@ -199,5 +219,7 @@ __all__ = [
     "TeamMemberItem",
     "TeamMembersNamespace",
     "UsageQuotas",
+    "WorkspaceItem",
+    "WorkspaceOwner",
     "__version__",
 ]

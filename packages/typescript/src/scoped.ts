@@ -1,4 +1,5 @@
 import type {
+  AdoptMemoryResponse,
   AdoptStatementResponse,
   AgentItem,
   CollaboratorRole,
@@ -6,6 +7,7 @@ import type {
   ConsolidateSweepResponse,
   CreateAgentKeyResponse,
   CreateAgentParams,
+  CreateMemoryParams,
   CreateRelationParams,
   CreateStatementParams,
   FeedbackParams,
@@ -15,11 +17,19 @@ import type {
   ListAgentsParams,
   ListCollaboratorsParams,
   ListCollaboratorsResponse,
+  ListMemoriesParams,
   ListProjectRelationsParams,
   ListPromotionsParams,
   ListStatementsParams,
+  MemoryHistoryResponse,
+  MemoryItem,
+  MemoryRelationItem,
+  MemoryRelationsResponse,
+  MemoryStarResponse,
   PaginatedResult,
   PendingInvitationItem,
+  PromoteMemoryParams,
+  PromoteMemoryResponse,
   PromoteStatementParams,
   PromoteStatementResponse,
   RecallParams,
@@ -39,6 +49,7 @@ import type {
   StatementRelationsResponse,
   StatementStarResponse,
   UpdateAgentParams,
+  UpdateMemoryParams,
   UpdateStatementParams,
   WaitForJobOptions,
   WrapExecutionOptions,
@@ -50,7 +61,66 @@ export class ScopedMemCell {
   readonly defaultFormat: "xml" | "markdown" | "none";
 
   /**
-   * Scoped statement operations bound to this namespace.
+   * Scoped memory operations bound to this namespace.
+   */
+  readonly memories = {
+    list: (params?: ListMemoriesParams): Promise<PaginatedResult<MemoryItem>> =>
+      this.client.memories.list(this.namespace, params),
+    get: (memoryId: string): Promise<MemoryItem> =>
+      this.client.memories.get(this.namespace, memoryId),
+    create: (params: CreateMemoryParams): Promise<MemoryItem> =>
+      this.client.memories.create(this.namespace, {
+        subject: this.defaultSubject ?? undefined,
+        ...params,
+      }),
+    update: (
+      memoryId: string,
+      params: UpdateMemoryParams,
+    ): Promise<MemoryItem> =>
+      this.client.memories.update(this.namespace, memoryId, params),
+    delete: (memoryId: string): Promise<void> =>
+      this.client.memories.delete(this.namespace, memoryId),
+    star: (memoryId: string, starred = true): Promise<MemoryStarResponse> =>
+      this.client.memories.star(this.namespace, memoryId, starred),
+    history: (memoryId: string): Promise<MemoryHistoryResponse> =>
+      this.client.memories.history(this.namespace, memoryId),
+    adopt: (
+      memoryId: string,
+      params: { targetProjectIds?: string[]; targetWorkspaceIds?: string[] },
+    ): Promise<AdoptMemoryResponse> =>
+      this.client.memories.adopt(this.namespace, memoryId, params),
+    promote: (
+      memoryId: string,
+      params?: PromoteMemoryParams,
+    ): Promise<PromoteMemoryResponse> =>
+      this.client.memories.promote(this.namespace, memoryId, params),
+    relations: {
+      list: (memoryId: string): Promise<MemoryRelationsResponse> =>
+        this.client.memories.relations.list(this.namespace, memoryId),
+      create: (
+        memoryId: string,
+        params: CreateRelationParams,
+      ): Promise<MemoryRelationItem> =>
+        this.client.memories.relations.create(this.namespace, memoryId, params),
+      delete: (memoryId: string, relationId: string): Promise<void> =>
+        this.client.memories.relations.delete(
+          this.namespace,
+          memoryId,
+          relationId,
+        ),
+      listWorkspace: (
+        params?: ListProjectRelationsParams,
+      ): Promise<PaginatedResult<MemoryRelationItem>> =>
+        this.client.memories.relations.listProject(this.namespace, params),
+      listProject: (
+        params?: ListProjectRelationsParams,
+      ): Promise<PaginatedResult<MemoryRelationItem>> =>
+        this.client.memories.relations.listProject(this.namespace, params),
+    },
+  };
+
+  /**
+   * @deprecated Use `memories` instead.
    */
   readonly statements = {
     list: (
@@ -320,6 +390,7 @@ export class ScopedMemCell {
       result,
       report: reportResult,
       recallId: recallResult.recallId,
+      memories: recallResult.memories ?? recallResult.statements,
       statements: recallResult.statements,
       promptContext: recallResult.promptContext,
     };
@@ -344,3 +415,6 @@ export class ScopedMemCell {
     return await this.client.sweep.consolidate(this.namespace, params);
   }
 }
+
+export { ScopedMemCell as ScopedWorkspace };
+export { ScopedMemCell as ScopedProjectNamespace };

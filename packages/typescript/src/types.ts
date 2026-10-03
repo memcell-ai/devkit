@@ -1,29 +1,40 @@
-export type StatementType =
+export type MemoryType =
   "guard" | "directive" | "fact" | "preference" | "observation";
 
-export const STATEMENT_SCOPES = [
+export const MEMORY_TYPES: readonly MemoryType[] = [
+  "guard",
+  "directive",
+  "fact",
+  "preference",
+  "observation",
+];
+
+export type StatementType = MemoryType;
+
+export const MEMORY_SCOPES = [
   "organization",
   "team",
+  "workspace",
   "project",
   "user",
 ] as const;
 
-export type StatementScope = (typeof STATEMENT_SCOPES)[number] | (string & {});
+export const STATEMENT_SCOPES = MEMORY_SCOPES;
+
+export type MemoryScope = (typeof MEMORY_SCOPES)[number] | (string & {});
+export type StatementScope = MemoryScope;
 
 export type PromotionStatus = "pending" | "approved" | "rejected";
 
 /**
- * @deprecated Use `StatementType` per Rule 12. Retained for backward compatibility.
+ * @deprecated Use `MemoryType` per Rule 12. Retained for backward compatibility.
  */
-export type MemoryKind = StatementType | "invariant" | "reflex" | "episodic";
+export type MemoryKind = MemoryType | "invariant" | "reflex" | "episodic";
 
-export type StatementStatus =
+export type MemoryStatus =
   "provisional" | "active" | "pinned" | "decayed" | "refuted";
 
-/**
- * @deprecated Use `StatementStatus`. Retained for backward compatibility.
- */
-export type MemoryStatus = StatementStatus;
+export type StatementStatus = MemoryStatus;
 
 export type OutcomeVerdict = "worked" | "failed" | "avoided";
 
@@ -121,7 +132,7 @@ export interface StatementAuthor {
   name?: string | null;
 }
 
-export interface StatementItem {
+export interface MemoryItem {
   id: string;
   rootId?: string;
   title: string;
@@ -129,10 +140,10 @@ export interface StatementItem {
   example?: string | null;
   tags?: string[];
   subject?: string | null;
-  type?: StatementType;
+  type?: MemoryType;
   /** @deprecated Use `type` instead per Rule 12. */
   kind?: string;
-  status?: StatementStatus;
+  status?: MemoryStatus;
   confidence?: number;
   score?: number;
   relevance?: number;
@@ -144,7 +155,7 @@ export interface StatementItem {
   starCount?: number;
   isGuard?: boolean;
   isInvariant?: boolean;
-  scope?: StatementScope;
+  scope?: MemoryScope;
   requiredRoles?: string[];
   scopePromotedAt?: string | Date | null;
   scopePromotedBy?: string | null;
@@ -157,12 +168,14 @@ export interface StatementItem {
   updatedAt?: string | Date;
 }
 
-export interface ListStatementsParams extends PaginationParams {
-  type?: StatementType;
+export type StatementItem = MemoryItem;
+
+export interface ListMemoriesParams extends PaginationParams {
+  type?: MemoryType;
   /** @deprecated Use `type` */
   kind?: string;
-  status?: StatementStatus;
-  scope?: StatementScope;
+  status?: MemoryStatus;
+  scope?: MemoryScope;
   q?: string;
   semantic?: string;
   sort?: "created" | "confidence" | "stars" | "title";
@@ -173,7 +186,9 @@ export interface ListStatementsParams extends PaginationParams {
   subject?: string;
 }
 
-export interface CreateStatementParams {
+export type ListStatementsParams = ListMemoriesParams;
+
+export interface CreateMemoryParams {
   title: string;
   context?: string | null;
   example?: string | null;
@@ -181,34 +196,38 @@ export interface CreateStatementParams {
   tags?: string[];
   confidence?: number;
   subject?: string | null;
-  type?: StatementType;
+  type?: MemoryType;
   /** @deprecated Use `type` */
   kind?: string;
-  status?: StatementStatus;
+  status?: MemoryStatus;
   isPinned?: boolean;
   expiresAt?: string | Date | null;
-  scope?: StatementScope;
+  scope?: MemoryScope;
   requiredRoles?: string[];
   metadata?: Record<string, unknown>;
 }
 
-export interface UpdateStatementParams {
+export type CreateStatementParams = CreateMemoryParams;
+
+export interface UpdateMemoryParams {
   title?: string;
   context?: string | null;
   example?: string | null;
   tags?: string[];
   confidence?: number;
-  status?: StatementStatus;
-  type?: StatementType;
+  status?: MemoryStatus;
+  type?: MemoryType;
   /** @deprecated Use `type` */
   kind?: string;
   subject?: string | null;
   isPinned?: boolean;
-  scope?: StatementScope;
+  scope?: MemoryScope;
   requiredRoles?: string[];
   metadata?: Record<string, unknown>;
   reason?: string;
 }
+
+export type UpdateStatementParams = UpdateMemoryParams;
 
 export interface StatementHistoryItem {
   id: string;
@@ -238,11 +257,16 @@ export interface StatementHistoryResponse {
   history: StatementHistoryItem[];
 }
 
+export type MemoryHistoryItem = StatementHistoryItem;
+export type MemoryHistoryResponse = StatementHistoryResponse;
+
 export interface StatementStarResponse {
   rootId: string;
   starred: boolean;
   starCount: number;
 }
+
+export type MemoryStarResponse = StatementStarResponse;
 
 export interface AdoptedTarget {
   projectId: string;
@@ -256,16 +280,22 @@ export interface AdoptStatementResponse {
   adopted: AdoptedTarget[];
 }
 
+export type AdoptMemoryResponse = AdoptStatementResponse;
+
 export interface PromoteStatementParams {
   toScope?: StatementScope;
   reason?: string;
 }
+
+export type PromoteMemoryParams = PromoteStatementParams;
 
 export interface PromoteStatementResponse {
   promoted: boolean;
   statement: StatementItem;
   promotionRequest?: StatementPromotionRequest;
 }
+
+export type PromoteMemoryResponse = PromoteStatementResponse;
 
 export interface StatementPromotionRequest {
   id: string;
@@ -282,6 +312,8 @@ export interface StatementPromotionRequest {
   updatedAt: string | Date;
 }
 
+export type MemoryPromotionRequest = StatementPromotionRequest;
+
 export interface ListPromotionsParams extends PaginationParams {
   status?: PromotionStatus;
   statementId?: string;
@@ -289,7 +321,7 @@ export interface ListPromotionsParams extends PaginationParams {
   offset?: number;
 }
 
-// ─── Statement Relations Domain ───
+// ─── Statement & Memory Relations Domain ───
 
 export type RelationType =
   "constrains" | "justifies" | "refines" | "depends_on" | "tensions_with";
@@ -308,6 +340,8 @@ export interface StatementRelationItem {
   targetStatement?: StatementItem;
 }
 
+export type MemoryRelationItem = StatementRelationItem;
+
 export interface CreateRelationParams {
   targetId: string;
   relationType: RelationType;
@@ -315,14 +349,20 @@ export interface CreateRelationParams {
   metadata?: Record<string, unknown>;
 }
 
+export type CreateMemoryRelationParams = CreateRelationParams;
+
 export interface StatementRelationsResponse {
   incoming: StatementRelationItem[];
   outgoing: StatementRelationItem[];
 }
 
+export type MemoryRelationsResponse = StatementRelationsResponse;
+
 export interface ListProjectRelationsParams extends PaginationParams {
   relationType?: RelationType;
 }
+
+export type ListWorkspaceRelationsParams = ListProjectRelationsParams;
 
 // ─── Memory Operations (Recall, Remember, Report, Feedback) ───
 
@@ -346,6 +386,7 @@ export interface RecallParams {
 export interface RecallResponse {
   recallId: string;
   promptContext: string;
+  memories?: MemoryItem[];
   statements: StatementItem[];
   matchedTags?: string[];
   guardMode?: "strict" | "advisory";
@@ -479,6 +520,7 @@ export interface ScopedExecutionResult<T> {
   result: T;
   report: ReportResponse;
   recallId: string;
+  memories?: MemoryItem[];
   statements: StatementItem[];
   promptContext: string;
 }
@@ -489,9 +531,9 @@ export interface ScopeOptions {
   minConfidence?: number;
 }
 
-// ─── Projects Domain ───
+// ─── Workspaces Domain ───
 
-export interface ProjectItem {
+export interface WorkspaceItem {
   id: string;
   name: string;
   slug: string;
@@ -515,14 +557,18 @@ export interface ProjectItem {
   updatedAt?: string | Date;
 }
 
-export interface ListProjectsParams extends PaginationParams {
+export type ProjectItem = WorkspaceItem;
+
+export interface ListWorkspacesParams extends PaginationParams {
   visibility?: "public" | "private" | "all";
   q?: string;
   sort?: "created" | "updated" | "name";
   order?: "asc" | "desc";
 }
 
-export interface CreateProjectParams {
+export type ListProjectsParams = ListWorkspacesParams;
+
+export interface CreateWorkspaceParams {
   name: string;
   slug?: string;
   description?: string;
@@ -531,7 +577,9 @@ export interface CreateProjectParams {
   owner?: string;
 }
 
-export interface UpdateProjectParams {
+export type CreateProjectParams = CreateWorkspaceParams;
+
+export interface UpdateWorkspaceParams {
   name?: string;
   slug?: string;
   description?: string;
@@ -544,9 +592,13 @@ export interface UpdateProjectParams {
   profile?: string;
 }
 
-export interface TransferProjectParams {
+export type UpdateProjectParams = UpdateWorkspaceParams;
+
+export interface TransferWorkspaceParams {
   targetOwner: string;
 }
+
+export type TransferProjectParams = TransferWorkspaceParams;
 
 // ─── Agents & Keys Domain ───
 

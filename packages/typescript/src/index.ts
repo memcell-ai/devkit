@@ -1,10 +1,12 @@
 export { MemCell } from "./client.js";
 export { ScopedMemCell } from "./scoped.js";
 export { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
+export { MemoriesNamespace, MemoryRelationsNamespace } from "./memories.js";
 export {
   StatementsNamespace,
   StatementRelationsNamespace,
 } from "./statements.js";
+export { WorkspacesNamespace } from "./workspaces.js";
 export { ProjectsNamespace } from "./projects.js";
 export { AgentsNamespace } from "./agents.js";
 export { CollaboratorsNamespace } from "./collaborators.js";
@@ -35,16 +37,24 @@ export {
   ScopedTeamMembers,
 } from "./teams.js";
 export { AuthManager } from "./auth.js";
-export { MemCellError, RateLimitError, STATEMENT_SCOPES } from "./types.js";
+export {
+  MemCellError,
+  RateLimitError,
+  MEMORY_SCOPES,
+  MEMORY_TYPES,
+  STATEMENT_SCOPES,
+} from "./types.js";
 
 export type {
   // Axiom Types
+  MemoryType,
   StatementType,
+  MemoryScope,
   StatementScope,
   PromotionStatus,
+  MemoryStatus,
   StatementStatus,
   MemoryKind,
-  MemoryStatus,
   OutcomeVerdict,
   MemCellAuth,
   MemCellConfig,
@@ -54,34 +64,51 @@ export type {
   PaginationMetadata,
   PaginatedResult,
 
-  // Statements
+  // Memories & Statements
+  MemoryItem,
   StatementItem,
   StatementAuthor,
+  ListMemoriesParams,
   ListStatementsParams,
+  CreateMemoryParams,
   CreateStatementParams,
+  UpdateMemoryParams,
   UpdateStatementParams,
   StatementHistoryItem,
   StatementHistoryResponse,
+  MemoryHistoryResponse,
   StatementStarResponse,
+  MemoryStarResponse,
   AdoptedTarget,
   AdoptStatementResponse,
+  AdoptMemoryResponse,
+  PromoteMemoryParams,
   PromoteStatementParams,
   PromoteStatementResponse,
+  PromoteMemoryResponse,
   StatementPromotionRequest,
   ListPromotionsParams,
 
-  // Statement Relations
+  // Relations
   RelationType,
   StatementRelationItem,
+  MemoryRelationItem,
   CreateRelationParams,
+  CreateMemoryRelationParams,
   StatementRelationsResponse,
+  MemoryRelationsResponse,
   ListProjectRelationsParams,
 
-  // Projects
+  // Workspaces & Projects
+  WorkspaceItem,
   ProjectItem,
+  ListWorkspacesParams,
   ListProjectsParams,
+  CreateWorkspaceParams,
   CreateProjectParams,
+  UpdateWorkspaceParams,
   UpdateProjectParams,
+  TransferWorkspaceParams,
   TransferProjectParams,
 
   // Agents & Keys

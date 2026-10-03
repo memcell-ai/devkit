@@ -5,16 +5,22 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-StatementType = Literal["guard", "directive", "fact", "preference", "observation"]
-STATEMENT_SCOPES = ("organization", "team", "project", "user")
-StatementScope = Literal["organization", "team", "project", "user", str]
+MemoryType = Literal["guard", "directive", "fact", "preference", "observation"]
+MEMORY_TYPES = ("guard", "directive", "fact", "preference", "observation")
+StatementType = MemoryType
+
+MEMORY_SCOPES = ("organization", "team", "workspace", "project", "user")
+STATEMENT_SCOPES = MEMORY_SCOPES
+MemoryScope = Literal["organization", "team", "workspace", "project", "user", str]
+StatementScope = MemoryScope
+
 PromotionStatus = Literal["pending", "approved", "rejected"]
 MemoryKind = Literal[
     "guard", "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
 ]
 RelationType = Literal["constrains", "justifies", "refines", "depends_on", "tensions_with"]
-StatementStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
-MemoryStatus = StatementStatus
+MemoryStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
+StatementStatus = MemoryStatus
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
 
 T = TypeVar("T")
@@ -32,15 +38,19 @@ class PaginatedResult(BaseModel, Generic[T]):
     pagination: PaginationMetadata
 
 
-class StatementAuthor(BaseModel):
+class MemoryAuthor(BaseModel):
     type: str
     id: str | None = None
     name: str | None = None
 
 
-class StatementRelationItem(BaseModel):
+StatementAuthor = MemoryAuthor
+
+
+class MemoryRelationItem(BaseModel):
     id: str
-    project_id: str
+    workspace_id: str | None = None
+    project_id: str | None = None
     source_id: str
     target_id: str
     relation_type: RelationType
@@ -48,17 +58,25 @@ class StatementRelationItem(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    source_statement: StatementItem | None = None
-    target_statement: StatementItem | None = None
+    source_memory: MemoryItem | None = None
+    target_memory: MemoryItem | None = None
+    source_statement: MemoryItem | None = None
+    target_statement: MemoryItem | None = None
 
 
-class StatementRelationsResponse(BaseModel):
-    incoming: list[StatementRelationItem] = Field(default_factory=list)
-    outgoing: list[StatementRelationItem] = Field(default_factory=list)
+StatementRelationItem = MemoryRelationItem
 
 
-class StatementItem(BaseModel):
-    """An individual atomic statement in MemCell."""
+class MemoryRelationsResponse(BaseModel):
+    incoming: list[MemoryRelationItem] = Field(default_factory=list)
+    outgoing: list[MemoryRelationItem] = Field(default_factory=list)
+
+
+StatementRelationsResponse = MemoryRelationsResponse
+
+
+class MemoryItem(BaseModel):
+    """An individual atomic memory in MemCell."""
 
     id: str
     root_id: str | None = None
@@ -67,9 +85,9 @@ class StatementItem(BaseModel):
     example: str | None = None
     tags: list[str] = Field(default_factory=list)
     subject: str | None = None
-    type: StatementType = "fact"
+    type: MemoryType = "fact"
     kind: str | None = None  # Deprecated alias retained for backward compatibility
-    status: StatementStatus = "active"
+    status: MemoryStatus = "active"
     confidence: float = 0.5
     score: float | None = None
     relevance: float | None = None
@@ -81,14 +99,14 @@ class StatementItem(BaseModel):
     star_count: int | None = None
     is_guard: bool = False
     is_invariant: bool = False
-    scope: str = "project"
+    scope: str = "workspace"
     required_roles: list[str] = Field(default_factory=list)
     scope_promoted_at: datetime | None = None
     scope_promoted_by: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    author: StatementAuthor | None = None
+    author: MemoryAuthor | None = None
     source: str | None = None
-    relations: list[StatementRelationItem] | None = None
+    relations: list[MemoryRelationItem] | None = None
     expires_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -108,13 +126,19 @@ class StatementItem(BaseModel):
         return "fact"
 
 
-class StatementStarResponse(BaseModel):
+StatementItem = MemoryItem
+
+
+class MemoryStarResponse(BaseModel):
     root_id: str
     starred: bool
     star_count: int
 
 
-class StatementHistoryItem(BaseModel):
+StatementStarResponse = MemoryStarResponse
+
+
+class MemoryHistoryItem(BaseModel):
     id: str
     root_id: str
     version: int
@@ -123,11 +147,11 @@ class StatementHistoryItem(BaseModel):
     example: str | None = None
     tags: list[str] = Field(default_factory=list)
     confidence: float = 0.5
-    status: StatementStatus = "active"
-    type: StatementType = "fact"
+    status: MemoryStatus = "active"
+    type: MemoryType = "fact"
     kind: str | None = None
     subject: str | None = None
-    scope: str = "common"
+    scope: str = "workspace"
     author_type: str = "user"
     author_id: str | None = None
     author_name: str | None = None
@@ -150,27 +174,40 @@ class StatementHistoryItem(BaseModel):
         return "fact"
 
 
-class StatementHistoryResponse(BaseModel):
+StatementHistoryItem = MemoryHistoryItem
+
+
+class MemoryHistoryResponse(BaseModel):
     root_id: str
     total_versions: int
-    history: list[StatementHistoryItem] = Field(default_factory=list)
+    history: list[MemoryHistoryItem] = Field(default_factory=list)
+
+
+StatementHistoryResponse = MemoryHistoryResponse
 
 
 class AdoptedTarget(BaseModel):
-    project_id: str
-    statement_id: str
+    workspace_id: str | None = None
+    project_id: str | None = None
+    memory_id: str | None = None
+    statement_id: str | None = None
     already_existed: bool
 
 
-class AdoptStatementResponse(BaseModel):
+class AdoptMemoryResponse(BaseModel):
     ok: bool
-    source_statement_id: str
+    source_memory_id: str | None = None
+    source_statement_id: str | None = None
     adopted: list[AdoptedTarget] = Field(default_factory=list)
 
 
-class StatementPromotionRequest(BaseModel):
+AdoptStatementResponse = AdoptMemoryResponse
+
+
+class MemoryPromotionRequest(BaseModel):
     id: str
-    statement_id: str
+    memory_id: str | None = None
+    statement_id: str | None = None
     from_scope: str
     to_scope: str
     status: PromotionStatus = "pending"
@@ -179,15 +216,23 @@ class StatementPromotionRequest(BaseModel):
     reviewer_id: str | None = None
     review_reason: str | None = None
     reviewed_at: datetime | None = None
-    statement: StatementItem | None = None
+    memory: MemoryItem | None = None
+    statement: MemoryItem | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
-class PromoteStatementResponse(BaseModel):
+StatementPromotionRequest = MemoryPromotionRequest
+
+
+class PromoteMemoryResponse(BaseModel):
     promoted: bool = True
-    statement: StatementItem | None = None
-    promotion_request: StatementPromotionRequest | None = None
+    memory: MemoryItem | None = None
+    statement: MemoryItem | None = None
+    promotion_request: MemoryPromotionRequest | None = None
+
+
+PromoteStatementResponse = PromoteMemoryResponse
 
 
 class RecallResponse(BaseModel):
@@ -195,16 +240,23 @@ class RecallResponse(BaseModel):
 
     recall_id: str
     prompt_context: str
-    statements: list[StatementItem] = Field(default_factory=list)
+    memories: list[MemoryItem] = Field(default_factory=list)
+    statements: list[MemoryItem] = Field(default_factory=list)
     matched_tags: list[str] | None = None
     guard_mode: str | None = None
     profile: dict[str, Any] | None = None
 
+    def model_post_init(self, __context: Any) -> None:
+        if self.memories and not self.statements:
+            self.statements = self.memories
+        elif self.statements and not self.memories:
+            self.memories = self.statements
+
 
 class RememberResponse(BaseModel):
-    """Result of explicitly filing statements into MemCell memory."""
+    """Result of explicitly filing memories into MemCell."""
 
-    created: list[StatementItem] = Field(default_factory=list)
+    created: list[MemoryItem] = Field(default_factory=list)
     reinforced: list[dict[str, Any]] | None = None
     superseded: list[dict[str, Any]] | None = None
     note: str | None = None
@@ -218,11 +270,18 @@ class ReportResponse(BaseModel):
 
     outcome: OutcomeVerdict
     attributed: list[dict[str, Any]] = Field(default_factory=list)
-    distilled_statement: StatementItem | None = None
+    distilled_memory: MemoryItem | None = None
+    distilled_statement: MemoryItem | None = None
     note: str | None = None
     accepted: bool | None = None
     job_id: str | None = None
     status: str | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.distilled_memory and not self.distilled_statement:
+            self.distilled_statement = self.distilled_memory
+        elif self.distilled_statement and not self.distilled_memory:
+            self.distilled_memory = self.distilled_statement
 
 
 class FeedbackResponse(BaseModel):
@@ -253,16 +312,19 @@ class ConsolidateSweepResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-# ─── Projects Models ───
+# ─── Workspaces Models ───
 
 
-class ProjectOwner(BaseModel):
+class WorkspaceOwner(BaseModel):
     type: str
     slug: str
     name: str
 
 
-class ProjectItem(BaseModel):
+ProjectOwner = WorkspaceOwner
+
+
+class WorkspaceItem(BaseModel):
     id: str
     name: str
     slug: str
@@ -271,7 +333,7 @@ class ProjectItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     visibility: str = "private"
     ownership: str | None = None
-    owner: ProjectOwner | None = None
+    owner: WorkspaceOwner | None = None
     state_root: str | None = None
     instruction: str | None = None
     guard_mode: str | None = None
@@ -280,6 +342,9 @@ class ProjectItem(BaseModel):
     vitals: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+ProjectItem = WorkspaceItem
 
 
 # ─── Agents Models ───
@@ -668,3 +733,14 @@ class TeamMemberItem(CamelModel):
     handle: str | None = None
     image: str | None = None
     created_at: datetime | str | None = None
+
+
+# ─── Backward-Compatibility Aliases ───
+
+StatementItem = MemoryItem
+ProjectItem = WorkspaceItem
+ProjectOwner = WorkspaceOwner
+AdoptStatementResponse = AdoptMemoryResponse
+PromoteStatementResponse = PromoteMemoryResponse
+StatementRelationsResponse = MemoryRelationsResponse
+StatementRelationItem = MemoryRelationItem

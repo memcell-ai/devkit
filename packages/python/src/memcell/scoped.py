@@ -406,7 +406,8 @@ class ScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
-        self.statements = _ScopedStatementsSync(client, namespace, subject)
+        self.memories = _ScopedStatementsSync(client, namespace, subject)
+        self.statements = self.memories
         self.agents = _ScopedAgentsSync(client, namespace)
         self.collaborators = _ScopedCollaboratorsSync(client, namespace)
         self.scopes = _ScopedScopesSync(client, namespace)
@@ -614,7 +615,8 @@ class AsyncScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
-        self.statements = _ScopedStatementsAsync(client, namespace, subject)
+        self.memories = _ScopedStatementsAsync(client, namespace, subject)
+        self.statements = self.memories
         self.agents = _ScopedAgentsAsync(client, namespace)
         self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
         self.scopes = _ScopedScopesAsync(client, namespace)

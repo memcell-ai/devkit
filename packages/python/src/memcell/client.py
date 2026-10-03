@@ -397,7 +397,7 @@ class _StatementsNamespaceSync:
             }
         )
         resp = self._client._request("GET", f"/api/v1/{owner}/{project}/statements", params=params)
-        raw_items = resp.get("statements") or []
+        raw_items = resp.get("statements") or resp.get("memories") or []
         items = [_parse_statement_item(s) for s in raw_items]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -405,7 +405,7 @@ class _StatementsNamespaceSync:
     def get(self, namespace: str, statement_id: str) -> StatementItem:
         owner, project = _parse_namespace(namespace)
         resp = self._client._request("GET", f"/api/v1/{owner}/{project}/statements/{statement_id}")
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     def create(
         self,
@@ -453,7 +453,7 @@ class _StatementsNamespaceSync:
             f"/api/v1/{owner}/{project}/statements",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     def update(
         self,
@@ -495,7 +495,7 @@ class _StatementsNamespaceSync:
             f"/api/v1/{owner}/{project}/statements/{statement_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     def delete(self, namespace: str, statement_id: str) -> None:
         owner, project = _parse_namespace(namespace)
@@ -716,7 +716,7 @@ class _ProjectsNamespaceSync:
             }
         )
         resp = self._client._request("GET", "/api/v1/projects", params=params)
-        raw_projects = resp.get("projects") or []
+        raw_projects = resp.get("projects") or resp.get("workspaces") or []
         items = [_parse_project_item(p) for p in raw_projects]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -742,7 +742,7 @@ class _ProjectsNamespaceSync:
             }
         )
         resp = self._client._request("GET", f"/api/v1/{owner}/projects", params=params)
-        raw_projects = resp.get("projects") or []
+        raw_projects = resp.get("projects") or resp.get("workspaces") or []
         items = [_parse_project_item(p) for p in raw_projects]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -750,7 +750,7 @@ class _ProjectsNamespaceSync:
     def get(self, namespace: str) -> ProjectItem:
         owner, project = _parse_namespace(namespace)
         resp = self._client._request("GET", f"/api/v1/{owner}/{project}")
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     def create(
         self,
@@ -774,7 +774,7 @@ class _ProjectsNamespaceSync:
             "/api/v1/projects",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     def update(
         self,
@@ -808,7 +808,7 @@ class _ProjectsNamespaceSync:
             f"/api/v1/{owner}/{project}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     def delete(self, namespace: str) -> None:
         owner, project = _parse_namespace(namespace)
@@ -1561,7 +1561,7 @@ class _StatementsNamespaceAsync:
         resp = await self._client._request(
             "GET", f"/api/v1/{owner}/{project}/statements", params=params
         )
-        raw_items = resp.get("statements") or []
+        raw_items = resp.get("statements") or resp.get("memories") or []
         items = [_parse_statement_item(s) for s in raw_items]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -1571,7 +1571,7 @@ class _StatementsNamespaceAsync:
         resp = await self._client._request(
             "GET", f"/api/v1/{owner}/{project}/statements/{statement_id}"
         )
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     async def create(
         self,
@@ -1619,7 +1619,7 @@ class _StatementsNamespaceAsync:
             f"/api/v1/{owner}/{project}/statements",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     async def update(
         self,
@@ -1661,7 +1661,7 @@ class _StatementsNamespaceAsync:
             f"/api/v1/{owner}/{project}/statements/{statement_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_statement_item(resp.get("statement", {}))
+        return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
     async def delete(self, namespace: str, statement_id: str) -> None:
         owner, project = _parse_namespace(namespace)
@@ -1886,7 +1886,7 @@ class _ProjectsNamespaceAsync:
             }
         )
         resp = await self._client._request("GET", "/api/v1/projects", params=params)
-        raw_projects = resp.get("projects") or []
+        raw_projects = resp.get("projects") or resp.get("workspaces") or []
         items = [_parse_project_item(p) for p in raw_projects]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -1912,7 +1912,7 @@ class _ProjectsNamespaceAsync:
             }
         )
         resp = await self._client._request("GET", f"/api/v1/{owner}/projects", params=params)
-        raw_projects = resp.get("projects") or []
+        raw_projects = resp.get("projects") or resp.get("workspaces") or []
         items = [_parse_project_item(p) for p in raw_projects]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
@@ -1920,7 +1920,7 @@ class _ProjectsNamespaceAsync:
     async def get(self, namespace: str) -> ProjectItem:
         owner, project = _parse_namespace(namespace)
         resp = await self._client._request("GET", f"/api/v1/{owner}/{project}")
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     async def create(
         self,
@@ -1944,7 +1944,7 @@ class _ProjectsNamespaceAsync:
             "/api/v1/projects",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     async def update(
         self,
@@ -1978,7 +1978,7 @@ class _ProjectsNamespaceAsync:
             f"/api/v1/{owner}/{project}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project", {}))
+        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
 
     async def delete(self, namespace: str) -> None:
         owner, project = _parse_namespace(namespace)
@@ -2731,8 +2731,10 @@ class MemCell:
         self._http = http_client or httpx.Client(timeout=timeout)
 
         # Mount resource namespaces
-        self.statements = _StatementsNamespaceSync(self)
-        self.projects = _ProjectsNamespaceSync(self)
+        self.memories = _StatementsNamespaceSync(self)
+        self.statements = self.memories
+        self.workspaces = _ProjectsNamespaceSync(self)
+        self.projects = self.workspaces
         self.agents = _AgentsNamespaceSync(self)
         self.collaborators = _CollaboratorsNamespaceSync(self)
         self.organizations = _OrganizationsNamespaceSync(self)
@@ -2764,6 +2766,9 @@ class MemCell:
         from .scoped import ScopedMemCell
 
         return ScopedMemCell(self, namespace, subject=subject)
+
+    def workspace(self, namespace: str, subject: str | None = None) -> ScopedMemCell:
+        return self.scope(namespace, subject=subject)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         attempt = 0
@@ -3173,8 +3178,10 @@ class AsyncMemCell:
         self._http = http_client or httpx.AsyncClient(timeout=timeout)
 
         # Mount resource namespaces
-        self.statements = _StatementsNamespaceAsync(self)
-        self.projects = _ProjectsNamespaceAsync(self)
+        self.memories = _StatementsNamespaceAsync(self)
+        self.statements = self.memories
+        self.workspaces = _ProjectsNamespaceAsync(self)
+        self.projects = self.workspaces
         self.agents = _AgentsNamespaceAsync(self)
         self.collaborators = _CollaboratorsNamespaceAsync(self)
         self.organizations = _OrganizationsNamespaceAsync(self)
@@ -3206,6 +3213,9 @@ class AsyncMemCell:
         from .scoped import AsyncScopedMemCell
 
         return AsyncScopedMemCell(self, namespace, subject=subject)
+
+    def workspace(self, namespace: str, subject: str | None = None) -> AsyncScopedMemCell:
+        return self.scope(namespace, subject=subject)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         attempt = 0

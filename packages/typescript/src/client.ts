@@ -1,7 +1,9 @@
 import { AuthManager } from "./auth.js";
 import { ScopedMemCell } from "./scoped.js";
 import { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
+import { MemoriesNamespace } from "./memories.js";
 import { StatementsNamespace } from "./statements.js";
+import { WorkspacesNamespace } from "./workspaces.js";
 import { ProjectsNamespace } from "./projects.js";
 import { AgentsNamespace } from "./agents.js";
 import { CollaboratorsNamespace } from "./collaborators.js";
@@ -36,12 +38,24 @@ export class MemCell {
   private readonly customFetch?: typeof fetch;
 
   /**
+   * Memories management APIs (atomic epistemic memory units).
+   */
+  readonly memories: MemoriesNamespace;
+
+  /**
    * Statements collection and lifecycle operations.
+   * @deprecated Use `memories` per the MemCell ontology. Retained for backward compatibility.
    */
   readonly statements: StatementsNamespace;
 
   /**
+   * Workspace boundary management APIs.
+   */
+  readonly workspaces: WorkspacesNamespace;
+
+  /**
    * Project management APIs.
+   * @deprecated Use `workspaces` per the MemCell ontology. Retained for backward compatibility.
    */
   readonly projects: ProjectsNamespace;
 
@@ -118,7 +132,9 @@ export class MemCell {
 
     this.authManager = new AuthManager(auth, this.baseUrl, this.customFetch);
 
+    this.memories = new MemoriesNamespace(this);
     this.statements = new StatementsNamespace(this);
+    this.workspaces = new WorkspacesNamespace(this);
     this.projects = new ProjectsNamespace(this);
     this.agents = new AgentsNamespace(this);
     this.collaborators = new CollaboratorsNamespace(this);
@@ -170,6 +186,14 @@ export class MemCell {
    */
   scope(namespace: string, options?: ScopeOptions): ScopedMemCell {
     return new ScopedMemCell(this, namespace, options);
+  }
+
+  /**
+   * Creates a scoped handle bound to a specific workspace (and optional default subject).
+   * Semantic alias for `scope(workspaceNamespace, options)`.
+   */
+  workspace(namespace: string, options?: ScopeOptions): ScopedMemCell {
+    return this.scope(namespace, options);
   }
 
   /**
