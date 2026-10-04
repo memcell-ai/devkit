@@ -204,6 +204,24 @@ class AdoptMemoryResponse(BaseModel):
 AdoptStatementResponse = AdoptMemoryResponse
 
 
+class DeleteMemoryResponse(BaseModel):
+    """Result of deleting a memory or statement."""
+
+    status: str = "deleted"
+    deleted_count: int = Field(default=1, alias="deletedCount")
+    deleted_scope: Literal["version", "memory"] | str = Field(
+        default="memory", alias="deletedScope"
+    )
+    next_id: str | None = Field(default=None, alias="nextId")
+    restored_version: int | None = Field(default=None, alias="restoredVersion")
+    message: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+DeleteStatementResponse = DeleteMemoryResponse
+
+
 class MemoryPromotionRequest(BaseModel):
     id: str
     memory_id: str | None = None
@@ -744,3 +762,4 @@ AdoptStatementResponse = AdoptMemoryResponse
 PromoteStatementResponse = PromoteMemoryResponse
 StatementRelationsResponse = MemoryRelationsResponse
 StatementRelationItem = MemoryRelationItem
+DeleteStatementResponse = DeleteMemoryResponse

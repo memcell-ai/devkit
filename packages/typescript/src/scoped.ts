@@ -10,6 +10,10 @@ import type {
   CreateMemoryParams,
   CreateRelationParams,
   CreateStatementParams,
+  DeleteMemoryOptions,
+  DeleteMemoryResponse,
+  DeleteStatementOptions,
+  DeleteStatementResponse,
   FeedbackParams,
   FeedbackResponse,
   InviteCollaboratorParams,
@@ -78,8 +82,12 @@ export class ScopedMemCell {
       params: UpdateMemoryParams,
     ): Promise<MemoryItem> =>
       this.client.memories.update(this.namespace, memoryId, params),
-    delete: (memoryId: string): Promise<void> =>
-      this.client.memories.delete(this.namespace, memoryId),
+    delete: (
+      memoryId: string,
+      options?: DeleteMemoryOptions,
+    ): Promise<DeleteMemoryResponse> =>
+      this.client.memories.delete(this.namespace, memoryId, options),
+
     star: (memoryId: string, starred = true): Promise<MemoryStarResponse> =>
       this.client.memories.star(this.namespace, memoryId, starred),
     history: (memoryId: string): Promise<MemoryHistoryResponse> =>
@@ -139,8 +147,12 @@ export class ScopedMemCell {
       params: UpdateStatementParams,
     ): Promise<StatementItem> =>
       this.client.statements.update(this.namespace, statementId, params),
-    delete: (statementId: string): Promise<void> =>
-      this.client.statements.delete(this.namespace, statementId),
+    delete: (
+      statementId: string,
+      options?: DeleteStatementOptions,
+    ): Promise<DeleteStatementResponse> =>
+      this.client.statements.delete(this.namespace, statementId, options),
+
     star: (
       statementId: string,
       starred = true,

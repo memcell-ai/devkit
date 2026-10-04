@@ -268,6 +268,26 @@ export interface StatementStarResponse {
 
 export type MemoryStarResponse = StatementStarResponse;
 
+export interface DeleteMemoryOptions {
+  /**
+   * If true, deletes all versions of the memory.
+   * If false (default), deletes only the latest version and restores the predecessor version as latest.
+   */
+  allVersions?: boolean;
+}
+
+export interface DeleteMemoryResponse {
+  status?: string;
+  deletedCount: number;
+  deletedScope?: "version" | "memory";
+  nextId?: string | null;
+  restoredVersion?: number | null;
+  message?: string;
+}
+
+export type DeleteStatementOptions = DeleteMemoryOptions;
+export type DeleteStatementResponse = DeleteMemoryResponse;
+
 export interface AdoptedTarget {
   projectId: string;
   statementId: string;

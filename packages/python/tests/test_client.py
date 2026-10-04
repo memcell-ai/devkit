@@ -234,8 +234,19 @@ def test_statements_resource_sync():
                 200,
                 json={"statement": {"id": "stmt_new", "title": body["title"], "type": "directive"}},
             )
-        if u.endswith("/statements/stmt_new") and method == "DELETE":
-            return httpx.Response(200, json={"ok": True, "statementId": "stmt_new"})
+        if "/statements/stmt_new" in u and method == "DELETE":
+            all_v = "allVersions=true" in u
+            return httpx.Response(
+                200,
+                json={
+                    "status": "deleted",
+                    "deletedCount": 2 if all_v else 1,
+                    "deletedScope": "memory" if all_v else "version",
+                    "nextId": None if all_v else "stmt_v1",
+                    "restoredVersion": None if all_v else 1,
+                    "message": "Deleted memory" if all_v else "Deleted latest version of statement",
+                },
+            )
         if u.endswith("/star") and method == "PUT":
             return httpx.Response(200, json={"rootId": "root_1", "starred": True, "starCount": 1})
         if u.endswith("/history") and method == "GET":
@@ -288,7 +299,16 @@ def test_statements_resource_sync():
     updated = memcell.statements.update("acme/backend", "stmt_new", title="Updated Title")
     assert updated.title == "Updated Title"
 
-    memcell.statements.delete("acme/backend", "stmt_new")
+    del_res = memcell.statements.delete("acme/backend", "stmt_new")
+    assert del_res.status == "deleted"
+    assert del_res.deleted_count == 1
+    assert del_res.deleted_scope == "version"
+    assert del_res.next_id == "stmt_v1"
+    assert del_res.restored_version == 1
+
+    del_all = memcell.statements.delete("acme/backend", "stmt_new", all_versions=True)
+    assert del_all.deleted_count == 2
+    assert del_all.deleted_scope == "memory"
 
     star_res = memcell.statements.star("acme/backend", "stmt_1", starred=True)
     assert star_res.starred is True
@@ -328,6 +348,18 @@ async def test_statements_resource_async():
                 201,
                 json={"statement": {"id": "stmt_async", "title": "Async Title", "type": "fact"}},
             )
+        if "/statements/stmt_async" in u and method == "DELETE":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "deleted",
+                    "deletedCount": 1,
+                    "deletedScope": "version",
+                    "nextId": "stmt_v0",
+                    "restoredVersion": 1,
+                    "message": "Deleted latest version of statement",
+                },
+            )
         return httpx.Response(404)
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -338,6 +370,11 @@ async def test_statements_resource_async():
 
         created = await memcell.statements.create("acme/backend", title="Async Title", type="fact")
         assert created.id == "stmt_async"
+
+        del_res = await memcell.statements.delete("acme/backend", "stmt_async")
+        assert del_res.status == "deleted"
+        assert del_res.deleted_scope == "version"
+        assert del_res.restored_version == 1
 
 
 def test_projects_resource_sync():

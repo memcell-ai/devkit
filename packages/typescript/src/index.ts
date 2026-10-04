@@ -1,7 +1,15 @@
 export { MemCell } from "./client.js";
 export { ScopedMemCell } from "./scoped.js";
 export { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
-export { MemoriesNamespace, MemoryRelationsNamespace } from "./memories.js";
+export {
+  MemoriesNamespace,
+  MemoryRelationsNamespace,
+  type DeleteMemoryOptions,
+  type DeleteMemoryResponse,
+  type DeleteStatementOptions,
+  type DeleteStatementResponse,
+} from "./memories.js";
+
 export {
   StatementsNamespace,
   StatementRelationsNamespace,

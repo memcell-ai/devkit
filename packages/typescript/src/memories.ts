@@ -3,6 +3,10 @@ import type {
   AdoptStatementResponse,
   CreateRelationParams,
   CreateMemoryParams,
+  DeleteMemoryOptions,
+  DeleteMemoryResponse,
+  DeleteStatementOptions,
+  DeleteStatementResponse,
   ListProjectRelationsParams,
   ListMemoriesParams,
   PaginatedResult,
@@ -53,6 +57,13 @@ function buildQuery(params?: ListMemoriesParams): string {
   const str = q.toString();
   return str ? `?${str}` : "";
 }
+
+export type {
+  DeleteMemoryOptions,
+  DeleteMemoryResponse,
+  DeleteStatementOptions,
+  DeleteStatementResponse,
+};
 
 export class MemoriesNamespace {
   readonly relations: MemoryRelationsNamespace;
@@ -189,12 +200,20 @@ export class MemoriesNamespace {
   }
 
   /**
-   * Deletes a memory from a workspace.
+
+   * Deletes a memory or its latest version from a workspace.
+   * If allVersions is true, permanently deletes the entire memory (all revisions).
+   * If allVersions is false, deletes only the latest version and restores the predecessor as latest.
    */
-  async delete(namespace: string, memoryId: string): Promise<void> {
+  async delete(
+    namespace: string,
+    memoryId: string,
+    options?: DeleteMemoryOptions,
+  ): Promise<DeleteMemoryResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    await this.client.request<{ ok: boolean }>(
-      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}`,
+    const query = options?.allVersions ? "?allVersions=true" : "";
+    return await this.client.request<DeleteMemoryResponse>(
+      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}${query}`,
       { method: "DELETE" },
     );
   }

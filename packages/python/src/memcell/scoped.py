@@ -12,6 +12,7 @@ from .models import (
     AgentItem,
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
+    DeleteMemoryResponse,
     FeedbackResponse,
     JobEvent,
     ListCollaboratorsResponse,
@@ -63,8 +64,10 @@ class _ScopedStatementsSync:
     def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
         return self._client.statements.update(self._namespace, statement_id, **kwargs)
 
-    def delete(self, statement_id: str) -> None:
-        self._client.statements.delete(self._namespace, statement_id)
+    def delete(self, statement_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
+        return self._client.statements.delete(
+            self._namespace, statement_id, all_versions=all_versions
+        )
 
     def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
         return self._client.statements.star(self._namespace, statement_id, starred=starred)
@@ -236,8 +239,10 @@ class _ScopedStatementsAsync:
     async def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
         return await self._client.statements.update(self._namespace, statement_id, **kwargs)
 
-    async def delete(self, statement_id: str) -> None:
-        await self._client.statements.delete(self._namespace, statement_id)
+    async def delete(self, statement_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
+        return await self._client.statements.delete(
+            self._namespace, statement_id, all_versions=all_versions
+        )
 
     async def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
         return await self._client.statements.star(self._namespace, statement_id, starred=starred)

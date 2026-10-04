@@ -687,10 +687,7 @@ describe("MemCell SDK (cli package export)", () => {
                 },
               );
             }
-            if (
-              method === "DELETE" &&
-              String(url).endsWith("/statements/stmt_new")
-            ) {
+            if (method === "DELETE" && String(url).includes("/stmt_new")) {
               return new Response(
                 JSON.stringify({ ok: true, statementId: "stmt_new" }),
                 {
@@ -699,6 +696,7 @@ describe("MemCell SDK (cli package export)", () => {
                 },
               );
             }
+
             return new Response("Not Found", { status: 404 });
           },
         );
@@ -729,7 +727,22 @@ describe("MemCell SDK (cli package export)", () => {
         expect(updated.title).toBe("Updated Title");
 
         await memcell.statements.delete("acme/backend", "stmt_new");
-        expect(recorded.find((r) => r.method === "DELETE")).toBeDefined();
+        const deleteCall = recorded.find((r) => r.method === "DELETE");
+        expect(deleteCall).toBeDefined();
+        expect(deleteCall!.url).toBe(
+          "https://api.memcell.io/api/v1/acme/backend/statements/stmt_new",
+        );
+
+        await memcell.memories.delete("acme/backend", "stmt_new", {
+          allVersions: true,
+        });
+        const deleteAllCall = recorded.find(
+          (r) => r.method === "DELETE" && r.url.includes("allVersions=true"),
+        );
+        expect(deleteAllCall).toBeDefined();
+        expect(deleteAllCall!.url).toBe(
+          "https://api.memcell.io/api/v1/acme/backend/memories/stmt_new?allVersions=true",
+        );
       });
 
       it("handles stars, history, adopt, and promote", async () => {

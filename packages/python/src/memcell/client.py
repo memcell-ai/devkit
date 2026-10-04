@@ -26,6 +26,7 @@ from .models import (
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
     CreatedPersonalTokenResult,
+    DeleteMemoryResponse,
     FeedbackResponse,
     JobEvent,
     ListCollaboratorsResponse,
@@ -215,6 +216,17 @@ def _parse_promotion_request(data: dict[str, Any]) -> StatementPromotionRequest:
         statement=stmt,
         created_at=data.get("createdAt") or data.get("created_at"),
         updated_at=data.get("updatedAt") or data.get("updated_at"),
+    )
+
+
+def _parse_delete_memory_response(data: dict[str, Any]) -> DeleteMemoryResponse:
+    return DeleteMemoryResponse(
+        status=data.get("status", "deleted"),
+        deleted_count=int(data.get("deletedCount") or data.get("deleted_count") or 1),
+        deleted_scope=data.get("deletedScope") or data.get("deleted_scope") or "memory",
+        next_id=data.get("nextId") or data.get("next_id"),
+        restored_version=data.get("restoredVersion") or data.get("restored_version"),
+        message=data.get("message"),
     )
 
 
@@ -497,9 +509,15 @@ class _StatementsNamespaceSync:
         )
         return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
-    def delete(self, namespace: str, statement_id: str) -> None:
+    def delete(
+        self, namespace: str, statement_id: str, all_versions: bool = False
+    ) -> DeleteMemoryResponse:
         owner, project = _parse_namespace(namespace)
-        self._client._request("DELETE", f"/api/v1/{owner}/{project}/statements/{statement_id}")
+        query = "?allVersions=true" if all_versions else ""
+        resp = self._client._request(
+            "DELETE", f"/api/v1/{owner}/{project}/statements/{statement_id}{query}"
+        )
+        return _parse_delete_memory_response(resp)
 
     def star(
         self, namespace: str, statement_id: str, starred: bool = True
@@ -1663,11 +1681,15 @@ class _StatementsNamespaceAsync:
         )
         return _parse_statement_item(resp.get("statement") or resp.get("memory") or {})
 
-    async def delete(self, namespace: str, statement_id: str) -> None:
+    async def delete(
+        self, namespace: str, statement_id: str, all_versions: bool = False
+    ) -> DeleteMemoryResponse:
         owner, project = _parse_namespace(namespace)
-        await self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/statements/{statement_id}"
+        query = "?allVersions=true" if all_versions else ""
+        resp = await self._client._request(
+            "DELETE", f"/api/v1/{owner}/{project}/statements/{statement_id}{query}"
         )
+        return _parse_delete_memory_response(resp)
 
     async def star(
         self, namespace: str, statement_id: str, starred: bool = True
