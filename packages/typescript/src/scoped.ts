@@ -1,6 +1,5 @@
 import type {
   AdoptMemoryResponse,
-  AdoptStatementResponse,
   AgentItem,
   CollaboratorRole,
   ConsolidateSweepParams,
@@ -9,11 +8,8 @@ import type {
   CreateAgentParams,
   CreateMemoryParams,
   CreateRelationParams,
-  CreateStatementParams,
   DeleteMemoryOptions,
   DeleteMemoryResponse,
-  DeleteStatementOptions,
-  DeleteStatementResponse,
   FeedbackParams,
   FeedbackResponse,
   InviteCollaboratorParams,
@@ -22,20 +18,18 @@ import type {
   ListCollaboratorsParams,
   ListCollaboratorsResponse,
   ListMemoriesParams,
-  ListProjectRelationsParams,
+  ListWorkspaceRelationsParams,
   ListPromotionsParams,
-  ListStatementsParams,
   MemoryHistoryResponse,
   MemoryItem,
   MemoryRelationItem,
   MemoryRelationsResponse,
   MemoryStarResponse,
+  MemoryPromotionRequest,
   PaginatedResult,
   PendingInvitationItem,
   PromoteMemoryParams,
   PromoteMemoryResponse,
-  PromoteStatementParams,
-  PromoteStatementResponse,
   RecallParams,
   RecallResponse,
   RememberParams,
@@ -46,15 +40,8 @@ import type {
   ScopeOptions,
   ScopedExecutionContext,
   ScopedExecutionResult,
-  StatementHistoryResponse,
-  StatementItem,
-  StatementPromotionRequest,
-  StatementRelationItem,
-  StatementRelationsResponse,
-  StatementStarResponse,
   UpdateAgentParams,
   UpdateMemoryParams,
-  UpdateStatementParams,
   WaitForJobOptions,
   WrapExecutionOptions,
 } from "./types.js";
@@ -117,81 +104,9 @@ export class ScopedMemCell {
           relationId,
         ),
       listWorkspace: (
-        params?: ListProjectRelationsParams,
+        params?: ListWorkspaceRelationsParams,
       ): Promise<PaginatedResult<MemoryRelationItem>> =>
-        this.client.memories.relations.listProject(this.namespace, params),
-      listProject: (
-        params?: ListProjectRelationsParams,
-      ): Promise<PaginatedResult<MemoryRelationItem>> =>
-        this.client.memories.relations.listProject(this.namespace, params),
-    },
-  };
-
-  /**
-   * @deprecated Use `memories` instead.
-   */
-  readonly statements = {
-    list: (
-      params?: ListStatementsParams,
-    ): Promise<PaginatedResult<StatementItem>> =>
-      this.client.statements.list(this.namespace, params),
-    get: (statementId: string): Promise<StatementItem> =>
-      this.client.statements.get(this.namespace, statementId),
-    create: (params: CreateStatementParams): Promise<StatementItem> =>
-      this.client.statements.create(this.namespace, {
-        subject: this.defaultSubject ?? undefined,
-        ...params,
-      }),
-    update: (
-      statementId: string,
-      params: UpdateStatementParams,
-    ): Promise<StatementItem> =>
-      this.client.statements.update(this.namespace, statementId, params),
-    delete: (
-      statementId: string,
-      options?: DeleteStatementOptions,
-    ): Promise<DeleteStatementResponse> =>
-      this.client.statements.delete(this.namespace, statementId, options),
-
-    star: (
-      statementId: string,
-      starred = true,
-    ): Promise<StatementStarResponse> =>
-      this.client.statements.star(this.namespace, statementId, starred),
-    history: (statementId: string): Promise<StatementHistoryResponse> =>
-      this.client.statements.history(this.namespace, statementId),
-    adopt: (
-      statementId: string,
-      params: { targetProjectIds: string[] },
-    ): Promise<AdoptStatementResponse> =>
-      this.client.statements.adopt(this.namespace, statementId, params),
-    promote: (
-      statementId: string,
-      params?: PromoteStatementParams,
-    ): Promise<PromoteStatementResponse> =>
-      this.client.statements.promote(this.namespace, statementId, params),
-    relations: {
-      list: (statementId: string): Promise<StatementRelationsResponse> =>
-        this.client.statements.relations.list(this.namespace, statementId),
-      create: (
-        statementId: string,
-        params: CreateRelationParams,
-      ): Promise<StatementRelationItem> =>
-        this.client.statements.relations.create(
-          this.namespace,
-          statementId,
-          params,
-        ),
-      delete: (statementId: string, relationId: string): Promise<void> =>
-        this.client.statements.relations.delete(
-          this.namespace,
-          statementId,
-          relationId,
-        ),
-      listProject: (
-        params?: ListProjectRelationsParams,
-      ): Promise<PaginatedResult<StatementRelationItem>> =>
-        this.client.statements.relations.listProject(this.namespace, params),
+        this.client.memories.relations.listWorkspace(this.namespace, params),
     },
   };
 
@@ -243,17 +158,17 @@ export class ScopedMemCell {
   };
 
   /**
-   * Scoped statement promotion pipeline operations bound to this namespace.
+   * Scoped memory promotion pipeline operations bound to this namespace.
    */
   readonly promotions = {
     list: (
       params?: ListPromotionsParams,
-    ): Promise<PaginatedResult<StatementPromotionRequest>> =>
+    ): Promise<PaginatedResult<MemoryPromotionRequest>> =>
       this.client.promotions.list(this.namespace, params),
     approve: (
       promotionId: string,
       params?: { reason?: string },
-    ): Promise<{ approved: boolean; statement: StatementItem }> =>
+    ): Promise<{ approved: boolean; memory: MemoryItem }> =>
       this.client.promotions.approve(this.namespace, promotionId, params),
     reject: (
       promotionId: string,
@@ -289,18 +204,16 @@ export class ScopedMemCell {
   }
 
   /**
-   * Direct addition of durable statements to the scoped memory container.
+   * Direct addition of durable memories to the scoped memory container.
    */
   async remember(
-    statement: Omit<RememberParams, "namespace">,
+    params: Omit<RememberParams, "namespace">,
   ): Promise<RememberResponse> {
     return await this.client.remember({
       namespace: this.namespace,
       subject:
-        statement.subject !== undefined
-          ? statement.subject
-          : this.defaultSubject,
-      ...statement,
+        params.subject !== undefined ? params.subject : this.defaultSubject,
+      ...params,
     });
   }
 
@@ -319,7 +232,7 @@ export class ScopedMemCell {
   }
 
   /**
-   * Direct statement outcome feedback.
+   * Direct memory outcome feedback.
    */
   async feedback(
     params: Omit<FeedbackParams, "namespace">,
@@ -332,8 +245,8 @@ export class ScopedMemCell {
 
   /**
    * Automated execution wrapper implementing the complete Agentic Closed-Loop:
-   * 1. Pre-Flight Recall: Queries relevant statements (directives, facts, preferences) for the action.
-   * 2. In-Flight Execution: Runs the agent callback with promptContext and statements.
+   * 1. Pre-Flight Recall: Queries relevant memories (directives, facts, preferences) for the action.
+   * 2. In-Flight Execution: Runs the agent callback with promptContext and memories.
    * 3. Post-Flight Reinforcement: Automatically reports outcome ('worked' on resolution, 'failed' on exception)
    *    and attributes feedback before re-throwing any error.
    */
@@ -349,7 +262,6 @@ export class ScopedMemCell {
     const recallResult = await this.recall(options.action, {
       subject: targetSubject,
       type: options.type,
-      kind: options.kind,
       minConfidence: options.minConfidence,
       limit: options.limit,
       tags: options.tags,
@@ -358,7 +270,7 @@ export class ScopedMemCell {
 
     const executionContext: ScopedExecutionContext = {
       promptContext: recallResult.promptContext,
-      statements: recallResult.statements,
+      memories: recallResult.memories,
       recallId: recallResult.recallId,
       subject: targetSubject,
     };
@@ -402,8 +314,7 @@ export class ScopedMemCell {
       result,
       report: reportResult,
       recallId: recallResult.recallId,
-      memories: recallResult.memories ?? recallResult.statements,
-      statements: recallResult.statements,
+      memories: recallResult.memories,
       promptContext: recallResult.promptContext,
     };
   }

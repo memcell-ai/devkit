@@ -27,7 +27,7 @@ const memory = new MemCell({
   apiKey: process.env.MEMCELL_API_KEY!,
 });
 
-// 1. Recall relevant statements before an agent acts:
+// 1. Recall relevant memories before an agent acts:
 const { promptContext } = await memory.recall({
   namespace: "acme/support",
   query: "refund verification and escalation thresholds",
@@ -55,7 +55,7 @@ const recall = await memory.recall({
 console.log(recall.promptContext);
 ```
 
-### 2. `remember` — Save Statements
+### 2. `remember` — Save Memories
 
 Save a verified directive, fact, preference, or observation so future agents inherit it immediately:
 
@@ -75,7 +75,7 @@ Memory adapts when told what happened. When an agent succeeds or fails after app
 ```typescript
 await memory.report({
   namespace: "acme/support",
-  statementId: "stmt_019a4b2c",
+  memoryId: "mem_019a4b2c",
   outcome: "worked", // "worked" | "failed" | "avoided"
   reason: "Customer verified and refund issued within guidelines",
 });
@@ -92,7 +92,7 @@ import { MemCell } from "@memcell/sdk";
 
 const memory = new MemCell({ apiKey: process.env.MEMCELL_API_KEY! });
 
-// Scope memory to your project:
+// Scope memory to your workspace:
 const support = memory.scope("acme/support");
 
 async function handleRefund(ticketId: string, amount: number) {
@@ -102,7 +102,7 @@ async function handleRefund(ticketId: string, amount: number) {
       query: "refund verification requirements",
     },
     async (ctx) => {
-      // 1. ctx.promptContext automatically contains active statements:
+      // 1. ctx.promptContext automatically contains active memories:
       //    e.g. "[directive] Require explicit customer confirmation before applying refunds over $500"
 
       // 2. Execute operation with verified context:
@@ -121,27 +121,27 @@ async function handleRefund(ticketId: string, amount: number) {
 
 The SDK provides direct, typed access to all MemCell platform resources:
 
-### Statements (`memory.statements`)
+### Memories (`memory.memories`)
 
 - `list(namespace, params)`: Paginated query with filtering by `type`, `status`, `scope`, `q`, `sort`.
-- `get(namespace, id)`: Retrieve an individual statement.
-- `create(namespace, params)`: Create a statement (`directive`, `fact`, `preference`, `observation`).
-- `update(namespace, id, params)`: Update statement content, status, confidence, or metadata.
-- `delete(namespace, id)`: Delete a statement.
-- `star(namespace, id, starred)`: Star or unstar a statement.
+- `get(namespace, id)`: Retrieve an individual memory.
+- `create(namespace, params)`: Create a memory (`directive`, `fact`, `preference`, `observation`).
+- `update(namespace, id, params)`: Update memory content, status, confidence, or metadata.
+- `delete(namespace, id)`: Delete a memory.
+- `star(namespace, id, starred)`: Star or unstar a memory.
 - `history(namespace, id)`: Retrieve complete version and mutation history.
-- `adopt(namespace, id, { targetProjectIds })`: Adopt a statement into other projects.
-- `promote(namespace, id, { toScope, reason })`: Promote a provisional statement to active.
+- `adopt(namespace, id, { targetWorkspaceIds })`: Adopt a memory into other workspaces.
+- `promote(namespace, id, { toScope, reason })`: Promote a provisional memory to active.
 
-### Projects (`memory.projects`)
+### Workspaces (`memory.workspaces`)
 
-- `list(params)`: List caller's accessible projects.
-- `listForOwner(owner, params)`: List projects belonging to an owner.
-- `get(namespace)`: Retrieve project details.
-- `create(params)`: Create a new project.
-- `update(namespace, params)`: Update project properties.
-- `delete(namespace)`: Delete a project.
-- `transfer(namespace, { targetOwner })`: Transfer project ownership.
+- `list(params)`: List caller's accessible workspaces.
+- `listForOwner(owner, params)`: List workspaces belonging to an owner.
+- `get(namespace)`: Retrieve workspace details.
+- `create(params)`: Create a new workspace.
+- `update(namespace, params)`: Update workspace properties.
+- `delete(namespace)`: Delete a workspace.
+- `transfer(namespace, { targetOwner })`: Transfer workspace ownership.
 
 ### Agents (`memory.agents`)
 
@@ -169,7 +169,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 ### Usage & Quotas (`memory.usage`)
 
-- `get(owner, { timeframe })`: Retrieve statement type breakdown and API quotas.
+- `get(owner, { timeframe })`: Retrieve memory type breakdown and API quotas.
 
 ### Account (`memory.account`)
 
@@ -180,7 +180,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 Provides convenient namespace-bound access:
 
-- `scoped.statements.*`, `scoped.agents.*`, `scoped.collaborators.*`, `scoped.scopes.list()`
+- `scoped.memories.*`, `scoped.agents.*`, `scoped.collaborators.*`, `scoped.scopes.list()`
 
 ### Machine-to-Machine (M2M) OAuth 2.0
 

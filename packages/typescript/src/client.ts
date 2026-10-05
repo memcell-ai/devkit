@@ -2,9 +2,7 @@ import { AuthManager } from "./auth.js";
 import { ScopedMemCell } from "./scoped.js";
 import { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
 import { MemoriesNamespace } from "./memories.js";
-import { StatementsNamespace } from "./statements.js";
 import { WorkspacesNamespace } from "./workspaces.js";
-import { ProjectsNamespace } from "./projects.js";
 import { AgentsNamespace } from "./agents.js";
 import { CollaboratorsNamespace } from "./collaborators.js";
 import { UsageNamespace } from "./usage.js";
@@ -27,7 +25,7 @@ import {
   type ReportParams,
   type ReportResponse,
   type ScopeOptions,
-  type StatementItem,
+  type MemoryItem,
   type WaitForJobOptions,
 } from "./types.js";
 
@@ -43,21 +41,9 @@ export class MemCell {
   readonly memories: MemoriesNamespace;
 
   /**
-   * Statements collection and lifecycle operations.
-   * @deprecated Use `memories` per the MemCell ontology. Retained for backward compatibility.
-   */
-  readonly statements: StatementsNamespace;
-
-  /**
    * Workspace boundary management APIs.
    */
   readonly workspaces: WorkspacesNamespace;
-
-  /**
-   * Project management APIs.
-   * @deprecated Use `workspaces` per the MemCell ontology. Retained for backward compatibility.
-   */
-  readonly projects: ProjectsNamespace;
 
   /**
    * Registered agents and keys APIs.
@@ -95,7 +81,7 @@ export class MemCell {
   readonly sweep: SweepNamespace;
 
   /**
-   * Statement promotion pipeline operations across 4-tier scopes.
+   * Memory promotion pipeline operations across 4-tier scopes.
    */
   readonly promotions: PromotionsNamespace;
 
@@ -133,9 +119,7 @@ export class MemCell {
     this.authManager = new AuthManager(auth, this.baseUrl, this.customFetch);
 
     this.memories = new MemoriesNamespace(this);
-    this.statements = new StatementsNamespace(this);
     this.workspaces = new WorkspacesNamespace(this);
-    this.projects = new ProjectsNamespace(this);
     this.agents = new AgentsNamespace(this);
     this.collaborators = new CollaboratorsNamespace(this);
     this.organizations = new OrganizationsNamespace(this);
@@ -201,7 +185,7 @@ export class MemCell {
    */
   async recall(params: RecallParams): Promise<RecallResponse> {
     const path = this.resolveEndpoint(params.namespace, "recall");
-    const effectiveType = params.type ?? params.kind;
+    const effectiveType = params.type;
 
     const payload: Record<string, unknown> = {
       query: params.query,
@@ -217,6 +201,8 @@ export class MemCell {
       tags: params.tags,
       format: params.format ?? "xml",
       allow_provisional: params.allowProvisional,
+      metadata: params.metadata,
+      include_metadata: params.includeMetadata,
     };
 
     if (params.namespace && !params.namespace.includes("/")) {
@@ -228,17 +214,16 @@ export class MemCell {
       body: JSON.stringify(payload),
     });
 
-    const rawStatements: any[] = json.statements || json.results || [];
-    const statements: StatementItem[] = rawStatements.map((s) => ({
-      id: s.id || s.statementId,
+    const rawMemories: any[] = json.memories || json.results || [];
+    const memories: MemoryItem[] = rawMemories.map((s) => ({
+      id: s.id || s.memoryId,
       rootId: s.rootId,
       title: s.title,
       context: s.context ?? null,
       example: s.example ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
-      type: s.type || s.kind,
-      kind: s.kind || s.type,
+      type: s.type,
       status: s.status,
       confidence: s.confidence,
       score: s.score,
@@ -261,10 +246,7 @@ export class MemCell {
           s.tags?.includes("convention")),
       isInvariant:
         s.isInvariant ??
-        (s.type === "guard" ||
-          s.type === "directive" ||
-          s.kind === "invariant" ||
-          s.status === "pinned"),
+        (s.type === "guard" || s.type === "directive" || s.status === "pinned"),
       expiresAt: s.expiresAt ?? null,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -273,7 +255,7 @@ export class MemCell {
     return {
       recallId: json.recallId || json.momentId || "",
       promptContext: json.promptContext || "",
-      statements,
+      memories,
       matchedTags: json.matchedTags,
       guardMode: json.guardMode,
       profile: json.profile,
@@ -281,11 +263,11 @@ export class MemCell {
   }
 
   /**
-   * Explicitly write a durable statement into MemCell memory.
+   * Explicitly write a durable memory into MemCell memory.
    */
   async remember(params: RememberParams): Promise<RememberResponse> {
     const path = this.resolveEndpoint(params.namespace, "remember");
-    const effectiveType = params.type ?? params.kind;
+    const effectiveType = params.type;
 
     const payload: Record<string, unknown> = {
       title: params.title,
@@ -329,15 +311,14 @@ export class MemCell {
     }
 
     const rawCreated: any[] = json.created || [];
-    const created: StatementItem[] = rawCreated.map((s) => ({
+    const created: MemoryItem[] = rawCreated.map((s) => ({
       id: s.id,
       title: s.title,
       context: s.context ?? null,
       example: s.example ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
-      type: s.type || s.kind,
-      kind: s.kind || s.type,
+      type: s.type,
       status: s.status,
       confidence: s.confidence,
       scope: s.scope,
@@ -367,7 +348,7 @@ export class MemCell {
       external_ref: params.externalRef,
       payload: params.payload,
       recall_id: params.recallId,
-      statement_id: params.statementId,
+      memory_id: params.memoryId,
       auto_distill: params.autoDistill ?? true,
       async: params.async,
     };
@@ -395,15 +376,14 @@ export class MemCell {
     return {
       outcome: json.outcome,
       attributed: json.attributed || [],
-      distilledStatement: json.distilledStatement
+      distilledMemory: json.distilledMemory
         ? {
-            id: json.distilledStatement.id,
-            title: json.distilledStatement.title,
-            type: json.distilledStatement.type || json.distilledStatement.kind,
-            kind: json.distilledStatement.kind || json.distilledStatement.type,
-            status: json.distilledStatement.status,
-            confidence: json.distilledStatement.confidence,
-            subject: json.distilledStatement.subject,
+            id: json.distilledMemory.id,
+            title: json.distilledMemory.title,
+            type: json.distilledMemory.type,
+            status: json.distilledMemory.status,
+            confidence: json.distilledMemory.confidence,
+            subject: json.distilledMemory.subject,
           }
         : null,
       note: json.note,
@@ -535,13 +515,13 @@ export class MemCell {
   }
 
   /**
-   * Direct statement outcome evaluation.
+   * Direct memory outcome evaluation.
    */
   async feedback(params: FeedbackParams): Promise<FeedbackResponse> {
     const path = this.resolveEndpoint(params.namespace, "feedback");
 
     const payload: Record<string, unknown> = {
-      statement_id: params.statementId,
+      memory_id: params.memoryId,
       recall_id: params.recallId,
       outcome: params.outcome,
       reason: params.reason,

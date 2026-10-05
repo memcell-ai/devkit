@@ -18,8 +18,8 @@ export class ScopesNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
-   * Lists active scopes and statement counts.
-   * If namespace is provided, scopes for that project are listed; otherwise caller's active project scopes are returned.
+   * Lists active scopes and memory counts.
+   * If namespace is provided, scopes for that workspace are listed; otherwise caller's active workspace scopes are returned.
    */
   async list(namespace?: string): Promise<ScopeItem[]> {
     const path = namespace

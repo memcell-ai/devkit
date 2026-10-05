@@ -5,7 +5,7 @@ export class UsageNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
-   * Fetches account or organization usage metrics, quotas, and statement type distribution.
+   * Fetches account or organization usage metrics, quotas, and memory type distribution.
    */
   async get(
     owner: string,

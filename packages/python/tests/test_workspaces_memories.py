@@ -20,7 +20,7 @@ def test_models_ontology_exports():
 
 def test_sync_client_workspaces_and_memories():
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/projects":
+        if request.url.path == "/api/v1/workspaces":
             return httpx.Response(
                 200,
                 json={
@@ -35,11 +35,11 @@ def test_sync_client_workspaces_and_memories():
                     "pagination": {"page": 1, "per_page": 30, "total": 1, "has_more": False},
                 },
             )
-        if request.url.path == "/api/v1/acme/backend/statements":
+        if request.url.path == "/api/v1/acme/backend/memories":
             return httpx.Response(
                 200,
                 json={
-                    "statements": [
+                    "memories": [
                         {
                             "id": "mem-1",
                             "title": "Use PostgreSQL 16",
@@ -76,7 +76,7 @@ def test_sync_client_workspaces_and_memories():
 @pytest.mark.asyncio
 async def test_async_client_workspaces_and_memories():
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/projects":
+        if request.url.path == "/api/v1/workspaces":
             return httpx.Response(
                 200,
                 json={

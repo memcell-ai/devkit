@@ -118,11 +118,11 @@ describe("MemCell SDK (cli package export)", () => {
             JSON.stringify({
               recallId: "rec_123",
               promptContext: "<memcell>Context</memcell>",
-              statements: [
+              memories: [
                 {
                   id: "st_1",
                   title: "Never skip verification",
-                  kind: "invariant",
+                  type: "guard",
                   confidence: 0.95,
                 },
               ],
@@ -143,16 +143,29 @@ describe("MemCell SDK (cli package export)", () => {
       const res1 = await memcell.recall({
         namespace: "org/repo",
         query: "deploy procedure",
-        kind: ["invariant", "reflex"],
+        type: ["guard", "directive"],
         minConfidence: 0.8,
       });
 
       expect(res1.recallId).toBe("rec_123");
-      expect(res1.statements).toHaveLength(1);
+      expect(res1.memories).toHaveLength(1);
       expect(requests[0]?.url).toBe(
         "https://custom.memcell.io/api/v1/org/repo/recall",
       );
       expect(requests[0]?.body.intent).toBe("deploy procedure");
+
+      await memcell.recall({
+        namespace: "org/repo",
+        query: "thread preferences",
+        metadata: { threadId: "thr_42", channel: "slack" },
+        includeMetadata: true,
+      });
+
+      expect(requests[1]?.body.metadata).toEqual({
+        threadId: "thr_42",
+        channel: "slack",
+      });
+      expect(requests[1]?.body.include_metadata).toBe(true);
     });
 
     it("ScopedMemCell & wrapExecution lifecycle", async () => {
@@ -168,12 +181,12 @@ describe("MemCell SDK (cli package export)", () => {
               JSON.stringify({
                 recallId: "rec_run_42",
                 promptContext: "<memcell>Guards loaded</memcell>",
-                statements: [
+                memories: [
                   {
                     id: "st_1",
                     title: "Validate env before deploy",
-                    kind: "invariant",
-                    isInvariant: true,
+                    type: "guard",
+                    isGuard: true,
                   },
                 ],
               }),
@@ -188,7 +201,7 @@ describe("MemCell SDK (cli package export)", () => {
                 outcome: "worked",
                 attributed: [
                   {
-                    statementId: "st_1",
+                    memoryId: "st_1",
                     title: "Validate env",
                     from: 0.8,
                     to: 0.85,
@@ -372,7 +385,7 @@ describe("MemCell SDK (cli package export)", () => {
               JSON.stringify({
                 recallId: "rec_123",
                 promptContext: "<xml></xml>",
-                statements: [],
+                memories: [],
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
             );
@@ -426,7 +439,7 @@ describe("MemCell SDK (cli package export)", () => {
       const warningHandler = vi.fn();
       const mockFetch = vi.fn(async () => {
         return new Response(
-          JSON.stringify({ recallId: "rec_warning", statements: [] }),
+          JSON.stringify({ recallId: "rec_warning", memories: [] }),
           {
             status: 200,
             headers: {
@@ -469,7 +482,7 @@ describe("MemCell SDK (cli package export)", () => {
           );
         }
         return new Response(
-          JSON.stringify({ recallId: "rec_recovered", statements: [] }),
+          JSON.stringify({ recallId: "rec_recovered", memories: [] }),
           {
             status: 200,
             headers: { "Content-Type": "application/json" },
@@ -573,7 +586,7 @@ describe("MemCell SDK (cli package export)", () => {
     it("initializes with direct apiKey and baseUrl without auth wrapper", async () => {
       const mockFetch = vi.fn(async () => {
         return new Response(
-          JSON.stringify({ recallId: "r1", promptContext: "", statements: [] }),
+          JSON.stringify({ recallId: "r1", promptContext: "", memories: [] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       });
@@ -588,17 +601,17 @@ describe("MemCell SDK (cli package export)", () => {
       expect(authHeader).toBe("Bearer mc_direct_123");
     });
 
-    describe("Statements Resource", () => {
-      it("lists statements with pagination and filters", async () => {
+    describe("Memories Resource", () => {
+      it("lists memories with pagination and filters", async () => {
         const mockFetch = vi.fn(async (url: string | URL | Request) => {
           const u = String(url);
-          expect(u).toContain("/api/v1/acme/backend/statements?");
+          expect(u).toContain("/api/v1/acme/backend/memories?");
           expect(u).toContain("page=2");
           expect(u).toContain("per_page=15");
           expect(u).toContain("type=directive");
           return new Response(
             JSON.stringify({
-              statements: [
+              memories: [
                 {
                   id: "stmt_1",
                   title: "Direct connection pool setup",
@@ -616,7 +629,7 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const res = await memcell.statements.list("acme/backend", {
+        const res = await memcell.memories.list("acme/backend", {
           page: 2,
           perPage: 15,
           type: "directive",
@@ -627,7 +640,7 @@ describe("MemCell SDK (cli package export)", () => {
         expect(res.pagination.total).toBe(25);
       });
 
-      it("creates, retrieves, updates, and deletes statements", async () => {
+      it("creates, retrieves, updates, and deletes memories", async () => {
         const recorded: Array<{ method: string; url: string; body?: unknown }> =
           [];
         const mockFetch = vi.fn(
@@ -636,10 +649,10 @@ describe("MemCell SDK (cli package export)", () => {
             const body = init?.body ? JSON.parse(String(init.body)) : undefined;
             recorded.push({ method, url: String(url), body });
 
-            if (method === "POST" && String(url).endsWith("/statements")) {
+            if (method === "POST" && String(url).endsWith("/memories")) {
               return new Response(
                 JSON.stringify({
-                  statement: {
+                  memory: {
                     id: "stmt_new",
                     title: body.title,
                     type: body.type,
@@ -653,11 +666,11 @@ describe("MemCell SDK (cli package export)", () => {
             }
             if (
               method === "GET" &&
-              String(url).endsWith("/statements/stmt_new")
+              String(url).endsWith("/memories/stmt_new")
             ) {
               return new Response(
                 JSON.stringify({
-                  statement: {
+                  memory: {
                     id: "stmt_new",
                     title: "Existing",
                     type: "directive",
@@ -671,11 +684,11 @@ describe("MemCell SDK (cli package export)", () => {
             }
             if (
               method === "PATCH" &&
-              String(url).endsWith("/statements/stmt_new")
+              String(url).endsWith("/memories/stmt_new")
             ) {
               return new Response(
                 JSON.stringify({
-                  statement: {
+                  memory: {
                     id: "stmt_new",
                     title: body.title,
                     type: "directive",
@@ -689,7 +702,7 @@ describe("MemCell SDK (cli package export)", () => {
             }
             if (method === "DELETE" && String(url).includes("/stmt_new")) {
               return new Response(
-                JSON.stringify({ ok: true, statementId: "stmt_new" }),
+                JSON.stringify({ ok: true, memoryId: "stmt_new" }),
                 {
                   status: 200,
                   headers: { "Content-Type": "application/json" },
@@ -705,19 +718,16 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const created = await memcell.statements.create("acme/backend", {
-          title: "Statement A",
+        const created = await memcell.memories.create("acme/backend", {
+          title: "Memory A",
           type: "directive",
         });
         expect(created.id).toBe("stmt_new");
 
-        const fetched = await memcell.statements.get(
-          "acme/backend",
-          "stmt_new",
-        );
+        const fetched = await memcell.memories.get("acme/backend", "stmt_new");
         expect(fetched.title).toBe("Existing");
 
-        const updated = await memcell.statements.update(
+        const updated = await memcell.memories.update(
           "acme/backend",
           "stmt_new",
           {
@@ -726,11 +736,11 @@ describe("MemCell SDK (cli package export)", () => {
         );
         expect(updated.title).toBe("Updated Title");
 
-        await memcell.statements.delete("acme/backend", "stmt_new");
+        await memcell.memories.delete("acme/backend", "stmt_new");
         const deleteCall = recorded.find((r) => r.method === "DELETE");
         expect(deleteCall).toBeDefined();
         expect(deleteCall!.url).toBe(
-          "https://api.memcell.io/api/v1/acme/backend/statements/stmt_new",
+          "https://api.memcell.io/api/v1/acme/backend/memories/stmt_new",
         );
 
         await memcell.memories.delete("acme/backend", "stmt_new", {
@@ -794,11 +804,11 @@ describe("MemCell SDK (cli package export)", () => {
               return new Response(
                 JSON.stringify({
                   ok: true,
-                  sourceStatementId: "stmt_1",
+                  sourceMemoryId: "stmt_1",
                   adopted: [
                     {
                       projectId: "p2",
-                      statementId: "stmt_2",
+                      memoryId: "stmt_2",
                       alreadyExisted: false,
                     },
                   ],
@@ -813,7 +823,7 @@ describe("MemCell SDK (cli package export)", () => {
               return new Response(
                 JSON.stringify({
                   promoted: true,
-                  statement: {
+                  memory: {
                     id: "stmt_1",
                     title: "Promoted",
                     status: "active",
@@ -833,29 +843,29 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const starRes = await memcell.statements.star(
+        const starRes = await memcell.memories.star(
           "acme/backend",
           "stmt_1",
           true,
         );
         expect(starRes.starred).toBe(true);
 
-        const historyRes = await memcell.statements.history(
+        const historyRes = await memcell.memories.history(
           "acme/backend",
           "stmt_1",
         );
         expect(historyRes.history).toHaveLength(2);
 
-        const adoptRes = await memcell.statements.adopt(
+        const adoptRes = await memcell.memories.adopt(
           "acme/backend",
           "stmt_1",
           {
-            targetProjectIds: ["p2"],
+            targetWorkspaceIds: ["p2"],
           },
         );
-        expect(adoptRes.adopted[0]!.statementId).toBe("stmt_2");
+        expect(adoptRes.adopted[0]!.memoryId).toBe("stmt_2");
 
-        const promoteRes = await memcell.statements.promote(
+        const promoteRes = await memcell.memories.promote(
           "acme/backend",
           "stmt_1",
           {
@@ -866,14 +876,14 @@ describe("MemCell SDK (cli package export)", () => {
       });
     });
 
-    describe("Projects Resource", () => {
-      it("lists caller projects and owner projects with pagination", async () => {
+    describe("Workspaces Resource", () => {
+      it("lists caller workspaces and owner workspaces with pagination", async () => {
         const mockFetch = vi.fn(async (url: string | URL | Request) => {
           const u = String(url);
-          if (u.includes("/api/v1/projects?")) {
+          if (u.includes("/api/v1/workspaces?")) {
             return new Response(
               JSON.stringify({
-                projects: [
+                workspaces: [
                   {
                     id: "p1",
                     name: "Core",
@@ -886,11 +896,11 @@ describe("MemCell SDK (cli package export)", () => {
               { status: 200, headers: { "Content-Type": "application/json" } },
             );
           }
-          if (u.includes("/api/v1/acme/projects?")) {
+          if (u.includes("/api/v1/acme/workspaces?")) {
             return new Response(
               JSON.stringify({
                 owner: "acme",
-                projects: [
+                workspaces: [
                   {
                     id: "p2",
                     name: "Backend",
@@ -910,26 +920,26 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const callerProjects = await memcell.projects.list({
+        const callerProjects = await memcell.workspaces.list({
           page: 1,
           perPage: 30,
         });
         expect(callerProjects.items[0]!.slug).toBe("core");
 
-        const ownerProjects = await memcell.projects.listForOwner("acme", {
+        const ownerProjects = await memcell.workspaces.listForOwner("acme", {
           page: 1,
           perPage: 10,
         });
         expect(ownerProjects.items[0]!.slug).toBe("backend");
       });
 
-      it("creates, gets, updates, deletes, and transfers projects", async () => {
+      it("creates, gets, updates, deletes, and transfers workspaces", async () => {
         const mockFetch = vi.fn(
           async (url: string | URL | Request, init?: RequestInit) => {
             const u = String(url);
             const method = init?.method || "GET";
 
-            if (u.endsWith("/api/v1/projects") && method === "POST") {
+            if (u.endsWith("/api/v1/workspaces") && method === "POST") {
               return new Response(
                 JSON.stringify({
                   ok: true,
@@ -1001,19 +1011,21 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const created = await memcell.projects.create({ name: "New Project" });
+        const created = await memcell.workspaces.create({
+          name: "New Project",
+        });
         expect(created.id).toBe("p_new");
 
-        const got = await memcell.projects.get("acme/backend");
+        const got = await memcell.workspaces.get("acme/backend");
         expect(got.name).toBe("Backend");
 
-        const updated = await memcell.projects.update("acme/backend", {
+        const updated = await memcell.workspaces.update("acme/backend", {
           name: "Backend V2",
         });
         expect(updated.name).toBe("Backend V2");
 
-        await memcell.projects.delete("acme/backend");
-        await memcell.projects.transfer("acme/backend", {
+        await memcell.workspaces.delete("acme/backend");
+        await memcell.workspaces.transfer("acme/backend", {
           targetOwner: "new-owner",
         });
       });
@@ -1284,7 +1296,7 @@ describe("MemCell SDK (cli package export)", () => {
     });
 
     describe("Usage Resource", () => {
-      it("retrieves usage with canonical statement type quotas", async () => {
+      it("retrieves usage with canonical memory type quotas", async () => {
         const mockFetch = vi.fn(async (url: string | URL | Request) => {
           expect(String(url)).toContain("/api/v1/acme/usage?timeframe=30d");
           return new Response(
@@ -1292,7 +1304,7 @@ describe("MemCell SDK (cli package export)", () => {
               owner: { type: "org", slug: "acme", name: "Acme Corp" },
               timeframe: "30d",
               quotas: {
-                statements: {
+                memories: {
                   total: 100,
                   limit: 1000,
                   percent: 10,
@@ -1328,8 +1340,8 @@ describe("MemCell SDK (cli package export)", () => {
           fetch: mockFetch as any,
         });
         const usage = await memcell.usage.get("acme", { timeframe: "30d" });
-        expect(usage.quotas.statements.types.directive).toBe(40);
-        expect(usage.quotas.statements.types.fact).toBe(30);
+        expect(usage.quotas.memories.types.directive).toBe(40);
+        expect(usage.quotas.memories.types.fact).toBe(30);
       });
     });
 
@@ -1423,16 +1435,16 @@ describe("MemCell SDK (cli package export)", () => {
     });
 
     describe("ScopedMemCell Bound Namespaces", () => {
-      it("invokes statements, agents, collaborators, and scopes with bound namespace", async () => {
+      it("invokes memories, agents, collaborators, and scopes with bound namespace", async () => {
         const calls: string[] = [];
         const mockFetch = vi.fn(async (url: string | URL | Request) => {
           const u = String(url);
           calls.push(u);
 
-          if (u.includes("/statements")) {
+          if (u.includes("/memories")) {
             return new Response(
               JSON.stringify({
-                statements: [],
+                memories: [],
                 pagination: { page: 1, perPage: 30, total: 0, hasMore: false },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
@@ -1472,7 +1484,7 @@ describe("MemCell SDK (cli package export)", () => {
         });
         const scoped = memcell.scope("acme/backend");
 
-        await scoped.statements.list();
+        await scoped.memories.list();
         await scoped.agents.list();
         await scoped.collaborators.list();
         const scopes = await scoped.scopes.list();

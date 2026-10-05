@@ -27,7 +27,7 @@ from memcell import AsyncMemCell
 
 async def main():
     async with AsyncMemCell(api_key="mc_live_...") as memory:
-        # 1. Recall relevant statements before an agent acts:
+        # 1. Recall relevant memories before an agent acts:
         recall = await memory.recall(
             namespace="acme/support",
             query="refund verification and escalation thresholds",
@@ -56,7 +56,7 @@ recall = await memory.recall(
 print(recall.prompt_context)
 ```
 
-### 2. `remember` — Save Statements
+### 2. `remember` — Save Memories
 
 Save a verified directive, fact, preference, or observation so future agents inherit it immediately:
 
@@ -75,7 +75,7 @@ Memory adapts when told what happened. When an agent succeeds or fails after app
 ```python
 await memory.report(
     namespace="acme/support",
-    statement_id="stmt_019a4b2c",
+    memory_id="mem_019a4b2c",
     outcome="worked",  # "worked" | "failed" | "avoided"
     reason="Customer verified and refund issued within guidelines",
 )
@@ -111,31 +111,31 @@ async def handle_refund(ticket_id: str, amount: int):
 
 The SDK provides direct, typed access to all MemCell platform resources across both synchronous (`MemCell`) and asynchronous (`AsyncMemCell`) clients:
 
-### Statements (`memory.statements`)
+### Memories (`memory.memories`)
 
 - `list(namespace, ...)`: Paginated query with filtering by `type`, `status`, `scope`, `q`, `sort`.
-- `get(namespace, id)`: Retrieve an individual statement.
-- `create(namespace, title, type="directive", ...)`: Create a statement (`directive`, `fact`, `preference`, `observation`).
-- `update(namespace, id, ...)`: Update statement content, status, confidence, or metadata.
-- `delete(namespace, id)`: Delete a statement.
-- `star(namespace, id, starred=True)`: Star or unstar a statement.
+- `get(namespace, id)`: Retrieve an individual memory.
+- `create(namespace, title, type="directive", ...)`: Create a memory (`guard`, `directive`, `fact`, `preference`, `observation`).
+- `update(namespace, id, ...)`: Update memory content, status, confidence, or metadata.
+- `delete(namespace, id)`: Delete a memory.
+- `star(namespace, id, starred=True)`: Star or unstar a memory.
 - `history(namespace, id)`: Retrieve complete version and mutation history.
-- `adopt(namespace, id, target_project_ids)`: Adopt a statement into other projects.
-- `promote(namespace, id, to_scope="common")`: Promote a provisional statement to active.
+- `adopt(namespace, id, target_project_ids)`: Adopt a memory into other workspaces.
+- `promote(namespace, id, to_scope="workspace")`: Promote a provisional memory to active.
 
-### Projects (`memory.projects`)
+### Workspaces (`memory.workspaces`)
 
-- `list(...)`: List caller's accessible projects.
-- `list_for_owner(owner, ...)`: List projects belonging to an owner.
-- `get(namespace)`: Retrieve project details.
-- `create(name, ...)`: Create a new project.
-- `update(namespace, ...)`: Update project properties.
-- `delete(namespace)`: Delete a project.
-- `transfer(namespace, target_owner)`: Transfer project ownership.
+- `list(...)`: List caller's accessible workspaces.
+- `list_for_owner(owner, ...)`: List workspaces belonging to an owner.
+- `get(namespace)`: Retrieve workspace details.
+- `create(name, ...)`: Create a new workspace.
+- `update(namespace, ...)`: Update workspace properties.
+- `delete(namespace)`: Delete a workspace.
+- `transfer(namespace, target_owner)`: Transfer workspace ownership.
 
 ### Agents (`memory.agents`)
 
-- `list(namespace, ...)`: List agents registered in a project.
+- `list(namespace, ...)`: List agents registered in a workspace.
 - `get(namespace, agent_id)`: Retrieve agent details.
 - `create(namespace, name, ...)`: Register an agent.
 - `update(namespace, agent_id, ...)`: Update agent configuration.
@@ -145,7 +145,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 
 ### Collaborators (`memory.collaborators`)
 
-- `list(namespace, ...)`: List project collaborators and pending invitations.
+- `list(namespace, ...)`: List workspace collaborators and pending invitations.
 - `invite(namespace, identifier, role="read")`: Invite a user or email to collaborate.
 - `update_role(namespace, user_id, role)`: Update a collaborator's role.
 - `remove(namespace, user_id)`: Remove a collaborator.
@@ -159,7 +159,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 
 ### Usage & Quotas (`memory.usage`)
 
-- `get(owner, timeframe="30d")`: Retrieve statement type breakdown and API quotas.
+- `get(owner, timeframe="30d")`: Retrieve memory type breakdown and API quotas.
 
 ### Account (`memory.account`)
 
@@ -170,7 +170,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 
 Provides convenient namespace-bound access:
 
-- `scoped.statements.*`, `scoped.agents.*`, `scoped.collaborators.*`, `scoped.scopes.list()`
+- `scoped.memories.*`, `scoped.agents.*`, `scoped.collaborators.*`, `scoped.scopes.list()`
 
 ---
 
@@ -187,8 +187,8 @@ recall = memory.recall(
     namespace="acme/support",
     query="refund verification and escalation thresholds",
 )
-for statement in recall.statements:
-    print(f"[{statement.type}] {statement.title} (confidence: {statement.confidence})")
+for memory_item in recall.memories:
+    print(f"[{memory_item.type}] {memory_item.title} (confidence: {memory_item.confidence})")
 ```
 
 ---

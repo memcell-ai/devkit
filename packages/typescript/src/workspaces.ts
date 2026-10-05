@@ -57,7 +57,7 @@ export class WorkspacesNamespace {
         total: number;
         hasMore: boolean;
       };
-    }>(`/api/v1/projects${query}`, { method: "GET" });
+    }>(`/api/v1/workspaces${query}`, { method: "GET" });
 
     return {
       items: json.workspaces || json.projects || [],
@@ -83,7 +83,7 @@ export class WorkspacesNamespace {
         total: number;
         hasMore: boolean;
       };
-    }>(`/api/v1/${encodeURIComponent(owner)}/projects${query}`, {
+    }>(`/api/v1/${encodeURIComponent(owner)}/workspaces${query}`, {
       method: "GET",
     });
 
@@ -117,7 +117,7 @@ export class WorkspacesNamespace {
       ok: boolean;
       project?: WorkspaceItem;
       workspace?: WorkspaceItem;
-    }>("/api/v1/projects", {
+    }>("/api/v1/workspaces", {
       method: "POST",
       body: JSON.stringify(params),
     });

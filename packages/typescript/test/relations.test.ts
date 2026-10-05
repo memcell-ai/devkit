@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemCell } from "../src/client.js";
 
-describe("Statements Relations API", () => {
-  it("creates a statement relation", async () => {
+describe("Memories Relations API", () => {
+  it("creates a memory relation", async () => {
     const recorded: Array<{ method: string; url: string; body?: any }> = [];
     const mockFetch = vi.fn(
       async (url: string | URL | Request, init?: RequestInit) => {
@@ -11,7 +11,7 @@ describe("Statements Relations API", () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         recorded.push({ method, url: u, body });
 
-        if (method === "POST" && u.includes("/statements/stmt_g1/relations")) {
+        if (method === "POST" && u.includes("/memories/stmt_g1/relations")) {
           return new Response(
             JSON.stringify({
               relation: {
@@ -34,7 +34,7 @@ describe("Statements Relations API", () => {
     );
 
     const memcell = new MemCell({ apiKey: "mc_key", fetch: mockFetch as any });
-    const rel = await memcell.statements.relations.create(
+    const rel = await memcell.memories.relations.create(
       "acme/backend",
       "stmt_g1",
       {
@@ -47,7 +47,7 @@ describe("Statements Relations API", () => {
     expect(recorded).toHaveLength(1);
     expect(recorded[0]!.method).toBe("POST");
     expect(recorded[0]!.url).toContain(
-      "/api/v1/acme/backend/statements/stmt_g1/relations",
+      "/api/v1/acme/backend/memories/stmt_g1/relations",
     );
     expect(recorded[0]!.body.targetId).toBe("stmt_d1");
     expect(recorded[0]!.body.relationType).toBe("constrains");
@@ -57,10 +57,10 @@ describe("Statements Relations API", () => {
     expect(rel.targetId).toBe("stmt_d1");
   });
 
-  it("lists statement incoming and outgoing relations", async () => {
+  it("lists memory incoming and outgoing relations", async () => {
     const mockFetch = vi.fn(async (url: string | URL | Request) => {
       const u = String(url);
-      expect(u).toContain("/api/v1/acme/backend/statements/stmt_g1/relations");
+      expect(u).toContain("/api/v1/acme/backend/memories/stmt_g1/relations");
       return new Response(
         JSON.stringify({
           incoming: [],
@@ -72,7 +72,7 @@ describe("Statements Relations API", () => {
               targetId: "stmt_d1",
               relationType: "constrains",
               confidence: 0.95,
-              targetStatement: {
+              targetMemory: {
                 id: "stmt_d1",
                 title: "Use background queue",
                 type: "directive",
@@ -85,7 +85,7 @@ describe("Statements Relations API", () => {
     });
 
     const memcell = new MemCell({ apiKey: "mc_key", fetch: mockFetch as any });
-    const res = await memcell.statements.relations.list(
+    const res = await memcell.memories.relations.list(
       "acme/backend",
       "stmt_g1",
     );
@@ -93,18 +93,16 @@ describe("Statements Relations API", () => {
     expect(res.incoming).toHaveLength(0);
     expect(res.outgoing).toHaveLength(1);
     expect(res.outgoing[0]!.relationType).toBe("constrains");
-    expect(res.outgoing[0]!.targetStatement?.title).toBe(
-      "Use background queue",
-    );
+    expect(res.outgoing[0]!.targetMemory?.title).toBe("Use background queue");
   });
 
-  it("deletes a statement relation", async () => {
+  it("deletes a memory relation", async () => {
     const mockFetch = vi.fn(
       async (url: string | URL | Request, init?: RequestInit) => {
         const u = String(url);
         expect(init?.method).toBe("DELETE");
         expect(u).toContain(
-          "/api/v1/acme/backend/statements/stmt_g1/relations/rel_1",
+          "/api/v1/acme/backend/memories/stmt_g1/relations/rel_1",
         );
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
@@ -115,7 +113,7 @@ describe("Statements Relations API", () => {
 
     const memcell = new MemCell({ apiKey: "mc_key", fetch: mockFetch as any });
     await expect(
-      memcell.statements.relations.delete("acme/backend", "stmt_g1", "rel_1"),
+      memcell.memories.relations.delete("acme/backend", "stmt_g1", "rel_1"),
     ).resolves.toBeUndefined();
   });
 
@@ -150,7 +148,7 @@ describe("Statements Relations API", () => {
     });
 
     const memcell = new MemCell({ apiKey: "mc_key", fetch: mockFetch as any });
-    const res = await memcell.statements.relations.listProject("acme/backend", {
+    const res = await memcell.memories.relations.listWorkspace("acme/backend", {
       page: 1,
       perPage: 20,
       relationType: "justifies",
@@ -168,7 +166,7 @@ describe("Statements Relations API", () => {
         const method = init?.method || "GET";
         if (
           method === "POST" &&
-          u.includes("/api/v1/acme/backend/statements/stmt_g1/relations")
+          u.includes("/api/v1/acme/backend/memories/stmt_g1/relations")
         ) {
           return new Response(
             JSON.stringify({
@@ -190,7 +188,7 @@ describe("Statements Relations API", () => {
 
     const memcell = new MemCell({ apiKey: "mc_key", fetch: mockFetch as any });
     const scoped = memcell.scope("acme/backend");
-    const rel = await scoped.statements.relations.create("stmt_g1", {
+    const rel = await scoped.memories.relations.create("stmt_g1", {
       targetId: "stmt_d1",
       relationType: "refines",
     });

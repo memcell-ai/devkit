@@ -39,9 +39,9 @@ export class SweepNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
-   * Triggers an asynchronous consolidation sweep over active statements in the project.
-   * Clusters statements by semantic density, fuses redundancies, infers relations,
-   * surfaces tensions, and regenerates living project profile.
+   * Triggers an asynchronous consolidation sweep over active memories in the workspace.
+   * Clusters memories by semantic density, fuses redundancies, infers relations,
+   * surfaces tensions, and regenerates living workspace profile.
    *
    * @returns 202 Accepted response containing `jobId` and streaming `phases`.
    */

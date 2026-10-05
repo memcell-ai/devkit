@@ -192,7 +192,7 @@ class OrganizationMemCell:
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
         recall_id: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         namespace: str | None = None,
         auto_distill: bool = True,
         async_: bool | None = None,
@@ -205,7 +205,7 @@ class OrganizationMemCell:
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
-            statement_id=statement_id,
+            memory_id=memory_id,
             namespace=self._resolve_namespace(namespace),
             auto_distill=auto_distill,
             async_=async_,
@@ -214,7 +214,7 @@ class OrganizationMemCell:
     def feedback(
         self,
         outcome: OutcomeVerdict,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -223,7 +223,7 @@ class OrganizationMemCell:
     ) -> FeedbackResponse:
         return self._client.feedback(
             outcome=outcome,
-            statement_id=statement_id,
+            memory_id=memory_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,
@@ -390,7 +390,7 @@ class AsyncOrganizationMemCell:
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
         recall_id: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         namespace: str | None = None,
         auto_distill: bool = True,
         async_: bool | None = None,
@@ -403,7 +403,7 @@ class AsyncOrganizationMemCell:
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
-            statement_id=statement_id,
+            memory_id=memory_id,
             namespace=self._resolve_namespace(namespace),
             auto_distill=auto_distill,
             async_=async_,
@@ -412,7 +412,7 @@ class AsyncOrganizationMemCell:
     async def feedback(
         self,
         outcome: OutcomeVerdict,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -421,7 +421,7 @@ class AsyncOrganizationMemCell:
     ) -> FeedbackResponse:
         return await self._client.feedback(
             outcome=outcome,
-            statement_id=statement_id,
+            memory_id=memory_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,

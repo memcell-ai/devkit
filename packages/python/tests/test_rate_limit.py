@@ -10,7 +10,7 @@ def test_rate_limit_warning_header_interception():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"recallId": "rec_warn", "statements": []},
+            json={"recallId": "rec_warn", "memories": []},
             headers={
                 "RateLimit-Warning": (
                     '299 - "Approaching rate limit capacity (85% consumed in active window)"'
@@ -48,7 +48,7 @@ def test_rate_limit_automatic_retry_backoff():
             )
         return httpx.Response(
             200,
-            json={"recallId": "rec_recovered", "statements": []},
+            json={"recallId": "rec_recovered", "memories": []},
         )
 
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))

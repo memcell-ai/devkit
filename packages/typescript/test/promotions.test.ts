@@ -17,7 +17,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
               promotionRequests: [
                 {
                   id: "promo-1",
-                  statementId: "stmt-1",
+                  memoryId: "stmt-1",
                   fromScope: "user",
                   toScope: "project",
                   status: "pending",
@@ -67,7 +67,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
           return new Response(
             JSON.stringify({
               approved: true,
-              statement: {
+              memory: {
                 id: "stmt-promoted-1",
                 title: "Always use TLS 1.3",
                 scope: "project",
@@ -101,7 +101,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
       reason: "Verified by lead reviewer",
     });
     expect(approved.approved).toBe(true);
-    expect(approved.statement.scope).toBe("project");
+    expect(approved.memory.scope).toBe("project");
 
     const rejected = await scoped.promotions.reject("promo-2", {
       reason: "Does not meet team guidelines",
@@ -118,7 +118,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
           JSON.stringify({
             recallId: "rec-123",
             promptContext: "<memcell_context></memcell_context>",
-            statements: [
+            memories: [
               {
                 id: "stmt-1",
                 title: "Use connection pooling",
@@ -142,8 +142,8 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
 
     expect(capturedBody.scopes).toEqual(["organization", "project"]);
     expect(capturedBody.my_memory).toBe(true);
-    expect(res.statements[0]!.scope).toBe("organization");
-    expect(res.statements[0]!.requiredRoles).toEqual(["admin"]);
+    expect(res.memories[0]!.scope).toBe("organization");
+    expect(res.memories[0]!.requiredRoles).toEqual(["admin"]);
   });
 
   it("sends scope and requiredRoles in remember payload", async () => {

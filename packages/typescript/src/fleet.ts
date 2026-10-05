@@ -18,7 +18,7 @@ function buildFleetQuery(params?: ListFleetAgentsParams): string {
   if (params.scope) q.set("scope", params.scope);
   if (params.framework) q.set("framework", params.framework);
   if (params.teamId) q.set("teamId", params.teamId);
-  if (params.projectId) q.set("projectId", params.projectId);
+  if (params.workspaceId) q.set("projectId", params.workspaceId);
 
   const str = q.toString();
   return str ? `?${str}` : "";

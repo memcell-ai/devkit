@@ -17,11 +17,11 @@ def test_sync_client_recall_and_remember():
                 json={
                     "recallId": "rec_sync_1",
                     "promptContext": "<memcell>Context</memcell>",
-                    "statements": [
+                    "memories": [
                         {
                             "id": "st_sync_1",
                             "title": "Never skip verification",
-                            "kind": "invariant",
+                            "type": "directive",
                             "confidence": 0.95,
                         }
                     ],
@@ -35,7 +35,7 @@ def test_sync_client_recall_and_remember():
                         {
                             "id": "st_sync_2",
                             "title": "Always test locally",
-                            "kind": "reflex",
+                            "type": "directive",
                             "confidence": 0.8,
                         }
                     ]
@@ -47,12 +47,20 @@ def test_sync_client_recall_and_remember():
     memory = MemCell(api_key="mc_live_test", http_client=mock_client)
 
     # Recall
-    recall = memory.recall(namespace="acme/backend", query="deploy procedure")
+    recall = memory.recall(
+        namespace="acme/backend",
+        query="deploy procedure",
+        metadata={"threadId": "thr_42"},
+        include_metadata=True,
+    )
     assert recall.recall_id == "rec_sync_1"
     assert recall.prompt_context == "<memcell>Context</memcell>"
-    assert len(recall.statements) == 1
-    assert recall.statements[0].title == "Never skip verification"
-    assert recall.statements[0].is_invariant is True
+    assert len(recall.memories) == 1
+    assert recall.memories[0].title == "Never skip verification"
+    assert recall.memories[0].type == "directive"
+    sent_payload = json.loads(requests_log[0].content.decode("utf-8"))
+    assert sent_payload["metadata"] == {"threadId": "thr_42"}
+    assert sent_payload["include_metadata"] is True
 
     # Remember
     remember = memory.remember(namespace="acme/backend", title="Always test locally")
@@ -71,7 +79,7 @@ def test_sync_scoped_memcell_wrap_execution():
                 json={
                     "recallId": "rec_wrap_1",
                     "promptContext": "<memcell>Guards loaded</memcell>",
-                    "statements": [],
+                    "memories": [],
                 },
             )
         if request.url.path.endswith("/report"):
@@ -116,7 +124,7 @@ def test_sync_organization_memcell():
         if request.url.path == "/api/v1/acme-corp/backend/recall":
             return httpx.Response(
                 200,
-                json={"recallId": "rec_org_1", "promptContext": "<org>", "statements": []},
+                json={"recallId": "rec_org_1", "promptContext": "<org>", "memories": []},
             )
         return httpx.Response(404)
 
@@ -146,7 +154,7 @@ async def test_async_client_lifecycle():
                 json={
                     "recallId": "rec_async_1",
                     "promptContext": "<xml>Async</xml>",
-                    "statements": [],
+                    "memories": [],
                 },
             )
         if request.url.path.endswith("/report"):
@@ -191,16 +199,16 @@ def test_streaming_job_completion():
     assert events[0].step == "distilling"
 
 
-def test_statements_resource_sync():
+def test_memories_resource_sync():
     def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         method = request.method
 
-        if "/statements?" in u and method == "GET":
+        if "/memories?" in u and method == "GET":
             return httpx.Response(
                 200,
                 json={
-                    "statements": [
+                    "memories": [
                         {
                             "id": "stmt_1",
                             "title": "Direct connection pool setup",
@@ -211,30 +219,30 @@ def test_statements_resource_sync():
                     "pagination": {"page": 2, "perPage": 15, "total": 25, "hasMore": False},
                 },
             )
-        if u.endswith("/statements") and method == "POST":
+        if u.endswith("/memories") and method == "POST":
             body = json.loads(request.content.decode("utf-8"))
             return httpx.Response(
                 201,
                 json={
-                    "statement": {
+                    "memory": {
                         "id": "stmt_new",
                         "title": body["title"],
                         "type": body.get("type", "directive"),
                     }
                 },
             )
-        if u.endswith("/statements/stmt_new") and method == "GET":
+        if u.endswith("/memories/stmt_new") and method == "GET":
             return httpx.Response(
                 200,
-                json={"statement": {"id": "stmt_new", "title": "Existing", "type": "directive"}},
+                json={"memory": {"id": "stmt_new", "title": "Existing", "type": "directive"}},
             )
-        if u.endswith("/statements/stmt_new") and method == "PATCH":
+        if u.endswith("/memories/stmt_new") and method == "PATCH":
             body = json.loads(request.content.decode("utf-8"))
             return httpx.Response(
                 200,
-                json={"statement": {"id": "stmt_new", "title": body["title"], "type": "directive"}},
+                json={"memory": {"id": "stmt_new", "title": body["title"], "type": "directive"}},
             )
-        if "/statements/stmt_new" in u and method == "DELETE":
+        if "/memories/stmt_new" in u and method == "DELETE":
             all_v = "allVersions=true" in u
             return httpx.Response(
                 200,
@@ -244,7 +252,7 @@ def test_statements_resource_sync():
                     "deletedScope": "memory" if all_v else "version",
                     "nextId": None if all_v else "stmt_v1",
                     "restoredVersion": None if all_v else 1,
-                    "message": "Deleted memory" if all_v else "Deleted latest version of statement",
+                    "message": "Deleted memory" if all_v else "Deleted latest version of memory",
                 },
             )
         if u.endswith("/star") and method == "PUT":
@@ -266,10 +274,8 @@ def test_statements_resource_sync():
                 200,
                 json={
                     "ok": True,
-                    "sourceStatementId": "stmt_1",
-                    "adopted": [
-                        {"projectId": "p2", "statementId": "stmt_2", "alreadyExisted": False}
-                    ],
+                    "sourceMemoryId": "stmt_1",
+                    "adopted": [{"projectId": "p2", "memoryId": "stmt_2", "alreadyExisted": False}],
                 },
             )
         if u.endswith("/promote") and method == "POST":
@@ -277,7 +283,7 @@ def test_statements_resource_sync():
                 200,
                 json={
                     "promoted": True,
-                    "statement": {"id": "stmt_1", "title": "Promoted", "status": "active"},
+                    "memory": {"id": "stmt_1", "title": "Promoted", "status": "active"},
                 },
             )
         return httpx.Response(404)
@@ -285,54 +291,54 @@ def test_statements_resource_sync():
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
-    listed = memcell.statements.list("acme/backend", page=2, per_page=15, type="directive")
+    listed = memcell.memories.list("acme/backend", page=2, per_page=15, type="directive")
     assert len(listed.items) == 1
     assert listed.items[0].id == "stmt_1"
     assert listed.pagination.total == 25
 
-    created = memcell.statements.create("acme/backend", title="Statement A", type="directive")
+    created = memcell.memories.create("acme/backend", title="Memory A", type="directive")
     assert created.id == "stmt_new"
 
-    fetched = memcell.statements.get("acme/backend", "stmt_new")
+    fetched = memcell.memories.get("acme/backend", "stmt_new")
     assert fetched.title == "Existing"
 
-    updated = memcell.statements.update("acme/backend", "stmt_new", title="Updated Title")
+    updated = memcell.memories.update("acme/backend", "stmt_new", title="Updated Title")
     assert updated.title == "Updated Title"
 
-    del_res = memcell.statements.delete("acme/backend", "stmt_new")
+    del_res = memcell.memories.delete("acme/backend", "stmt_new")
     assert del_res.status == "deleted"
     assert del_res.deleted_count == 1
     assert del_res.deleted_scope == "version"
     assert del_res.next_id == "stmt_v1"
     assert del_res.restored_version == 1
 
-    del_all = memcell.statements.delete("acme/backend", "stmt_new", all_versions=True)
+    del_all = memcell.memories.delete("acme/backend", "stmt_new", all_versions=True)
     assert del_all.deleted_count == 2
     assert del_all.deleted_scope == "memory"
 
-    star_res = memcell.statements.star("acme/backend", "stmt_1", starred=True)
+    star_res = memcell.memories.star("acme/backend", "stmt_1", starred=True)
     assert star_res.starred is True
 
-    hist_res = memcell.statements.history("acme/backend", "stmt_1")
+    hist_res = memcell.memories.history("acme/backend", "stmt_1")
     assert len(hist_res.history) == 2
 
-    adopt_res = memcell.statements.adopt("acme/backend", "stmt_1", ["p2"])
-    assert adopt_res.adopted[0].statement_id == "stmt_2"
+    adopt_res = memcell.memories.adopt("acme/backend", "stmt_1", ["p2"])
+    assert adopt_res.adopted[0].memory_id == "stmt_2"
 
-    promote_res = memcell.statements.promote("acme/backend", "stmt_1", to_scope="common")
+    promote_res = memcell.memories.promote("acme/backend", "stmt_1", to_scope="common")
     assert promote_res.promoted is True
 
 
 @pytest.mark.asyncio
-async def test_statements_resource_async():
+async def test_memories_resource_async():
     def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         method = request.method
-        if "/statements" in u and method == "GET":
+        if "/memories" in u and method == "GET":
             return httpx.Response(
                 200,
                 json={
-                    "statements": [
+                    "memories": [
                         {
                             "id": "stmt_1",
                             "title": "Direct connection pool setup",
@@ -343,12 +349,12 @@ async def test_statements_resource_async():
                     "pagination": {"page": 1, "perPage": 10, "total": 1, "hasMore": False},
                 },
             )
-        if u.endswith("/statements") and method == "POST":
+        if u.endswith("/memories") and method == "POST":
             return httpx.Response(
                 201,
-                json={"statement": {"id": "stmt_async", "title": "Async Title", "type": "fact"}},
+                json={"memory": {"id": "stmt_async", "title": "Async Title", "type": "fact"}},
             )
-        if "/statements/stmt_async" in u and method == "DELETE":
+        if "/memories/stmt_async" in u and method == "DELETE":
             return httpx.Response(
                 200,
                 json={
@@ -357,21 +363,21 @@ async def test_statements_resource_async():
                     "deletedScope": "version",
                     "nextId": "stmt_v0",
                     "restoredVersion": 1,
-                    "message": "Deleted latest version of statement",
+                    "message": "Deleted latest version of memory",
                 },
             )
         return httpx.Response(404)
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     async with AsyncMemCell(api_key="mc_key", http_client=mock_client) as memcell:
-        listed = await memcell.statements.list("acme/backend")
+        listed = await memcell.memories.list("acme/backend")
         assert len(listed.items) == 1
         assert listed.items[0].id == "stmt_1"
 
-        created = await memcell.statements.create("acme/backend", title="Async Title", type="fact")
+        created = await memcell.memories.create("acme/backend", title="Async Title", type="fact")
         assert created.id == "stmt_async"
 
-        del_res = await memcell.statements.delete("acme/backend", "stmt_async")
+        del_res = await memcell.memories.delete("acme/backend", "stmt_async")
         assert del_res.status == "deleted"
         assert del_res.deleted_scope == "version"
         assert del_res.restored_version == 1
@@ -382,7 +388,7 @@ def test_projects_resource_sync():
         u = str(request.url)
         method = request.method
 
-        if "/api/v1/projects?" in u and method == "GET":
+        if "/api/v1/workspaces?" in u and method == "GET":
             return httpx.Response(
                 200,
                 json={
@@ -392,7 +398,7 @@ def test_projects_resource_sync():
                     "pagination": {"page": 1, "perPage": 30, "total": 1, "hasMore": False},
                 },
             )
-        if "/api/v1/acme/projects?" in u and method == "GET":
+        if "/api/v1/acme/workspaces?" in u and method == "GET":
             return httpx.Response(
                 200,
                 json={
@@ -403,7 +409,7 @@ def test_projects_resource_sync():
                     "pagination": {"page": 1, "perPage": 10, "total": 1, "hasMore": False},
                 },
             )
-        if u.endswith("/api/v1/projects") and method == "POST":
+        if u.endswith("/api/v1/workspaces") and method == "POST":
             return httpx.Response(
                 201,
                 json={
@@ -449,30 +455,30 @@ def test_projects_resource_sync():
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
-    caller_projects = memcell.projects.list(page=1, per_page=30)
+    caller_projects = memcell.workspaces.list(page=1, per_page=30)
     assert caller_projects.items[0].slug == "core"
 
-    owner_projects = memcell.projects.list_for_owner("acme", page=1, per_page=10)
+    owner_projects = memcell.workspaces.list_for_owner("acme", page=1, per_page=10)
     assert owner_projects.items[0].slug == "backend"
 
-    created = memcell.projects.create(name="New Project")
+    created = memcell.workspaces.create(name="New Project")
     assert created.id == "p_new"
 
-    got = memcell.projects.get("acme/backend")
+    got = memcell.workspaces.get("acme/backend")
     assert got.name == "Backend"
 
-    updated = memcell.projects.update("acme/backend", name="Backend V2")
+    updated = memcell.workspaces.update("acme/backend", name="Backend V2")
     assert updated.name == "Backend V2"
 
-    memcell.projects.delete("acme/backend")
-    memcell.projects.transfer("acme/backend", target_owner="new-owner")
+    memcell.workspaces.delete("acme/backend")
+    memcell.workspaces.transfer("acme/backend", target_owner="new-owner")
 
 
 @pytest.mark.asyncio
 async def test_projects_resource_async():
     def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
-        if "/api/v1/projects" in u:
+        if "/api/v1/workspaces" in u:
             return httpx.Response(
                 200,
                 json={
@@ -486,7 +492,7 @@ async def test_projects_resource_async():
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     async with AsyncMemCell(api_key="mc_key", http_client=mock_client) as memcell:
-        res = await memcell.projects.list()
+        res = await memcell.workspaces.list()
         assert len(res.items) == 1
         assert res.items[0].slug == "core"
 
@@ -647,7 +653,7 @@ def test_usage_resource_sync():
                 "owner": {"type": "org", "slug": "acme", "name": "Acme Corp"},
                 "timeframe": "30d",
                 "quotas": {
-                    "statements": {
+                    "memories": {
                         "total": 100,
                         "limit": 1000,
                         "percent": 10,
@@ -675,10 +681,10 @@ def test_usage_resource_sync():
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
     usage = memcell.usage.get("acme", timeframe="30d")
-    assert usage.quotas.statements.types.directive == 40
-    assert usage.quotas.statements.types.fact == 30
-    assert usage.quotas.statements.types.preference == 20
-    assert usage.quotas.statements.types.observation == 10
+    assert usage.quotas.memories.types.directive == 40
+    assert usage.quotas.memories.types.fact == 30
+    assert usage.quotas.memories.types.preference == 20
+    assert usage.quotas.memories.types.observation == 10
 
 
 def test_account_resource_sync():
@@ -743,11 +749,11 @@ def test_scoped_memcell_bound_namespaces():
         u = str(request.url)
         calls.append(u)
 
-        if "/statements" in u:
+        if "/memories" in u:
             return httpx.Response(
                 200,
                 json={
-                    "statements": [],
+                    "memories": [],
                     "pagination": {"page": 1, "perPage": 30, "total": 0, "hasMore": False},
                 },
             )
@@ -779,7 +785,7 @@ def test_scoped_memcell_bound_namespaces():
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
     scoped = memcell.scope("acme/backend")
 
-    scoped.statements.list()
+    scoped.memories.list()
     scoped.agents.list()
     scoped.collaborators.list()
     scopes = scoped.scopes.list()

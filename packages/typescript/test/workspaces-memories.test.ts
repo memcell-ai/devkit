@@ -2,13 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { MemCell } from "../src/index.js";
 
 describe("Workspaces and Memories Ontology", () => {
-  it("exposes client.workspaces and client.memories alongside client.projects and client.statements", () => {
+  it("exposes client.workspaces and client.memories", () => {
     const client = new MemCell({ apiKey: "test-api-key" });
 
     expect(client.workspaces).toBeDefined();
     expect(client.memories).toBeDefined();
-    expect(client.projects).toBeDefined();
-    expect(client.statements).toBeDefined();
     expect(typeof client.workspace).toBe("function");
     expect(typeof client.scope).toBe("function");
   });
@@ -17,7 +15,7 @@ describe("Workspaces and Memories Ontology", () => {
     const mockFetch = vi.fn(
       async (url: string | URL | Request, init?: RequestInit) => {
         const u = String(url);
-        if (u.includes("/api/v1/projects") && init?.method === "GET") {
+        if (u.includes("/api/v1/workspaces") && init?.method === "GET") {
           return new Response(
             JSON.stringify({
               workspaces: [
@@ -33,7 +31,7 @@ describe("Workspaces and Memories Ontology", () => {
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
         }
-        if (u.includes("/api/v1/projects") && init?.method === "POST") {
+        if (u.includes("/api/v1/workspaces") && init?.method === "POST") {
           const body = JSON.parse(String(init.body));
           return new Response(
             JSON.stringify({

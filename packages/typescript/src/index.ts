@@ -6,16 +6,9 @@ export {
   MemoryRelationsNamespace,
   type DeleteMemoryOptions,
   type DeleteMemoryResponse,
-  type DeleteStatementOptions,
-  type DeleteStatementResponse,
 } from "./memories.js";
 
-export {
-  StatementsNamespace,
-  StatementRelationsNamespace,
-} from "./statements.js";
 export { WorkspacesNamespace } from "./workspaces.js";
-export { ProjectsNamespace } from "./projects.js";
 export { AgentsNamespace } from "./agents.js";
 export { CollaboratorsNamespace } from "./collaborators.js";
 export { UsageNamespace } from "./usage.js";
@@ -50,19 +43,14 @@ export {
   RateLimitError,
   MEMORY_SCOPES,
   MEMORY_TYPES,
-  STATEMENT_SCOPES,
 } from "./types.js";
 
 export type {
   // Axiom Types
   MemoryType,
-  StatementType,
   MemoryScope,
-  StatementScope,
   PromotionStatus,
   MemoryStatus,
-  StatementStatus,
-  MemoryKind,
   OutcomeVerdict,
   MemCellAuth,
   MemCellConfig,
@@ -72,52 +60,36 @@ export type {
   PaginationMetadata,
   PaginatedResult,
 
-  // Memories & Statements
+  // Memories
   MemoryItem,
-  StatementItem,
-  StatementAuthor,
+  MemoryAuthor,
   ListMemoriesParams,
-  ListStatementsParams,
   CreateMemoryParams,
-  CreateStatementParams,
   UpdateMemoryParams,
-  UpdateStatementParams,
-  StatementHistoryItem,
-  StatementHistoryResponse,
+  MemoryHistoryItem,
   MemoryHistoryResponse,
-  StatementStarResponse,
   MemoryStarResponse,
   AdoptedTarget,
-  AdoptStatementResponse,
   AdoptMemoryResponse,
   PromoteMemoryParams,
-  PromoteStatementParams,
-  PromoteStatementResponse,
   PromoteMemoryResponse,
-  StatementPromotionRequest,
+  MemoryPromotionRequest,
   ListPromotionsParams,
 
   // Relations
   RelationType,
-  StatementRelationItem,
   MemoryRelationItem,
   CreateRelationParams,
   CreateMemoryRelationParams,
-  StatementRelationsResponse,
   MemoryRelationsResponse,
-  ListProjectRelationsParams,
+  ListWorkspaceRelationsParams,
 
-  // Workspaces & Projects
+  // Workspaces
   WorkspaceItem,
-  ProjectItem,
   ListWorkspacesParams,
-  ListProjectsParams,
   CreateWorkspaceParams,
-  CreateProjectParams,
   UpdateWorkspaceParams,
-  UpdateProjectParams,
   TransferWorkspaceParams,
-  TransferProjectParams,
 
   // Agents & Keys
   AgentItem,

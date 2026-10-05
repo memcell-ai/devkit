@@ -15,7 +15,7 @@ def test_relations_sync():
         body = json.loads(request.content.decode()) if request.content else None
         recorded.append({"method": method, "url": u, "body": body})
 
-        if method == "POST" and "/statements/stmt_g1/relations" in u:
+        if method == "POST" and "/memories/stmt_g1/relations" in u:
             return httpx.Response(
                 201,
                 json={
@@ -32,7 +32,7 @@ def test_relations_sync():
                     }
                 },
             )
-        if method == "GET" and "/statements/stmt_g1/relations" in u:
+        if method == "GET" and "/memories/stmt_g1/relations" in u:
             return httpx.Response(
                 200,
                 json={
@@ -45,7 +45,7 @@ def test_relations_sync():
                             "targetId": "stmt_d1",
                             "relationType": "constrains",
                             "confidence": 0.95,
-                            "targetStatement": {
+                            "targetMemory": {
                                 "id": "stmt_d1",
                                 "title": "Deploy workers",
                                 "type": "directive",
@@ -54,7 +54,7 @@ def test_relations_sync():
                     ],
                 },
             )
-        if method == "DELETE" and "/statements/stmt_g1/relations/rel_1" in u:
+        if method == "DELETE" and "/memories/stmt_g1/relations/rel_1" in u:
             return httpx.Response(200, json={"ok": True})
 
         if method == "GET" and "/api/v1/acme/backend/relations" in u:
@@ -80,9 +80,9 @@ def test_relations_sync():
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
     # 1. Create relation
-    rel = memcell.statements.create_relation(
+    rel = memcell.memories.create_relation(
         "acme/backend",
-        statement_id="stmt_g1",
+        memory_id="stmt_g1",
         target_id="stmt_d1",
         relation_type="constrains",
         confidence=0.95,
@@ -92,26 +92,26 @@ def test_relations_sync():
     assert rel.source_id == "stmt_g1"
     assert rel.target_id == "stmt_d1"
 
-    # 2. List relations on statement
-    relations = memcell.statements.list_relations("acme/backend", "stmt_g1")
+    # 2. List relations on memory
+    relations = memcell.memories.list_relations("acme/backend", "stmt_g1")
     assert len(relations.incoming) == 0
     assert len(relations.outgoing) == 1
-    assert relations.outgoing[0].target_statement is not None
-    assert relations.outgoing[0].target_statement.title == "Deploy workers"
+    assert relations.outgoing[0].target_memory is not None
+    assert relations.outgoing[0].target_memory.title == "Deploy workers"
 
     # 3. List project relations
-    proj_relations = memcell.statements.list_project_relations(
+    proj_relations = memcell.memories.list_project_relations(
         "acme/backend", page=1, per_page=10, relation_type="constrains"
     )
     assert len(proj_relations.items) == 1
     assert proj_relations.pagination.total == 1
 
     # 4. Delete relation
-    memcell.statements.delete_relation("acme/backend", "stmt_g1", "rel_1")
+    memcell.memories.delete_relation("acme/backend", "stmt_g1", "rel_1")
 
     # 5. ScopedMemCell relations proxy
     scoped = memcell.scope("acme/backend")
-    scoped_rel = scoped.statements.relations.create(
+    scoped_rel = scoped.memories.relations.create(
         "stmt_g1", target_id="stmt_d1", relation_type="constrains"
     )
     assert scoped_rel.id == "rel_1"
@@ -124,7 +124,7 @@ async def test_relations_async():
         method = request.method
         body = json.loads(request.content.decode()) if request.content else None
 
-        if method == "POST" and "/statements/stmt_g1/relations" in u:
+        if method == "POST" and "/memories/stmt_g1/relations" in u:
             return httpx.Response(
                 201,
                 json={
@@ -139,7 +139,7 @@ async def test_relations_async():
                     }
                 },
             )
-        if method == "GET" and "/statements/stmt_g1/relations" in u:
+        if method == "GET" and "/memories/stmt_g1/relations" in u:
             return httpx.Response(
                 200,
                 json={"incoming": [], "outgoing": []},
@@ -148,20 +148,20 @@ async def test_relations_async():
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     async with AsyncMemCell(api_key="mc_key", http_client=mock_client) as memcell:
-        rel = await memcell.statements.create_relation(
+        rel = await memcell.memories.create_relation(
             "acme/backend",
-            statement_id="stmt_g1",
+            memory_id="stmt_g1",
             target_id="stmt_d1",
             relation_type="constrains",
         )
         assert rel.id == "rel_async_1"
 
-        rels = await memcell.statements.list_relations("acme/backend", "stmt_g1")
+        rels = await memcell.memories.list_relations("acme/backend", "stmt_g1")
         assert len(rels.incoming) == 0
 
         # Async scoped
         scoped = memcell.scope("acme/backend")
-        scoped_rel = await scoped.statements.relations.create(
+        scoped_rel = await scoped.memories.relations.create(
             "stmt_g1", target_id="stmt_d1", relation_type="constrains"
         )
         assert scoped_rel.id == "rel_async_1"

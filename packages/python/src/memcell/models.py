@@ -7,20 +7,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MemoryType = Literal["guard", "directive", "fact", "preference", "observation"]
 MEMORY_TYPES = ("guard", "directive", "fact", "preference", "observation")
-StatementType = MemoryType
 
 MEMORY_SCOPES = ("organization", "team", "workspace", "project", "user")
-STATEMENT_SCOPES = MEMORY_SCOPES
 MemoryScope = Literal["organization", "team", "workspace", "project", "user", str]
-StatementScope = MemoryScope
 
 PromotionStatus = Literal["pending", "approved", "rejected"]
-MemoryKind = Literal[
-    "guard", "directive", "fact", "preference", "observation", "invariant", "reflex", "episodic"
-]
 RelationType = Literal["constrains", "justifies", "refines", "depends_on", "tensions_with"]
 MemoryStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
-StatementStatus = MemoryStatus
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
 
 T = TypeVar("T")
@@ -44,9 +37,6 @@ class MemoryAuthor(BaseModel):
     name: str | None = None
 
 
-StatementAuthor = MemoryAuthor
-
-
 class MemoryRelationItem(BaseModel):
     id: str
     workspace_id: str | None = None
@@ -60,19 +50,11 @@ class MemoryRelationItem(BaseModel):
     updated_at: datetime | None = None
     source_memory: MemoryItem | None = None
     target_memory: MemoryItem | None = None
-    source_statement: MemoryItem | None = None
-    target_statement: MemoryItem | None = None
-
-
-StatementRelationItem = MemoryRelationItem
 
 
 class MemoryRelationsResponse(BaseModel):
     incoming: list[MemoryRelationItem] = Field(default_factory=list)
     outgoing: list[MemoryRelationItem] = Field(default_factory=list)
-
-
-StatementRelationsResponse = MemoryRelationsResponse
 
 
 class MemoryItem(BaseModel):
@@ -86,7 +68,6 @@ class MemoryItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     subject: str | None = None
     type: MemoryType = "fact"
-    kind: str | None = None  # Deprecated alias retained for backward compatibility
     status: MemoryStatus = "active"
     confidence: float = 0.5
     score: float | None = None
@@ -98,7 +79,6 @@ class MemoryItem(BaseModel):
     starred: bool | None = None
     star_count: int | None = None
     is_guard: bool = False
-    is_invariant: bool = False
     scope: str = "workspace"
     required_roles: list[str] = Field(default_factory=list)
     scope_promoted_at: datetime | None = None
@@ -119,23 +99,13 @@ class MemoryItem(BaseModel):
         s = str(v).lower()
         if s in ("guard", "directive", "fact", "preference", "observation"):
             return s
-        if s in ("invariant", "reflex"):
-            return "directive"
-        if s == "episodic":
-            return "observation"
         return "fact"
-
-
-StatementItem = MemoryItem
 
 
 class MemoryStarResponse(BaseModel):
     root_id: str
     starred: bool
     star_count: int
-
-
-StatementStarResponse = MemoryStarResponse
 
 
 class MemoryHistoryItem(BaseModel):
@@ -149,7 +119,6 @@ class MemoryHistoryItem(BaseModel):
     confidence: float = 0.5
     status: MemoryStatus = "active"
     type: MemoryType = "fact"
-    kind: str | None = None
     subject: str | None = None
     scope: str = "workspace"
     author_type: str = "user"
@@ -165,16 +134,9 @@ class MemoryHistoryItem(BaseModel):
         if not v:
             return "fact"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference", "observation"):
+        if s in ("guard", "directive", "fact", "preference", "observation"):
             return s
-        if s in ("invariant", "reflex"):
-            return "directive"
-        if s == "episodic":
-            return "observation"
         return "fact"
-
-
-StatementHistoryItem = MemoryHistoryItem
 
 
 class MemoryHistoryResponse(BaseModel):
@@ -183,29 +145,21 @@ class MemoryHistoryResponse(BaseModel):
     history: list[MemoryHistoryItem] = Field(default_factory=list)
 
 
-StatementHistoryResponse = MemoryHistoryResponse
-
-
 class AdoptedTarget(BaseModel):
     workspace_id: str | None = None
     project_id: str | None = None
     memory_id: str | None = None
-    statement_id: str | None = None
     already_existed: bool
 
 
 class AdoptMemoryResponse(BaseModel):
     ok: bool
     source_memory_id: str | None = None
-    source_statement_id: str | None = None
     adopted: list[AdoptedTarget] = Field(default_factory=list)
 
 
-AdoptStatementResponse = AdoptMemoryResponse
-
-
 class DeleteMemoryResponse(BaseModel):
-    """Result of deleting a memory or statement."""
+    """Result of deleting a memory."""
 
     status: str = "deleted"
     deleted_count: int = Field(default=1, alias="deletedCount")
@@ -219,13 +173,9 @@ class DeleteMemoryResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-DeleteStatementResponse = DeleteMemoryResponse
-
-
 class MemoryPromotionRequest(BaseModel):
     id: str
     memory_id: str | None = None
-    statement_id: str | None = None
     from_scope: str
     to_scope: str
     status: PromotionStatus = "pending"
@@ -235,22 +185,14 @@ class MemoryPromotionRequest(BaseModel):
     review_reason: str | None = None
     reviewed_at: datetime | None = None
     memory: MemoryItem | None = None
-    statement: MemoryItem | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-StatementPromotionRequest = MemoryPromotionRequest
 
 
 class PromoteMemoryResponse(BaseModel):
     promoted: bool = True
     memory: MemoryItem | None = None
-    statement: MemoryItem | None = None
     promotion_request: MemoryPromotionRequest | None = None
-
-
-PromoteStatementResponse = PromoteMemoryResponse
 
 
 class RecallResponse(BaseModel):
@@ -259,16 +201,9 @@ class RecallResponse(BaseModel):
     recall_id: str
     prompt_context: str
     memories: list[MemoryItem] = Field(default_factory=list)
-    statements: list[MemoryItem] = Field(default_factory=list)
     matched_tags: list[str] | None = None
     guard_mode: str | None = None
     profile: dict[str, Any] | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.memories and not self.statements:
-            self.statements = self.memories
-        elif self.statements and not self.memories:
-            self.memories = self.statements
 
 
 class RememberResponse(BaseModel):
@@ -289,21 +224,14 @@ class ReportResponse(BaseModel):
     outcome: OutcomeVerdict
     attributed: list[dict[str, Any]] = Field(default_factory=list)
     distilled_memory: MemoryItem | None = None
-    distilled_statement: MemoryItem | None = None
     note: str | None = None
     accepted: bool | None = None
     job_id: str | None = None
     status: str | None = None
 
-    def model_post_init(self, __context: Any) -> None:
-        if self.distilled_memory and not self.distilled_statement:
-            self.distilled_statement = self.distilled_memory
-        elif self.distilled_statement and not self.distilled_memory:
-            self.distilled_memory = self.distilled_statement
-
 
 class FeedbackResponse(BaseModel):
-    """Direct statement evaluation response."""
+    """Direct memory evaluation response."""
 
     outcome: OutcomeVerdict
     attributed: list[dict[str, Any]] = Field(default_factory=list)
@@ -339,9 +267,6 @@ class WorkspaceOwner(BaseModel):
     name: str
 
 
-ProjectOwner = WorkspaceOwner
-
-
 class WorkspaceItem(BaseModel):
     id: str
     name: str
@@ -360,9 +285,6 @@ class WorkspaceItem(BaseModel):
     vitals: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-ProjectItem = WorkspaceItem
 
 
 # ─── Agents Models ───
@@ -474,7 +396,7 @@ class OrgInvitationItem(BaseModel):
 # ─── Usage Models ───
 
 
-class StatementTypeQuotas(BaseModel):
+class MemoryTypeQuotas(BaseModel):
     guard: int | None = None
     directive: int = 0
     fact: int = 0
@@ -483,11 +405,11 @@ class StatementTypeQuotas(BaseModel):
     provisional: int = 0
 
 
-class StatementQuotas(BaseModel):
+class MemoryQuotas(BaseModel):
     total: int = 0
     limit: int = 0
     percent: float = 0.0
-    types: StatementTypeQuotas = Field(default_factory=StatementTypeQuotas)
+    types: MemoryTypeQuotas = Field(default_factory=MemoryTypeQuotas)
 
 
 class ApiRequestQuotas(BaseModel):
@@ -498,7 +420,7 @@ class ApiRequestQuotas(BaseModel):
 
 
 class UsageQuotas(BaseModel):
-    statements: StatementQuotas = Field(default_factory=StatementQuotas)
+    memories: MemoryQuotas = Field(default_factory=MemoryQuotas)
     api_requests: ApiRequestQuotas = Field(default_factory=ApiRequestQuotas)
 
 
@@ -559,7 +481,7 @@ class ScopedExecutionContext(BaseModel):
 
     recall_id: str
     prompt_context: str
-    statements: list[StatementItem] = Field(default_factory=list)
+    memories: list[MemoryItem] = Field(default_factory=list)
     action: str
     subject: str | None = None
 
@@ -711,8 +633,8 @@ class EnterpriseMetrics(CamelModel):
     worked_recalls: int = 0
     failed_recalls: int = 0
     pending_recalls: int = 0
-    total_statements: int = 0
-    converged_statements: int = 0
+    total_memories: int = 0
+    converged_memories: int = 0
 
 
 class EnterpriseInsights(CamelModel):
@@ -751,15 +673,3 @@ class TeamMemberItem(CamelModel):
     handle: str | None = None
     image: str | None = None
     created_at: datetime | str | None = None
-
-
-# ─── Backward-Compatibility Aliases ───
-
-StatementItem = MemoryItem
-ProjectItem = WorkspaceItem
-ProjectOwner = WorkspaceOwner
-AdoptStatementResponse = AdoptMemoryResponse
-PromoteStatementResponse = PromoteMemoryResponse
-StatementRelationsResponse = MemoryRelationsResponse
-StatementRelationItem = MemoryRelationItem
-DeleteStatementResponse = DeleteMemoryResponse

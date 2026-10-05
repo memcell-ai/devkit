@@ -365,7 +365,7 @@ export class OrganizationMemCell {
   }
 
   /**
-   * Recall statements scoped to this organization.
+   * Recall memories scoped to this organization.
    */
   async recall(params: RecallParams): Promise<RecallResponse> {
     return this.memcell.recall({
@@ -375,7 +375,7 @@ export class OrganizationMemCell {
   }
 
   /**
-   * Remember statements scoped to this organization.
+   * Remember memories scoped to this organization.
    */
   async remember(params: RememberParams): Promise<RememberResponse> {
     return this.memcell.remember({

@@ -9,32 +9,19 @@ export const MEMORY_TYPES: readonly MemoryType[] = [
   "observation",
 ];
 
-export type StatementType = MemoryType;
-
 export const MEMORY_SCOPES = [
   "organization",
   "team",
   "workspace",
-  "project",
   "user",
 ] as const;
 
-export const STATEMENT_SCOPES = MEMORY_SCOPES;
-
 export type MemoryScope = (typeof MEMORY_SCOPES)[number] | (string & {});
-export type StatementScope = MemoryScope;
 
 export type PromotionStatus = "pending" | "approved" | "rejected";
 
-/**
- * @deprecated Use `MemoryType` per Rule 12. Retained for backward compatibility.
- */
-export type MemoryKind = MemoryType | "invariant" | "reflex" | "episodic";
-
 export type MemoryStatus =
   "provisional" | "active" | "pinned" | "decayed" | "refuted";
-
-export type StatementStatus = MemoryStatus;
 
 export type OutcomeVerdict = "worked" | "failed" | "avoided";
 
@@ -124,9 +111,9 @@ export interface PaginatedResult<T> {
   pagination: PaginationMetadata;
 }
 
-// ─── Statements Domain ───
+// ─── Memories Domain ───
 
-export interface StatementAuthor {
+export interface MemoryAuthor {
   type: "agent" | "user";
   id?: string | null;
   name?: string | null;
@@ -141,8 +128,6 @@ export interface MemoryItem {
   tags?: string[];
   subject?: string | null;
   type?: MemoryType;
-  /** @deprecated Use `type` instead per Rule 12. */
-  kind?: string;
   status?: MemoryStatus;
   confidence?: number;
   score?: number;
@@ -160,20 +145,16 @@ export interface MemoryItem {
   scopePromotedAt?: string | Date | null;
   scopePromotedBy?: string | null;
   metadata?: Record<string, unknown>;
-  author?: StatementAuthor;
+  author?: MemoryAuthor;
   source?: string | null;
-  relations?: StatementRelationItem[];
+  relations?: MemoryRelationItem[];
   expiresAt?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
 
-export type StatementItem = MemoryItem;
-
 export interface ListMemoriesParams extends PaginationParams {
   type?: MemoryType;
-  /** @deprecated Use `type` */
-  kind?: string;
   status?: MemoryStatus;
   scope?: MemoryScope;
   q?: string;
@@ -186,8 +167,6 @@ export interface ListMemoriesParams extends PaginationParams {
   subject?: string;
 }
 
-export type ListStatementsParams = ListMemoriesParams;
-
 export interface CreateMemoryParams {
   title: string;
   context?: string | null;
@@ -197,8 +176,6 @@ export interface CreateMemoryParams {
   confidence?: number;
   subject?: string | null;
   type?: MemoryType;
-  /** @deprecated Use `type` */
-  kind?: string;
   status?: MemoryStatus;
   isPinned?: boolean;
   expiresAt?: string | Date | null;
@@ -206,8 +183,6 @@ export interface CreateMemoryParams {
   requiredRoles?: string[];
   metadata?: Record<string, unknown>;
 }
-
-export type CreateStatementParams = CreateMemoryParams;
 
 export interface UpdateMemoryParams {
   title?: string;
@@ -217,8 +192,6 @@ export interface UpdateMemoryParams {
   confidence?: number;
   status?: MemoryStatus;
   type?: MemoryType;
-  /** @deprecated Use `type` */
-  kind?: string;
   subject?: string | null;
   isPinned?: boolean;
   scope?: MemoryScope;
@@ -227,9 +200,7 @@ export interface UpdateMemoryParams {
   reason?: string;
 }
 
-export type UpdateStatementParams = UpdateMemoryParams;
-
-export interface StatementHistoryItem {
+export interface MemoryHistoryItem {
   id: string;
   rootId: string;
   version: number;
@@ -238,9 +209,8 @@ export interface StatementHistoryItem {
   example?: string | null;
   tags?: string[];
   confidence: number;
-  status: StatementStatus;
-  type?: StatementType;
-  kind?: string;
+  status: MemoryStatus;
+  type?: MemoryType;
   subject?: string | null;
   scope?: string;
   authorType: "agent" | "user";
@@ -251,22 +221,17 @@ export interface StatementHistoryItem {
   createdAt: string | Date;
 }
 
-export interface StatementHistoryResponse {
+export interface MemoryHistoryResponse {
   rootId: string;
   totalVersions: number;
-  history: StatementHistoryItem[];
+  history: MemoryHistoryItem[];
 }
 
-export type MemoryHistoryItem = StatementHistoryItem;
-export type MemoryHistoryResponse = StatementHistoryResponse;
-
-export interface StatementStarResponse {
+export interface MemoryStarResponse {
   rootId: string;
   starred: boolean;
   starCount: number;
 }
-
-export type MemoryStarResponse = StatementStarResponse;
 
 export interface DeleteMemoryOptions {
   /**
@@ -285,43 +250,34 @@ export interface DeleteMemoryResponse {
   message?: string;
 }
 
-export type DeleteStatementOptions = DeleteMemoryOptions;
-export type DeleteStatementResponse = DeleteMemoryResponse;
-
 export interface AdoptedTarget {
-  projectId: string;
-  statementId: string;
+  workspaceId: string;
+  memoryId: string;
   alreadyExisted: boolean;
 }
 
-export interface AdoptStatementResponse {
+export interface AdoptMemoryResponse {
   ok: boolean;
-  sourceStatementId: string;
+  sourceMemoryId: string;
   adopted: AdoptedTarget[];
 }
 
-export type AdoptMemoryResponse = AdoptStatementResponse;
-
-export interface PromoteStatementParams {
-  toScope?: StatementScope;
+export interface PromoteMemoryParams {
+  toScope?: MemoryScope;
   reason?: string;
 }
 
-export type PromoteMemoryParams = PromoteStatementParams;
-
-export interface PromoteStatementResponse {
+export interface PromoteMemoryResponse {
   promoted: boolean;
-  statement: StatementItem;
-  promotionRequest?: StatementPromotionRequest;
+  memory: MemoryItem;
+  promotionRequest?: MemoryPromotionRequest;
 }
 
-export type PromoteMemoryResponse = PromoteStatementResponse;
-
-export interface StatementPromotionRequest {
+export interface MemoryPromotionRequest {
   id: string;
-  statementId: string;
-  fromScope: StatementScope;
-  toScope: StatementScope;
+  memoryId: string;
+  fromScope: MemoryScope;
+  toScope: MemoryScope;
   status: PromotionStatus;
   requesterId: string;
   requesterReason?: string | null;
@@ -332,23 +288,21 @@ export interface StatementPromotionRequest {
   updatedAt: string | Date;
 }
 
-export type MemoryPromotionRequest = StatementPromotionRequest;
-
 export interface ListPromotionsParams extends PaginationParams {
   status?: PromotionStatus;
-  statementId?: string;
+  memoryId?: string;
   limit?: number;
   offset?: number;
 }
 
-// ─── Statement & Memory Relations Domain ───
+// ─── Memory Relations Domain ───
 
 export type RelationType =
   "constrains" | "justifies" | "refines" | "depends_on" | "tensions_with";
 
-export interface StatementRelationItem {
+export interface MemoryRelationItem {
   id: string;
-  projectId: string;
+  workspaceId: string;
   sourceId: string;
   targetId: string;
   relationType: RelationType;
@@ -356,11 +310,9 @@ export interface StatementRelationItem {
   metadata?: Record<string, unknown>;
   createdAt: string | Date;
   updatedAt: string | Date;
-  sourceStatement?: StatementItem;
-  targetStatement?: StatementItem;
+  sourceMemory?: MemoryItem;
+  targetMemory?: MemoryItem;
 }
-
-export type MemoryRelationItem = StatementRelationItem;
 
 export interface CreateRelationParams {
   targetId: string;
@@ -371,18 +323,14 @@ export interface CreateRelationParams {
 
 export type CreateMemoryRelationParams = CreateRelationParams;
 
-export interface StatementRelationsResponse {
-  incoming: StatementRelationItem[];
-  outgoing: StatementRelationItem[];
+export interface MemoryRelationsResponse {
+  incoming: MemoryRelationItem[];
+  outgoing: MemoryRelationItem[];
 }
 
-export type MemoryRelationsResponse = StatementRelationsResponse;
-
-export interface ListProjectRelationsParams extends PaginationParams {
+export interface ListWorkspaceRelationsParams extends PaginationParams {
   relationType?: RelationType;
 }
-
-export type ListWorkspaceRelationsParams = ListProjectRelationsParams;
 
 // ─── Memory Operations (Recall, Remember, Report, Feedback) ───
 
@@ -390,24 +338,23 @@ export interface RecallParams {
   namespace?: string;
   query: string;
   subject?: string | null;
-  type?: StatementType | StatementType[];
-  /** @deprecated Use `type` */
-  kind?: MemoryKind | MemoryKind[];
-  scope?: StatementScope;
-  scopes?: StatementScope[];
+  type?: MemoryType | MemoryType[];
+  scope?: MemoryScope;
+  scopes?: MemoryScope[];
   myMemory?: boolean;
   minConfidence?: number;
   limit?: number;
   tags?: string[];
   format?: "xml" | "markdown" | "none";
   allowProvisional?: boolean;
+  metadata?: Record<string, unknown>;
+  includeMetadata?: boolean | string[];
 }
 
 export interface RecallResponse {
   recallId: string;
   promptContext: string;
-  memories?: MemoryItem[];
-  statements: StatementItem[];
+  memories: MemoryItem[];
   matchedTags?: string[];
   guardMode?: "strict" | "advisory";
   profile?: string | null;
@@ -420,12 +367,10 @@ export interface RememberParams {
   example?: string | null;
   tags?: string[];
   subject?: string | null;
-  type?: StatementType;
-  /** @deprecated Use `type` */
-  kind?: MemoryKind;
-  status?: StatementStatus;
+  type?: MemoryType;
+  status?: MemoryStatus;
   confidence?: number;
-  scope?: StatementScope;
+  scope?: MemoryScope;
   requiredRoles?: string[];
   expiresAt?: string | Date | null;
   metadata?: Record<string, unknown>;
@@ -435,7 +380,7 @@ export interface RememberParams {
 }
 
 export interface RememberResponse {
-  created: StatementItem[];
+  created: MemoryItem[];
   reinforced?: Array<{ id: string; title: string; confidence?: number }>;
   superseded?: Array<{ id: string; title: string }>;
   note?: string;
@@ -453,7 +398,7 @@ export interface ReportParams {
   externalRef?: string | null;
   payload?: Record<string, unknown>;
   recallId?: string;
-  statementId?: string;
+  memoryId?: string;
   autoDistill?: boolean;
   async?: boolean;
 }
@@ -461,13 +406,13 @@ export interface ReportParams {
 export interface ReportResponse {
   outcome: OutcomeVerdict;
   attributed: Array<{
-    statementId: string;
+    memoryId: string;
     title: string;
     from: number;
     to: number;
     evidenceId: string;
   }>;
-  distilledStatement?: StatementItem | null;
+  distilledMemory?: MemoryItem | null;
   note?: string;
   accepted?: boolean;
   jobId?: string;
@@ -495,7 +440,7 @@ export interface WaitForJobOptions {
 
 export interface FeedbackParams {
   namespace?: string;
-  statementId?: string;
+  memoryId?: string;
   recallId?: string;
   outcome: "worked" | "failed";
   reason?: string | null;
@@ -506,7 +451,7 @@ export interface FeedbackParams {
 export interface FeedbackResponse {
   outcome: "worked" | "failed";
   attributed: Array<{
-    statementId: string;
+    memoryId: string;
     title: string;
     from: number;
     to: number;
@@ -517,9 +462,7 @@ export interface FeedbackResponse {
 export interface WrapExecutionOptions {
   action: string;
   subject?: string | null;
-  type?: StatementType | StatementType[];
-  /** @deprecated Use `type` */
-  kind?: MemoryKind | MemoryKind[];
+  type?: MemoryType | MemoryType[];
   minConfidence?: number;
   limit?: number;
   tags?: string[];
@@ -531,7 +474,7 @@ export interface WrapExecutionOptions {
 
 export interface ScopedExecutionContext {
   promptContext: string;
-  statements: StatementItem[];
+  memories: MemoryItem[];
   recallId: string;
   subject: string | null;
 }
@@ -540,8 +483,7 @@ export interface ScopedExecutionResult<T> {
   result: T;
   report: ReportResponse;
   recallId: string;
-  memories?: MemoryItem[];
-  statements: StatementItem[];
+  memories: MemoryItem[];
   promptContext: string;
 }
 
@@ -577,16 +519,12 @@ export interface WorkspaceItem {
   updatedAt?: string | Date;
 }
 
-export type ProjectItem = WorkspaceItem;
-
 export interface ListWorkspacesParams extends PaginationParams {
   visibility?: "public" | "private" | "all";
   q?: string;
   sort?: "created" | "updated" | "name";
   order?: "asc" | "desc";
 }
-
-export type ListProjectsParams = ListWorkspacesParams;
 
 export interface CreateWorkspaceParams {
   name: string;
@@ -596,8 +534,6 @@ export interface CreateWorkspaceParams {
   visibility?: "public" | "private";
   owner?: string;
 }
-
-export type CreateProjectParams = CreateWorkspaceParams;
 
 export interface UpdateWorkspaceParams {
   name?: string;
@@ -612,13 +548,9 @@ export interface UpdateWorkspaceParams {
   profile?: string;
 }
 
-export type UpdateProjectParams = UpdateWorkspaceParams;
-
 export interface TransferWorkspaceParams {
   targetOwner: string;
 }
-
-export type TransferProjectParams = TransferWorkspaceParams;
 
 // ─── Agents & Keys Domain ───
 
@@ -821,7 +753,7 @@ export interface OwnerUsage {
   };
   timeframe: UsageTimeframe;
   quotas: {
-    statements: {
+    memories: {
       total: number;
       limit: number;
       percent: number;
@@ -1001,7 +933,7 @@ export interface ListFleetAgentsParams {
   scope?: "project" | "team" | "organization";
   framework?: string;
   teamId?: string;
-  projectId?: string;
+  workspaceId?: string;
   page?: number;
   perPage?: number;
 }
@@ -1082,7 +1014,7 @@ export interface ListAuditEventsParams {
   action?: string;
   targetType?: string;
   targetId?: string;
-  projectId?: string;
+  workspaceId?: string;
   teamId?: string;
   from?: string;
   to?: string;
@@ -1136,8 +1068,8 @@ export interface EnterpriseInsights {
     workedRecalls: number;
     failedRecalls: number;
     pendingRecalls: number;
-    totalStatements: number;
-    convergedStatements: number;
+    totalMemories: number;
+    convergedMemories: number;
   };
   timeseries: Array<{
     date: string;
@@ -1150,7 +1082,7 @@ export interface EnterpriseInsights {
 export interface GetInsightsParams {
   timeframe?: "24h" | "7d" | "30d" | "all";
   teamId?: string;
-  projectId?: string;
+  workspaceId?: string;
 }
 
 // ─── Team Management Domain ───

@@ -8,7 +8,7 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel
 
 from .models import (
-    AdoptStatementResponse,
+    AdoptMemoryResponse,
     AgentItem,
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
@@ -16,21 +16,21 @@ from .models import (
     FeedbackResponse,
     JobEvent,
     ListCollaboratorsResponse,
+    MemoryHistoryResponse,
+    MemoryItem,
+    MemoryPromotionRequest,
+    MemoryRelationItem,
+    MemoryRelationsResponse,
+    MemoryStarResponse,
     OutcomeVerdict,
     PaginatedResult,
     PendingInvitationItem,
-    PromoteStatementResponse,
+    PromoteMemoryResponse,
     RecallResponse,
     RememberResponse,
     ReportResponse,
     ScopedExecutionContext,
     ScopeItem,
-    StatementHistoryResponse,
-    StatementItem,
-    StatementPromotionRequest,
-    StatementRelationItem,
-    StatementRelationsResponse,
-    StatementStarResponse,
 )
 
 T = TypeVar("T")
@@ -44,92 +44,90 @@ class ScopedExecutionResult(BaseModel, Generic[T]):
     recall: RecallResponse
 
 
-class _ScopedStatementsSync:
+class _ScopedMemoriesSync:
     def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
         self._client = client
         self._namespace = namespace
         self._default_subject = default_subject
 
-    def list(self, **kwargs: Any) -> PaginatedResult[StatementItem]:
-        return self._client.statements.list(self._namespace, **kwargs)
+    def list(self, **kwargs: Any) -> PaginatedResult[MemoryItem]:
+        return self._client.memories.list(self._namespace, **kwargs)
 
-    def get(self, statement_id: str) -> StatementItem:
-        return self._client.statements.get(self._namespace, statement_id)
+    def get(self, memory_id: str) -> MemoryItem:
+        return self._client.memories.get(self._namespace, memory_id)
 
-    def create(self, title: str, **kwargs: Any) -> StatementItem:
+    def create(self, title: str, **kwargs: Any) -> MemoryItem:
         if "subject" not in kwargs or kwargs["subject"] is None:
             kwargs["subject"] = self._default_subject
-        return self._client.statements.create(self._namespace, title, **kwargs)
+        return self._client.memories.create(self._namespace, title, **kwargs)
 
-    def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
-        return self._client.statements.update(self._namespace, statement_id, **kwargs)
+    def update(self, memory_id: str, **kwargs: Any) -> MemoryItem:
+        return self._client.memories.update(self._namespace, memory_id, **kwargs)
 
-    def delete(self, statement_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
-        return self._client.statements.delete(
-            self._namespace, statement_id, all_versions=all_versions
-        )
+    def delete(self, memory_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
+        return self._client.memories.delete(self._namespace, memory_id, all_versions=all_versions)
 
-    def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
-        return self._client.statements.star(self._namespace, statement_id, starred=starred)
+    def star(self, memory_id: str, starred: bool = True) -> MemoryStarResponse:
+        return self._client.memories.star(self._namespace, memory_id, starred=starred)
 
-    def history(self, statement_id: str) -> StatementHistoryResponse:
-        return self._client.statements.history(self._namespace, statement_id)
+    def history(self, memory_id: str) -> MemoryHistoryResponse:
+        return self._client.memories.history(self._namespace, memory_id)
 
-    def adopt(self, statement_id: str, target_project_ids: list[str]) -> AdoptStatementResponse:
-        return self._client.statements.adopt(self._namespace, statement_id, target_project_ids)
+    def adopt(self, memory_id: str, target_project_ids: list[str]) -> AdoptMemoryResponse:
+        return self._client.memories.adopt(self._namespace, memory_id, target_project_ids)
 
     def promote(
-        self, statement_id: str, to_scope: str = "project", reason: str | None = None
-    ) -> PromoteStatementResponse:
-        return self._client.statements.promote(
-            self._namespace, statement_id, to_scope=to_scope, reason=reason
+        self, memory_id: str, to_scope: str = "project", reason: str | None = None
+    ) -> PromoteMemoryResponse:
+        return self._client.memories.promote(
+            self._namespace, memory_id, to_scope=to_scope, reason=reason
         )
 
-    def list_relations(self, statement_id: str) -> StatementRelationsResponse:
-        return self._client.statements.list_relations(self._namespace, statement_id)
+    def list_relations(self, memory_id: str) -> MemoryRelationsResponse:
+        return self._client.memories.list_relations(self._namespace, memory_id)
 
     def create_relation(
         self,
-        statement_id: str,
+        memory_id: str,
         target_id: str,
         relation_type: str,
         confidence: float = 0.9,
         metadata: dict[str, Any] | None = None,
-    ) -> StatementRelationItem:
-        return self._client.statements.create_relation(
-            self._namespace, statement_id, target_id, relation_type, confidence, metadata
+    ) -> MemoryRelationItem:
+        return self._client.memories.create_relation(
+            self._namespace, memory_id, target_id, relation_type, confidence, metadata
         )
 
-    def delete_relation(self, statement_id: str, relation_id: str) -> None:
-        self._client.statements.delete_relation(self._namespace, statement_id, relation_id)
+    def delete_relation(self, memory_id: str, relation_id: str) -> None:
+        self._client.memories.delete_relation(self._namespace, memory_id, relation_id)
 
-    def list_project_relations(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
-        return self._client.statements.list_project_relations(self._namespace, **kwargs)
+    def list_project_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+        return self._client.memories.list_project_relations(self._namespace, **kwargs)
 
     @property
     def relations(self) -> Any:
         scoped = self
 
         class _ScopedRelationsProxy:
-            def list(self, statement_id: str) -> StatementRelationsResponse:
-                return scoped.list_relations(statement_id)
+            def list(self, memory_id: str) -> MemoryRelationsResponse:
+                return scoped.list_relations(memory_id)
 
             def create(
                 self,
-                statement_id: str,
+                memory_id: str,
                 target_id: str,
                 relation_type: str,
                 confidence: float = 0.9,
                 metadata: dict[str, Any] | None = None,
-            ) -> StatementRelationItem:
+            ) -> MemoryRelationItem:
                 return scoped.create_relation(
-                    statement_id, target_id, relation_type, confidence, metadata
+                    memory_id, target_id, relation_type, confidence, metadata
                 )
 
-            def delete(self, statement_id: str, relation_id: str) -> None:
-                scoped.delete_relation(statement_id, relation_id)
+            def delete(self, memory_id: str, relation_id: str) -> None:
+                scoped.delete_relation(memory_id, relation_id)
 
-            def list_project(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+            def list_project(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
                 return scoped.list_project_relations(**kwargs)
 
         return _ScopedRelationsProxy()
@@ -200,14 +198,14 @@ class _ScopedPromotionsSync:
     def list(
         self,
         status: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         page: int | None = None,
         per_page: int | None = None,
-    ) -> PaginatedResult[StatementPromotionRequest]:
+    ) -> PaginatedResult[MemoryPromotionRequest]:
         return self._client.promotions.list(
             self._namespace,
             status=status,
-            statement_id=statement_id,
+            memory_id=memory_id,
             page=page,
             per_page=per_page,
         )
@@ -219,96 +217,92 @@ class _ScopedPromotionsSync:
         return self._client.promotions.reject(self._namespace, promotion_id, reason=reason)
 
 
-class _ScopedStatementsAsync:
+class _ScopedMemoriesAsync:
     def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
         self._client = client
         self._namespace = namespace
         self._default_subject = default_subject
 
-    async def list(self, **kwargs: Any) -> PaginatedResult[StatementItem]:
-        return await self._client.statements.list(self._namespace, **kwargs)
+    async def list(self, **kwargs: Any) -> PaginatedResult[MemoryItem]:
+        return await self._client.memories.list(self._namespace, **kwargs)
 
-    async def get(self, statement_id: str) -> StatementItem:
-        return await self._client.statements.get(self._namespace, statement_id)
+    async def get(self, memory_id: str) -> MemoryItem:
+        return await self._client.memories.get(self._namespace, memory_id)
 
-    async def create(self, title: str, **kwargs: Any) -> StatementItem:
+    async def create(self, title: str, **kwargs: Any) -> MemoryItem:
         if "subject" not in kwargs or kwargs["subject"] is None:
             kwargs["subject"] = self._default_subject
-        return await self._client.statements.create(self._namespace, title, **kwargs)
+        return await self._client.memories.create(self._namespace, title, **kwargs)
 
-    async def update(self, statement_id: str, **kwargs: Any) -> StatementItem:
-        return await self._client.statements.update(self._namespace, statement_id, **kwargs)
+    async def update(self, memory_id: str, **kwargs: Any) -> MemoryItem:
+        return await self._client.memories.update(self._namespace, memory_id, **kwargs)
 
-    async def delete(self, statement_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
-        return await self._client.statements.delete(
-            self._namespace, statement_id, all_versions=all_versions
+    async def delete(self, memory_id: str, all_versions: bool = False) -> DeleteMemoryResponse:
+        return await self._client.memories.delete(
+            self._namespace, memory_id, all_versions=all_versions
         )
 
-    async def star(self, statement_id: str, starred: bool = True) -> StatementStarResponse:
-        return await self._client.statements.star(self._namespace, statement_id, starred=starred)
+    async def star(self, memory_id: str, starred: bool = True) -> MemoryStarResponse:
+        return await self._client.memories.star(self._namespace, memory_id, starred=starred)
 
-    async def history(self, statement_id: str) -> StatementHistoryResponse:
-        return await self._client.statements.history(self._namespace, statement_id)
+    async def history(self, memory_id: str) -> MemoryHistoryResponse:
+        return await self._client.memories.history(self._namespace, memory_id)
 
-    async def adopt(
-        self, statement_id: str, target_project_ids: list[str]
-    ) -> AdoptStatementResponse:
-        return await self._client.statements.adopt(
-            self._namespace, statement_id, target_project_ids
-        )
+    async def adopt(self, memory_id: str, target_project_ids: list[str]) -> AdoptMemoryResponse:
+        return await self._client.memories.adopt(self._namespace, memory_id, target_project_ids)
 
     async def promote(
-        self, statement_id: str, to_scope: str = "project", reason: str | None = None
-    ) -> PromoteStatementResponse:
-        return await self._client.statements.promote(
-            self._namespace, statement_id, to_scope=to_scope, reason=reason
+        self, memory_id: str, to_scope: str = "project", reason: str | None = None
+    ) -> PromoteMemoryResponse:
+        return await self._client.memories.promote(
+            self._namespace, memory_id, to_scope=to_scope, reason=reason
         )
 
-    async def list_relations(self, statement_id: str) -> StatementRelationsResponse:
-        return await self._client.statements.list_relations(self._namespace, statement_id)
+    async def list_relations(self, memory_id: str) -> MemoryRelationsResponse:
+        return await self._client.memories.list_relations(self._namespace, memory_id)
 
     async def create_relation(
         self,
-        statement_id: str,
+        memory_id: str,
         target_id: str,
         relation_type: str,
         confidence: float = 0.9,
         metadata: dict[str, Any] | None = None,
-    ) -> StatementRelationItem:
-        return await self._client.statements.create_relation(
-            self._namespace, statement_id, target_id, relation_type, confidence, metadata
+    ) -> MemoryRelationItem:
+        return await self._client.memories.create_relation(
+            self._namespace, memory_id, target_id, relation_type, confidence, metadata
         )
 
-    async def delete_relation(self, statement_id: str, relation_id: str) -> None:
-        await self._client.statements.delete_relation(self._namespace, statement_id, relation_id)
+    async def delete_relation(self, memory_id: str, relation_id: str) -> None:
+        await self._client.memories.delete_relation(self._namespace, memory_id, relation_id)
 
-    async def list_project_relations(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
-        return await self._client.statements.list_project_relations(self._namespace, **kwargs)
+    async def list_project_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+        return await self._client.memories.list_project_relations(self._namespace, **kwargs)
 
     @property
     def relations(self) -> Any:
         scoped = self
 
         class _AsyncScopedRelationsProxy:
-            async def list(self, statement_id: str) -> StatementRelationsResponse:
-                return await scoped.list_relations(statement_id)
+            async def list(self, memory_id: str) -> MemoryRelationsResponse:
+                return await scoped.list_relations(memory_id)
 
             async def create(
                 self,
-                statement_id: str,
+                memory_id: str,
                 target_id: str,
                 relation_type: str,
                 confidence: float = 0.9,
                 metadata: dict[str, Any] | None = None,
-            ) -> StatementRelationItem:
+            ) -> MemoryRelationItem:
                 return await scoped.create_relation(
-                    statement_id, target_id, relation_type, confidence, metadata
+                    memory_id, target_id, relation_type, confidence, metadata
                 )
 
-            async def delete(self, statement_id: str, relation_id: str) -> None:
-                await scoped.delete_relation(statement_id, relation_id)
+            async def delete(self, memory_id: str, relation_id: str) -> None:
+                await scoped.delete_relation(memory_id, relation_id)
 
-            async def list_project(self, **kwargs: Any) -> PaginatedResult[StatementRelationItem]:
+            async def list_project(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
                 return await scoped.list_project_relations(**kwargs)
 
         return _AsyncScopedRelationsProxy()
@@ -379,14 +373,14 @@ class _ScopedPromotionsAsync:
     async def list(
         self,
         status: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         page: int | None = None,
         per_page: int | None = None,
-    ) -> PaginatedResult[StatementPromotionRequest]:
+    ) -> PaginatedResult[MemoryPromotionRequest]:
         return await self._client.promotions.list(
             self._namespace,
             status=status,
-            statement_id=statement_id,
+            memory_id=memory_id,
             page=page,
             per_page=per_page,
         )
@@ -411,8 +405,7 @@ class ScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
-        self.memories = _ScopedStatementsSync(client, namespace, subject)
-        self.statements = self.memories
+        self.memories = _ScopedMemoriesSync(client, namespace, subject)
         self.agents = _ScopedAgentsSync(client, namespace)
         self.collaborators = _ScopedCollaboratorsSync(client, namespace)
         self.scopes = _ScopedScopesSync(client, namespace)
@@ -423,7 +416,6 @@ class ScopedMemCell:
         query: str,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
         my_memory: bool | None = None,
@@ -432,13 +424,14 @@ class ScopedMemCell:
         tags: list[str] | None = None,
         format: str = "xml",
         allow_provisional: bool | None = None,
+        metadata: dict[str, Any] | None = None,
+        include_metadata: bool | list[str] | None = None,
     ) -> RecallResponse:
         return self._client.recall(
             query=query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
             type=type,
-            kind=kind,
             scope=scope,
             scopes=scopes,
             my_memory=my_memory,
@@ -447,6 +440,8 @@ class ScopedMemCell:
             tags=tags,
             format=format,
             allow_provisional=allow_provisional,
+            metadata=metadata,
+            include_metadata=include_metadata,
         )
 
     def remember(
@@ -457,7 +452,6 @@ class ScopedMemCell:
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
-        kind: str | None = None,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -475,7 +469,6 @@ class ScopedMemCell:
             tags=tags,
             subject=subject or self.default_subject,
             type=type,
-            kind=kind,
             status=status,
             confidence=confidence,
             scope=scope,
@@ -497,7 +490,7 @@ class ScopedMemCell:
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
         recall_id: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         auto_distill: bool = True,
         async_: bool | None = None,
     ) -> ReportResponse:
@@ -509,7 +502,7 @@ class ScopedMemCell:
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
-            statement_id=statement_id,
+            memory_id=memory_id,
             namespace=self.namespace,
             auto_distill=auto_distill,
             async_=async_,
@@ -518,7 +511,7 @@ class ScopedMemCell:
     def feedback(
         self,
         outcome: OutcomeVerdict,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -526,7 +519,7 @@ class ScopedMemCell:
     ) -> FeedbackResponse:
         return self._client.feedback(
             outcome=outcome,
-            statement_id=statement_id,
+            memory_id=memory_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,
@@ -562,7 +555,7 @@ class ScopedMemCell:
         context = ScopedExecutionContext(
             recall_id=recall.recall_id,
             prompt_context=recall.prompt_context,
-            statements=recall.statements,
+            memories=recall.memories,
             action=action,
             subject=target_subject,
         )
@@ -620,8 +613,7 @@ class AsyncScopedMemCell:
         self.namespace = namespace
         self.default_subject = subject
 
-        self.memories = _ScopedStatementsAsync(client, namespace, subject)
-        self.statements = self.memories
+        self.memories = _ScopedMemoriesAsync(client, namespace, subject)
         self.agents = _ScopedAgentsAsync(client, namespace)
         self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
         self.scopes = _ScopedScopesAsync(client, namespace)
@@ -632,7 +624,6 @@ class AsyncScopedMemCell:
         query: str,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
         my_memory: bool | None = None,
@@ -641,13 +632,14 @@ class AsyncScopedMemCell:
         tags: list[str] | None = None,
         format: str = "xml",
         allow_provisional: bool | None = None,
+        metadata: dict[str, Any] | None = None,
+        include_metadata: bool | list[str] | None = None,
     ) -> RecallResponse:
         return await self._client.recall(
             query=query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
             type=type,
-            kind=kind,
             scope=scope,
             scopes=scopes,
             my_memory=my_memory,
@@ -656,6 +648,8 @@ class AsyncScopedMemCell:
             tags=tags,
             format=format,
             allow_provisional=allow_provisional,
+            metadata=metadata,
+            include_metadata=include_metadata,
         )
 
     async def remember(
@@ -666,7 +660,6 @@ class AsyncScopedMemCell:
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
-        kind: str | None = None,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -684,7 +677,6 @@ class AsyncScopedMemCell:
             tags=tags,
             subject=subject or self.default_subject,
             type=type,
-            kind=kind,
             status=status,
             confidence=confidence,
             scope=scope,
@@ -706,7 +698,7 @@ class AsyncScopedMemCell:
         external_ref: str | None = None,
         payload: dict[str, Any] | None = None,
         recall_id: str | None = None,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         auto_distill: bool = True,
         async_: bool | None = None,
     ) -> ReportResponse:
@@ -718,7 +710,7 @@ class AsyncScopedMemCell:
             external_ref=external_ref,
             payload=payload,
             recall_id=recall_id,
-            statement_id=statement_id,
+            memory_id=memory_id,
             namespace=self.namespace,
             auto_distill=auto_distill,
             async_=async_,
@@ -727,7 +719,7 @@ class AsyncScopedMemCell:
     async def feedback(
         self,
         outcome: OutcomeVerdict,
-        statement_id: str | None = None,
+        memory_id: str | None = None,
         recall_id: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -735,7 +727,7 @@ class AsyncScopedMemCell:
     ) -> FeedbackResponse:
         return await self._client.feedback(
             outcome=outcome,
-            statement_id=statement_id,
+            memory_id=memory_id,
             recall_id=recall_id,
             reason=reason,
             external_ref=external_ref,
@@ -771,7 +763,7 @@ class AsyncScopedMemCell:
         context = ScopedExecutionContext(
             recall_id=recall.recall_id,
             prompt_context=recall.prompt_context,
-            statements=recall.statements,
+            memories=recall.memories,
             action=action,
             subject=target_subject,
         )

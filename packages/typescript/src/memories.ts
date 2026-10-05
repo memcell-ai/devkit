@@ -1,22 +1,20 @@
 import type { MemCell } from "./client.js";
 import type {
-  AdoptStatementResponse,
+  AdoptMemoryResponse,
   CreateRelationParams,
   CreateMemoryParams,
   DeleteMemoryOptions,
   DeleteMemoryResponse,
-  DeleteStatementOptions,
-  DeleteStatementResponse,
-  ListProjectRelationsParams,
+  ListWorkspaceRelationsParams,
   ListMemoriesParams,
   PaginatedResult,
   PromoteMemoryParams,
-  PromoteStatementResponse,
-  StatementHistoryResponse,
+  PromoteMemoryResponse,
+  MemoryHistoryResponse,
   MemoryItem,
-  StatementRelationItem,
-  StatementRelationsResponse,
-  StatementStarResponse,
+  MemoryRelationItem,
+  MemoryRelationsResponse,
+  MemoryStarResponse,
   UpdateMemoryParams,
 } from "./types.js";
 
@@ -42,7 +40,6 @@ function buildQuery(params?: ListMemoriesParams): string {
   if (params.page !== undefined) q.set("page", String(params.page));
   if (params.perPage !== undefined) q.set("per_page", String(params.perPage));
   if (params.type) q.set("type", params.type);
-  if (params.kind) q.set("kind", params.kind);
   if (params.status) q.set("status", params.status);
   if (params.scope) q.set("scope", params.scope);
   if (params.q) q.set("q", params.q);
@@ -58,12 +55,7 @@ function buildQuery(params?: ListMemoriesParams): string {
   return str ? `?${str}` : "";
 }
 
-export type {
-  DeleteMemoryOptions,
-  DeleteMemoryResponse,
-  DeleteStatementOptions,
-  DeleteStatementResponse,
-};
+export type { DeleteMemoryOptions, DeleteMemoryResponse };
 
 export class MemoriesNamespace {
   readonly relations: MemoryRelationsNamespace;
@@ -84,7 +76,6 @@ export class MemoriesNamespace {
     const query = buildQuery(params);
     const json = await this.client.request<{
       memories?: MemoryItem[];
-      statements?: MemoryItem[];
       pagination: {
         page: number;
         perPage: number;
@@ -96,7 +87,7 @@ export class MemoriesNamespace {
     });
 
     return {
-      items: json.memories || json.statements || [],
+      items: (json as any).memories || [],
       pagination: json.pagination,
     };
   }
@@ -108,12 +99,11 @@ export class MemoriesNamespace {
     const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{
       memory?: MemoryItem;
-      statement?: MemoryItem;
     }>(
       `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}`,
       { method: "GET" },
     );
-    const item = json.memory ?? json.statement;
+    const item = (json as any).memory;
     if (!item) {
       throw new Error(`Memory not found: ${memoryId}`);
     }
@@ -121,7 +111,7 @@ export class MemoriesNamespace {
   }
 
   /**
-   * Remembers a new memory statement in the specified workspace.
+   * Remembers a new memory in the specified workspace.
    */
   async remember(
     namespace: string,
@@ -137,7 +127,6 @@ export class MemoriesNamespace {
       confidence: params.confidence,
       subject: params.subject,
       type: params.type,
-      kind: params.kind,
       status: params.status,
       isPinned: params.isPinned,
       scope: params.scope,
@@ -151,12 +140,11 @@ export class MemoriesNamespace {
 
     const json = await this.client.request<{
       memory?: MemoryItem;
-      statement?: MemoryItem;
     }>(`/api/v1/${owner}/${workspace}/${this.endpointName}`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    const item = json.memory ?? json.statement;
+    const item = (json as any).memory;
     if (!item) {
       throw new Error("Failed to remember memory: empty response");
     }
@@ -184,7 +172,6 @@ export class MemoriesNamespace {
     const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{
       memory?: MemoryItem;
-      statement?: MemoryItem;
     }>(
       `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}`,
       {
@@ -192,7 +179,7 @@ export class MemoriesNamespace {
         body: JSON.stringify(params),
       },
     );
-    const item = json.memory ?? json.statement;
+    const item = (json as any).memory;
     if (!item) {
       throw new Error(`Failed to update memory: ${memoryId}`);
     }
@@ -200,7 +187,6 @@ export class MemoriesNamespace {
   }
 
   /**
-
    * Deletes a memory or its latest version from a workspace.
    * If allVersions is true, permanently deletes the entire memory (all revisions).
    * If allVersions is false, deletes only the latest version and restores the predecessor as latest.
@@ -225,11 +211,11 @@ export class MemoriesNamespace {
     namespace: string,
     memoryId: string,
     starred = true,
-  ): Promise<StatementStarResponse> {
+  ): Promise<MemoryStarResponse> {
     const { owner, workspace } = parseNamespace(namespace);
     const method = starred ? "PUT" : "DELETE";
-    return await this.client.request<StatementStarResponse>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/star`,
+    return await this.client.request<MemoryStarResponse>(
+      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}/star`,
       { method },
     );
   }
@@ -240,10 +226,10 @@ export class MemoriesNamespace {
   async history(
     namespace: string,
     memoryId: string,
-  ): Promise<StatementHistoryResponse> {
+  ): Promise<MemoryHistoryResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    return await this.client.request<StatementHistoryResponse>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/history`,
+    return await this.client.request<MemoryHistoryResponse>(
+      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}/history`,
       { method: "GET" },
     );
   }
@@ -254,16 +240,15 @@ export class MemoriesNamespace {
   async adopt(
     namespace: string,
     memoryId: string,
-    params: { targetProjectIds?: string[]; targetWorkspaceIds?: string[] },
-  ): Promise<AdoptStatementResponse> {
+    params: { targetWorkspaceIds?: string[] },
+  ): Promise<AdoptMemoryResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    const targetProjectIds =
-      params.targetWorkspaceIds ?? params.targetProjectIds ?? [];
-    return await this.client.request<AdoptStatementResponse>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/adopt`,
+    const targetWorkspaceIds = params.targetWorkspaceIds ?? [];
+    return await this.client.request<AdoptMemoryResponse>(
+      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}/adopt`,
       {
         method: "POST",
-        body: JSON.stringify({ targetProjectIds }),
+        body: JSON.stringify({ targetWorkspaceIds }),
       },
     );
   }
@@ -275,10 +260,10 @@ export class MemoriesNamespace {
     namespace: string,
     memoryId: string,
     params?: PromoteMemoryParams,
-  ): Promise<PromoteStatementResponse> {
+  ): Promise<PromoteMemoryResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    return await this.client.request<PromoteStatementResponse>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/promote`,
+    return await this.client.request<PromoteMemoryResponse>(
+      `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}/promote`,
       {
         method: "POST",
         body: JSON.stringify(params || {}),
@@ -296,10 +281,10 @@ export class MemoryRelationsNamespace {
   async list(
     namespace: string,
     memoryId: string,
-  ): Promise<StatementRelationsResponse> {
+  ): Promise<MemoryRelationsResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    return await this.client.request<StatementRelationsResponse>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/relations`,
+    return await this.client.request<MemoryRelationsResponse>(
+      `/api/v1/${owner}/${workspace}/memories/${encodeURIComponent(memoryId)}/relations`,
       { method: "GET" },
     );
   }
@@ -311,10 +296,10 @@ export class MemoryRelationsNamespace {
     namespace: string,
     memoryId: string,
     params: CreateRelationParams,
-  ): Promise<StatementRelationItem> {
+  ): Promise<MemoryRelationItem> {
     const { owner, workspace } = parseNamespace(namespace);
-    const json = await this.client.request<{ relation: StatementRelationItem }>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/relations`,
+    const json = await this.client.request<{ relation: MemoryRelationItem }>(
+      `/api/v1/${owner}/${workspace}/memories/${encodeURIComponent(memoryId)}/relations`,
       {
         method: "POST",
         body: JSON.stringify(params),
@@ -333,7 +318,7 @@ export class MemoryRelationsNamespace {
   ): Promise<void> {
     const { owner, workspace } = parseNamespace(namespace);
     await this.client.request<{ ok: boolean }>(
-      `/api/v1/${owner}/${workspace}/statements/${encodeURIComponent(memoryId)}/relations/${encodeURIComponent(relationId)}`,
+      `/api/v1/${owner}/${workspace}/memories/${encodeURIComponent(memoryId)}/relations/${encodeURIComponent(relationId)}`,
       { method: "DELETE" },
     );
   }
@@ -343,8 +328,8 @@ export class MemoryRelationsNamespace {
    */
   async listWorkspace(
     namespace: string,
-    params?: ListProjectRelationsParams,
-  ): Promise<PaginatedResult<StatementRelationItem>> {
+    params?: ListWorkspaceRelationsParams,
+  ): Promise<PaginatedResult<MemoryRelationItem>> {
     const { owner, workspace } = parseNamespace(namespace);
     const q = new URLSearchParams();
     if (params?.page !== undefined) q.set("page", String(params.page));
@@ -354,7 +339,7 @@ export class MemoryRelationsNamespace {
     const query = q.toString() ? `?${q.toString()}` : "";
 
     const json = await this.client.request<{
-      relations: StatementRelationItem[];
+      relations: MemoryRelationItem[];
       pagination: {
         page: number;
         perPage: number;
@@ -369,15 +354,5 @@ export class MemoryRelationsNamespace {
       items: json.relations || [],
       pagination: json.pagination,
     };
-  }
-
-  /**
-   * Backward-compatible alias for listWorkspace.
-   */
-  async listProject(
-    namespace: string,
-    params?: ListProjectRelationsParams,
-  ): Promise<PaginatedResult<StatementRelationItem>> {
-    return this.listWorkspace(namespace, params);
   }
 }
