@@ -23,9 +23,9 @@ def test_promotions_sync():
                     "promotionRequests": [
                         {
                             "id": "req_1",
-                            "memoryId": "stmt_1",
+                            "memoryId": "mem_1",
                             "fromScope": "user",
-                            "toScope": "project",
+                            "toScope": "workspace",
                             "status": "pending",
                             "requesterId": "user_alice",
                             "requesterReason": "Team standard",
@@ -35,7 +35,7 @@ def test_promotions_sync():
                             "createdAt": "2026-10-01T10:00:00Z",
                             "updatedAt": "2026-10-01T10:00:00Z",
                             "memory": {
-                                "id": "stmt_1",
+                                "id": "mem_1",
                                 "title": "Check types strictly",
                                 "body": "All types must pass strictly.",
                                 "type": "directive",
@@ -55,24 +55,24 @@ def test_promotions_sync():
                     "approved": True,
                     "promotionRequest": {
                         "id": "req_1",
-                        "memoryId": "stmt_1",
+                        "memoryId": "mem_1",
                         "fromScope": "user",
-                        "toScope": "project",
+                        "toScope": "workspace",
                         "status": "approved",
                         "requesterId": "user_alice",
                         "requesterReason": "Team standard",
                         "reviewerId": "user_lead",
                         "reviewedAt": "2026-10-01T11:00:00Z",
-                        "reviewReason": "Approved for project",
+                        "reviewReason": "Approved for workspace",
                         "createdAt": "2026-10-01T10:00:00Z",
                         "updatedAt": "2026-10-01T11:00:00Z",
                     },
                     "memory": {
-                        "id": "stmt_1",
+                        "id": "mem_1",
                         "title": "Check types strictly",
                         "body": "All types must pass strictly.",
                         "type": "directive",
-                        "scope": "project",
+                        "scope": "workspace",
                         "scopePromotedAt": "2026-10-01T11:00:00Z",
                         "scopePromotedBy": "user_lead",
                     },
@@ -87,9 +87,9 @@ def test_promotions_sync():
                     "rejected": True,
                     "promotionRequest": {
                         "id": "req_1",
-                        "memoryId": "stmt_1",
+                        "memoryId": "mem_1",
                         "fromScope": "user",
-                        "toScope": "project",
+                        "toScope": "workspace",
                         "status": "rejected",
                         "requesterId": "user_alice",
                         "requesterReason": "Team standard",
@@ -103,7 +103,7 @@ def test_promotions_sync():
             )
 
         # direct promote or promotion request creation
-        if method == "POST" and "/api/v1/acme/backend/memories/stmt_1/promote" in u:
+        if method == "POST" and "/api/v1/acme/backend/memories/mem_1/promote" in u:
             if body and body.get("toScope") == "organization":
                 return httpx.Response(
                     202,
@@ -111,8 +111,8 @@ def test_promotions_sync():
                         "promoted": False,
                         "promotionRequest": {
                             "id": "req_2",
-                            "memoryId": "stmt_1",
-                            "fromScope": "project",
+                            "memoryId": "mem_1",
+                            "fromScope": "workspace",
                             "toScope": "organization",
                             "status": "pending",
                             "requesterId": "user_alice",
@@ -126,11 +126,11 @@ def test_promotions_sync():
                 json={
                     "promoted": True,
                     "memory": {
-                        "id": "stmt_1",
+                        "id": "mem_1",
                         "title": "Check types strictly",
                         "body": "All types must pass strictly.",
                         "type": "directive",
-                        "scope": "project",
+                        "scope": "workspace",
                     },
                 },
             )
@@ -154,10 +154,10 @@ def test_promotions_sync():
     approved = client.promotions.approve(
         "acme/backend",
         "req_1",
-        reason="Approved for project",
+        reason="Approved for workspace",
     )
     assert approved["promotionRequest"].status == "approved"
-    assert approved["memory"].scope == "project"
+    assert approved["memory"].scope == "workspace"
     assert approved["memory"].scope_promoted_by == "user_lead"
 
     # 3. client.promotions.reject
@@ -169,16 +169,16 @@ def test_promotions_sync():
     assert rejected["promotionRequest"].status == "rejected"
 
     # 4. client.memories.promote (direct promotion)
-    promo_direct = client.memories.promote("acme/backend", "stmt_1", to_scope="project")
+    promo_direct = client.memories.promote("acme/backend", "mem_1", to_scope="workspace")
     assert promo_direct.promoted is True
     assert promo_direct.memory is not None
-    assert promo_direct.memory.scope == "project"
+    assert promo_direct.memory.scope == "workspace"
     assert promo_direct.promotion_request is None
 
     # 5. client.memories.promote (request pending review)
     promo_pending = client.memories.promote(
         "acme/backend",
-        "stmt_1",
+        "mem_1",
         to_scope="organization",
         reason="Needs org-wide visibility",
     )
@@ -193,10 +193,10 @@ def test_promotions_sync():
     assert len(scoped_list.items) == 1
     assert scoped_list.items[0].id == "req_1"
 
-    scoped_promo = scoped.memories.promote("stmt_1", to_scope="project")
+    scoped_promo = scoped.memories.promote("mem_1", to_scope="workspace")
     assert scoped_promo.promoted is True
     assert scoped_promo.memory is not None
-    assert scoped_promo.memory.scope == "project"
+    assert scoped_promo.memory.scope == "workspace"
 
 
 @pytest.mark.asyncio
@@ -212,9 +212,9 @@ async def test_promotions_async():
                     "promotionRequests": [
                         {
                             "id": "req_async_1",
-                            "memoryId": "stmt_1",
+                            "memoryId": "mem_1",
                             "fromScope": "user",
-                            "toScope": "project",
+                            "toScope": "workspace",
                             "status": "pending",
                             "requesterId": "user_bob",
                             "createdAt": "2026-10-01T10:00:00Z",
@@ -232,9 +232,9 @@ async def test_promotions_async():
                     "approved": True,
                     "promotionRequest": {
                         "id": "req_async_1",
-                        "memoryId": "stmt_1",
+                        "memoryId": "mem_1",
                         "fromScope": "user",
-                        "toScope": "project",
+                        "toScope": "workspace",
                         "status": "approved",
                         "requesterId": "user_bob",
                         "reviewerId": "user_lead",
@@ -243,26 +243,26 @@ async def test_promotions_async():
                         "updatedAt": "2026-10-01T11:00:00Z",
                     },
                     "memory": {
-                        "id": "stmt_1",
+                        "id": "mem_1",
                         "title": "Check types strictly",
                         "body": "All types must pass strictly.",
                         "type": "directive",
-                        "scope": "project",
+                        "scope": "workspace",
                     },
                 },
             )
 
-        if method == "POST" and "/api/v1/acme/backend/memories/stmt_1/promote" in u:
+        if method == "POST" and "/api/v1/acme/backend/memories/mem_1/promote" in u:
             return httpx.Response(
                 200,
                 json={
                     "promoted": True,
                     "memory": {
-                        "id": "stmt_1",
+                        "id": "mem_1",
                         "title": "Check types strictly",
                         "body": "All types must pass strictly.",
                         "type": "directive",
-                        "scope": "project",
+                        "scope": "workspace",
                     },
                 },
             )
@@ -281,9 +281,9 @@ async def test_promotions_async():
     approved = await client.promotions.approve("acme/backend", "req_async_1", reason="Approved")
     assert approved["promotionRequest"].status == "approved"
 
-    promo = await client.memories.promote("acme/backend", "stmt_1", to_scope="project")
+    promo = await client.memories.promote("acme/backend", "mem_1", to_scope="workspace")
     assert promo.promoted is True
-    assert promo.memory.scope == "project"
+    assert promo.memory.scope == "workspace"
 
     scoped = client.scope("acme/backend")
     scoped_list = await scoped.promotions.list()

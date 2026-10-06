@@ -15,7 +15,7 @@ def _build_audit_query(
     action: str | None = None,
     target_type: str | None = None,
     target_id: str | None = None,
-    project_id: str | None = None,
+    workspace_id: str | None = None,
     team_id: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
@@ -33,8 +33,8 @@ def _build_audit_query(
         params["targetType"] = target_type
     if target_id:
         params["targetId"] = target_id
-    if project_id:
-        params["projectId"] = project_id
+    if workspace_id:
+        params["workspaceId"] = workspace_id
     if team_id:
         params["teamId"] = team_id
     if from_date:
@@ -155,7 +155,7 @@ class OrganizationAuditNamespace:
         action: str | None = None,
         target_type: str | None = None,
         target_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         team_id: str | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -168,7 +168,7 @@ class OrganizationAuditNamespace:
             action=action,
             target_type=target_type,
             target_id=target_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
             team_id=team_id,
             from_date=from_date,
             to_date=to_date,
@@ -208,7 +208,7 @@ class AsyncOrganizationAuditNamespace:
         action: str | None = None,
         target_type: str | None = None,
         target_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         team_id: str | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -221,7 +221,7 @@ class AsyncOrganizationAuditNamespace:
             action=action,
             target_type=target_type,
             target_id=target_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
             team_id=team_id,
             from_date=from_date,
             to_date=to_date,

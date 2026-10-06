@@ -16,7 +16,7 @@ describe("Memories Relations API", () => {
             JSON.stringify({
               relation: {
                 id: "rel_1",
-                projectId: "proj_1",
+                workspaceId: "ws_1",
                 sourceId: "stmt_g1",
                 targetId: body.targetId,
                 relationType: body.relationType,
@@ -39,7 +39,7 @@ describe("Memories Relations API", () => {
       "stmt_g1",
       {
         targetId: "stmt_d1",
-        relationType: "constrains",
+        relationType: "limits",
         confidence: 0.95,
       },
     );
@@ -50,9 +50,9 @@ describe("Memories Relations API", () => {
       "/api/v1/acme/backend/memories/stmt_g1/relations",
     );
     expect(recorded[0]!.body.targetId).toBe("stmt_d1");
-    expect(recorded[0]!.body.relationType).toBe("constrains");
+    expect(recorded[0]!.body.relationType).toBe("limits");
     expect(rel.id).toBe("rel_1");
-    expect(rel.relationType).toBe("constrains");
+    expect(rel.relationType).toBe("limits");
     expect(rel.sourceId).toBe("stmt_g1");
     expect(rel.targetId).toBe("stmt_d1");
   });
@@ -67,10 +67,10 @@ describe("Memories Relations API", () => {
           outgoing: [
             {
               id: "rel_1",
-              projectId: "proj_1",
+              workspaceId: "ws_1",
               sourceId: "stmt_g1",
               targetId: "stmt_d1",
-              relationType: "constrains",
+              relationType: "limits",
               confidence: 0.95,
               targetMemory: {
                 id: "stmt_d1",
@@ -92,7 +92,7 @@ describe("Memories Relations API", () => {
 
     expect(res.incoming).toHaveLength(0);
     expect(res.outgoing).toHaveLength(1);
-    expect(res.outgoing[0]!.relationType).toBe("constrains");
+    expect(res.outgoing[0]!.relationType).toBe("limits");
     expect(res.outgoing[0]!.targetMemory?.title).toBe("Use background queue");
   });
 
@@ -117,7 +117,7 @@ describe("Memories Relations API", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("lists project-wide relations with filtering and pagination", async () => {
+  it("lists workspace-wide relations with filtering and pagination", async () => {
     const mockFetch = vi.fn(async (url: string | URL | Request) => {
       const u = String(url);
       expect(u).toContain("/api/v1/acme/backend/relations?");
@@ -129,7 +129,7 @@ describe("Memories Relations API", () => {
           relations: [
             {
               id: "rel_2",
-              projectId: "proj_1",
+              workspaceId: "ws_1",
               sourceId: "stmt_f1",
               targetId: "stmt_g1",
               relationType: "justifies",
@@ -172,7 +172,7 @@ describe("Memories Relations API", () => {
             JSON.stringify({
               relation: {
                 id: "rel_scoped_1",
-                projectId: "proj_1",
+                workspaceId: "ws_1",
                 sourceId: "stmt_g1",
                 targetId: "stmt_d1",
                 relationType: "refines",

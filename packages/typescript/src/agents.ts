@@ -8,16 +8,19 @@ import type {
   UpdateAgentParams,
 } from "./types.js";
 
-function parseNamespace(namespace: string): { owner: string; project: string } {
+function parseNamespace(namespace: string): {
+  owner: string;
+  workspace: string;
+} {
   const parts = namespace.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error(
-      `Invalid namespace "${namespace}". Expected format "owner/project" (e.g. "acme/backend").`,
+      `Invalid namespace "${namespace}". Expected format "owner/workspace" (e.g. "acme/backend").`,
     );
   }
   return {
     owner: encodeURIComponent(parts[0]),
-    project: encodeURIComponent(parts[1]),
+    workspace: encodeURIComponent(parts[1]),
   };
 }
 
@@ -40,13 +43,13 @@ export class AgentsNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
-   * Lists agents registered in a project with pagination and filtering.
+   * Lists agents registered in a workspace with pagination and filtering.
    */
   async list(
     namespace: string,
     params?: ListAgentsParams,
   ): Promise<PaginatedResult<AgentItem>> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const query = buildQuery(params);
     const json = await this.client.request<{
       agents: AgentItem[];
@@ -56,7 +59,7 @@ export class AgentsNamespace {
         total: number;
         hasMore: boolean;
       };
-    }>(`/api/v1/${owner}/${project}/agents${query}`, { method: "GET" });
+    }>(`/api/v1/${owner}/${workspace}/agents${query}`, { method: "GET" });
 
     return {
       items: json.agents || [],
@@ -65,27 +68,27 @@ export class AgentsNamespace {
   }
 
   /**
-   * Fetches an agent by ID within a project.
+   * Fetches an agent by ID within a workspace.
    */
   async get(namespace: string, agentId: string): Promise<AgentItem> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{ agent: AgentItem }>(
-      `/api/v1/${owner}/${project}/agents/${encodeURIComponent(agentId)}`,
+      `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}`,
       { method: "GET" },
     );
     return json.agent;
   }
 
   /**
-   * Registers a new agent in the project.
+   * Registers a new agent in the workspace.
    */
   async create(
     namespace: string,
     params: CreateAgentParams,
   ): Promise<AgentItem> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{ agent: AgentItem }>(
-      `/api/v1/${owner}/${project}/agents`,
+      `/api/v1/${owner}/${workspace}/agents`,
       {
         method: "POST",
         body: JSON.stringify(params),
@@ -102,9 +105,9 @@ export class AgentsNamespace {
     agentId: string,
     params: UpdateAgentParams,
   ): Promise<AgentItem> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{ agent: AgentItem }>(
-      `/api/v1/${owner}/${project}/agents/${encodeURIComponent(agentId)}`,
+      `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}`,
       {
         method: "PATCH",
         body: JSON.stringify(params),
@@ -114,12 +117,12 @@ export class AgentsNamespace {
   }
 
   /**
-   * Deletes an agent from a project.
+   * Deletes an agent from a workspace.
    */
   async delete(namespace: string, agentId: string): Promise<void> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     await this.client.request<{ ok: boolean }>(
-      `/api/v1/${owner}/${project}/agents/${encodeURIComponent(agentId)}`,
+      `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}`,
       { method: "DELETE" },
     );
   }
@@ -131,9 +134,9 @@ export class AgentsNamespace {
     namespace: string,
     agentId: string,
   ): Promise<CreateAgentKeyResponse["key"]> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<CreateAgentKeyResponse>(
-      `/api/v1/${owner}/${project}/agents/${encodeURIComponent(agentId)}/keys`,
+      `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}/keys`,
       { method: "POST" },
     );
     return json.key;
@@ -147,9 +150,9 @@ export class AgentsNamespace {
     agentId: string,
     keyId: string,
   ): Promise<void> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     await this.client.request<{ revoked: boolean }>(
-      `/api/v1/${owner}/${project}/agents/${encodeURIComponent(agentId)}/keys/${encodeURIComponent(keyId)}`,
+      `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}/keys/${encodeURIComponent(keyId)}`,
       { method: "DELETE" },
     );
   }

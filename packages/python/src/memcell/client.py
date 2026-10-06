@@ -72,10 +72,10 @@ if TYPE_CHECKING:
 def _parse_namespace(namespace: str) -> tuple[str, str]:
     if "/" not in namespace:
         raise ValueError(
-            f'Invalid namespace "{namespace}". Expected format "owner/project" (e.g. "acme/backend").'
+            f'Invalid namespace "{namespace}". Expected format "owner/workspace" (e.g. "acme/backend").'
         )
-    owner, project = namespace.split("/", 1)
-    return owner.strip(), project.strip()
+    owner, workspace = namespace.split("/", 1)
+    return owner.strip(), workspace.strip()
 
 
 def _resolve_endpoint(
@@ -83,8 +83,8 @@ def _resolve_endpoint(
     action: str,
 ) -> str:
     if namespace and "/" in namespace:
-        owner, project = _parse_namespace(namespace)
-        return f"/api/v1/{owner}/{project}/{action}"
+        owner, workspace = _parse_namespace(namespace)
+        return f"/api/v1/{owner}/{workspace}/{action}"
     return f"/api/v1/{action}"
 
 
@@ -110,11 +110,11 @@ def _parse_pagination(data: dict[str, Any]) -> PaginationMetadata:
 
 def _normalize_memory_type(val: Any) -> MemoryType:
     if not val:
-        return "fact"
+        return "directive"
     s = str(val).lower()
-    if s in ("guard", "directive", "fact", "preference", "observation"):
+    if s in ("directive", "fact", "preference"):
         return s  # type: ignore
-    return "fact"
+    return "directive"
 
 
 def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
@@ -123,10 +123,9 @@ def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
     return MemoryRelationItem(
         id=str(data.get("id") or ""),
         workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
-        project_id=str(data.get("projectId") or data.get("project_id") or ""),
         source_id=str(data.get("sourceId") or data.get("source_id") or ""),
         target_id=str(data.get("targetId") or data.get("target_id") or ""),
-        relation_type=data.get("relationType") or data.get("relation_type") or "constrains",
+        relation_type=data.get("relationType") or data.get("relation_type") or "limits",
         confidence=float(data.get("confidence", 0.9)),
         metadata=data.get("metadata") or {},
         created_at=data.get("createdAt") or data.get("created_at"),
@@ -138,12 +137,10 @@ def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
 
 def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
     tags = data.get("tags") or []
-    raw_type = data.get("type") or "fact"
+    raw_type = data.get("type") or "directive"
     mem_type = _normalize_memory_type(raw_type)
     status = data.get("status", "active")
-    is_guard = data.get("isGuard")
-    if is_guard is None:
-        is_guard = (mem_type == "guard") or ("guard" in tags)
+    enforce = bool(data.get("enforce", False))
 
     raw_relations = data.get("relations")
     relations = [_parse_memory_relation_item(r) for r in raw_relations] if raw_relations else None
@@ -153,10 +150,11 @@ def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
         root_id=data.get("rootId") or data.get("root_id"),
         title=data.get("title", ""),
         context=data.get("context"),
-        example=data.get("example"),
+        observation=data.get("observation"),
         tags=tags,
         subject=data.get("subject"),
         type=mem_type,
+        enforce=enforce,
         status=status,
         confidence=float(data.get("confidence", 0.5)),
         score=data.get("score"),
@@ -167,7 +165,6 @@ def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
         is_pinned=bool(data.get("isPinned", False)),
         starred=data.get("starred"),
         star_count=data.get("starCount") or data.get("star_count"),
-        is_guard=is_guard,
         scope=data.get("scope", "workspace"),
         required_roles=data.get("requiredRoles") or data.get("required_roles") or [],
         scope_promoted_at=data.get("scopePromotedAt") or data.get("scope_promoted_at"),
@@ -217,7 +214,7 @@ def _parse_delete_memory_response(data: dict[str, Any]) -> DeleteMemoryResponse:
     )
 
 
-def _parse_project_item(data: dict[str, Any]) -> WorkspaceItem:
+def _parse_workspace_item(data: dict[str, Any]) -> WorkspaceItem:
     owner_data = data.get("owner")
     owner = WorkspaceOwner(**owner_data) if owner_data else None
     return WorkspaceItem(
@@ -244,7 +241,7 @@ def _parse_project_item(data: dict[str, Any]) -> WorkspaceItem:
 def _parse_agent_item(data: dict[str, Any]) -> AgentItem:
     return AgentItem(
         id=str(data.get("id", "")),
-        project_id=str(data.get("projectId") or data.get("project_id") or ""),
+        workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
         name=str(data.get("name", "")),
         slug=str(data.get("slug", "")),
         kind=str(data.get("kind", "coding_assistant")),
@@ -375,7 +372,7 @@ class _MemoriesNamespaceSync:
         author_type: str | None = None,
         subject: str | None = None,
     ) -> PaginatedResult[MemoryItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -393,15 +390,15 @@ class _MemoriesNamespaceSync:
                 "subject": subject,
             }
         )
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/memories", params=params)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}/memories", params=params)
         raw_items = resp.get("memories") or []
         items = [_parse_memory_item(s) for s in raw_items]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
     def get(self, namespace: str, memory_id: str) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/memories/{memory_id}")
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}")
         return _parse_memory_item(resp.get("memory") or {})
 
     def create(
@@ -409,19 +406,20 @@ class _MemoriesNamespaceSync:
         namespace: str,
         title: str,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         source: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
         subject: str | None = None,
         type: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         is_pinned: bool | None = None,
         expires_at: Any | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         exp_str = (
             expires_at.isoformat()
             if isinstance(expires_at, datetime.date | datetime.datetime)
@@ -430,12 +428,13 @@ class _MemoriesNamespaceSync:
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "source": source,
             "tags": tags,
             "confidence": confidence,
             "subject": subject,
             "type": type,
+            "enforce": enforce,
             "status": status,
             "isPinned": is_pinned,
             "expiresAt": exp_str,
@@ -444,7 +443,7 @@ class _MemoriesNamespaceSync:
         }
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories",
+            f"/api/v1/{owner}/{workspace}/memories",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
@@ -455,26 +454,28 @@ class _MemoriesNamespaceSync:
         memory_id: str,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
         status: str | None = None,
         type: str | None = None,
+        enforce: bool | None = None,
         subject: str | None = None,
         is_pinned: bool | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
         reason: str | None = None,
     ) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "tags": tags,
             "confidence": confidence,
             "status": status,
             "type": type,
+            "enforce": enforce,
             "subject": subject,
             "isPinned": is_pinned,
             "scope": scope,
@@ -483,7 +484,7 @@ class _MemoriesNamespaceSync:
         }
         resp = self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
@@ -491,17 +492,19 @@ class _MemoriesNamespaceSync:
     def delete(
         self, namespace: str, memory_id: str, all_versions: bool = False
     ) -> DeleteMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         query = "?allVersions=true" if all_versions else ""
         resp = self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/memories/{memory_id}{query}"
+            "DELETE", f"/api/v1/{owner}/{workspace}/memories/{memory_id}{query}"
         )
         return _parse_delete_memory_response(resp)
 
     def star(self, namespace: str, memory_id: str, starred: bool = True) -> MemoryStarResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         method = "PUT" if starred else "DELETE"
-        resp = self._client._request(method, f"/api/v1/{owner}/{project}/memories/{memory_id}/star")
+        resp = self._client._request(
+            method, f"/api/v1/{owner}/{workspace}/memories/{memory_id}/star"
+        )
         return MemoryStarResponse(
             root_id=resp.get("rootId", ""),
             starred=bool(resp.get("starred", starred)),
@@ -509,9 +512,9 @@ class _MemoriesNamespaceSync:
         )
 
     def history(self, namespace: str, memory_id: str) -> MemoryHistoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/memories/{memory_id}/history"
+            "GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}/history"
         )
         hist = [
             MemoryHistoryItem(
@@ -520,11 +523,12 @@ class _MemoriesNamespaceSync:
                 version=h.get("version", 1),
                 title=h.get("title", ""),
                 context=h.get("context"),
-                example=h.get("example"),
+                observation=h.get("observation"),
                 tags=h.get("tags") or [],
                 confidence=float(h.get("confidence", 0.5)),
                 status=h.get("status", "active"),
-                type=h.get("type", "fact"),
+                type=h.get("type", "directive"),
+                enforce=bool(h.get("enforce", False)),
                 subject=h.get("subject"),
                 scope=h.get("scope", "workspace"),
                 author_type=h.get("authorType", "user"),
@@ -543,18 +547,21 @@ class _MemoriesNamespaceSync:
         )
 
     def adopt(
-        self, namespace: str, memory_id: str, target_project_ids: list[str]
+        self,
+        namespace: str,
+        memory_id: str,
+        target_workspace_ids: list[str] | None = None,
     ) -> AdoptMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
+        targets = target_workspace_ids or []
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/adopt",
-            json={"targetProjectIds": target_project_ids},
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/adopt",
+            json={"targetWorkspaceIds": targets},
         )
         adopted = [
             AdoptedTarget(
-                project_id=a.get("projectId") or a.get("workspaceId"),
-                workspace_id=a.get("workspaceId") or a.get("projectId"),
+                workspace_id=a.get("workspaceId"),
                 memory_id=a.get("memoryId") or "",
                 already_existed=bool(a.get("alreadyExisted")),
             )
@@ -570,16 +577,16 @@ class _MemoriesNamespaceSync:
         self,
         namespace: str,
         memory_id: str,
-        to_scope: str = "project",
+        to_scope: str = "workspace",
         reason: str | None = None,
     ) -> PromoteMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         body: dict[str, Any] = {"toScope": to_scope}
         if reason:
             body["reason"] = reason
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/promote",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/promote",
             json=body,
         )
         mem_data = resp.get("memory")
@@ -609,14 +616,14 @@ class _MemoriesNamespaceSync:
     def delete_relation(self, namespace: str, memory_id: str, relation_id: str) -> None:
         return self.relations.delete(namespace, memory_id, relation_id)
 
-    def list_project_relations(
+    def list_workspace_relations(
         self,
         namespace: str,
         page: int | None = None,
         per_page: int | None = None,
         relation_type: str | None = None,
     ) -> PaginatedResult[MemoryRelationItem]:
-        return self.relations.list_project(namespace, page, per_page, relation_type)
+        return self.relations.list_workspace(namespace, page, per_page, relation_type)
 
 
 class _MemoryRelationsNamespaceSync:
@@ -624,9 +631,9 @@ class _MemoryRelationsNamespaceSync:
         self._client = client
 
     def list(self, namespace: str, memory_id: str) -> MemoryRelationsResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/memories/{memory_id}/relations"
+            "GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations"
         )
         return MemoryRelationsResponse(
             incoming=[_parse_memory_relation_item(r) for r in resp.get("incoming", [])],
@@ -642,7 +649,7 @@ class _MemoryRelationsNamespaceSync:
         confidence: float = 0.9,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryRelationItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload = {
             "targetId": target_id,
             "relationType": relation_type,
@@ -651,26 +658,26 @@ class _MemoryRelationsNamespaceSync:
         }
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/relations",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations",
             json=payload,
         )
         return _parse_memory_relation_item(resp.get("relation", {}))
 
     def delete(self, namespace: str, memory_id: str, relation_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         self._client._request(
             "DELETE",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/relations/{relation_id}",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations/{relation_id}",
         )
 
-    def list_project(
+    def list_workspace(
         self,
         namespace: str,
         page: int | None = None,
         per_page: int | None = None,
         relation_type: str | None = None,
     ) -> PaginatedResult[MemoryRelationItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -678,14 +685,14 @@ class _MemoryRelationsNamespaceSync:
                 "relation_type": relation_type,
             }
         )
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/relations", params=params)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}/relations", params=params)
         raw_items = resp.get("relations") or []
         items = [_parse_memory_relation_item(r) for r in raw_items]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
 
-class _ProjectsNamespaceSync:
+class _WorkspacesNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
 
@@ -709,8 +716,8 @@ class _ProjectsNamespaceSync:
             }
         )
         resp = self._client._request("GET", "/api/v1/workspaces", params=params)
-        raw_projects = resp.get("projects") or resp.get("workspaces") or []
-        items = [_parse_project_item(p) for p in raw_projects]
+        raw_workspaces = resp.get("workspaces") or []
+        items = [_parse_workspace_item(p) for p in raw_workspaces]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
@@ -735,15 +742,15 @@ class _ProjectsNamespaceSync:
             }
         )
         resp = self._client._request("GET", f"/api/v1/{owner}/workspaces", params=params)
-        raw_projects = resp.get("projects") or resp.get("workspaces") or []
-        items = [_parse_project_item(p) for p in raw_projects]
+        raw_workspaces = resp.get("workspaces") or []
+        items = [_parse_workspace_item(p) for p in raw_workspaces]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
     def get(self, namespace: str) -> WorkspaceItem:
-        owner, project = _parse_namespace(namespace)
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}")
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}")
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     def create(
         self,
@@ -767,7 +774,7 @@ class _ProjectsNamespaceSync:
             "/api/v1/workspaces",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     def update(
         self,
@@ -783,7 +790,7 @@ class _ProjectsNamespaceSync:
         tag_prompt: str | None = None,
         profile: str | None = None,
     ) -> WorkspaceItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "slug": slug,
@@ -798,20 +805,20 @@ class _ProjectsNamespaceSync:
         }
         resp = self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}",
+            f"/api/v1/{owner}/{workspace}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     def delete(self, namespace: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        self._client._request("DELETE", f"/api/v1/{owner}/{project}")
+        owner, workspace = _parse_namespace(namespace)
+        self._client._request("DELETE", f"/api/v1/{owner}/{workspace}")
 
     def transfer(self, namespace: str, target_owner: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/transfer",
+            f"/api/v1/{owner}/{workspace}/transfer",
             json={"targetOwner": target_owner},
         )
 
@@ -831,7 +838,7 @@ class _AgentsNamespaceSync:
         sort: str | None = None,
         order: str | None = None,
     ) -> PaginatedResult[AgentItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -843,15 +850,15 @@ class _AgentsNamespaceSync:
                 "order": order,
             }
         )
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/agents", params=params)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}/agents", params=params)
         raw_items = resp.get("agents") or []
         items = [_parse_agent_item(a) for a in raw_items]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
     def get(self, namespace: str, agent_id: str) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/agents/{agent_id}")
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}/agents/{agent_id}")
         return _parse_agent_item(resp.get("agent", {}))
 
     def create(
@@ -864,7 +871,7 @@ class _AgentsNamespaceSync:
         description: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "slug": slug,
@@ -875,7 +882,7 @@ class _AgentsNamespaceSync:
         }
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/agents",
+            f"/api/v1/{owner}/{workspace}/agents",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_agent_item(resp.get("agent", {}))
@@ -890,7 +897,7 @@ class _AgentsNamespaceSync:
         status: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "model": model,
@@ -900,24 +907,24 @@ class _AgentsNamespaceSync:
         }
         resp = self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/agents/{agent_id}",
+            f"/api/v1/{owner}/{workspace}/agents/{agent_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_agent_item(resp.get("agent", {}))
 
     def delete(self, namespace: str, agent_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        self._client._request("DELETE", f"/api/v1/{owner}/{project}/agents/{agent_id}")
+        owner, workspace = _parse_namespace(namespace)
+        self._client._request("DELETE", f"/api/v1/{owner}/{workspace}/agents/{agent_id}")
 
     def create_key(self, namespace: str, agent_id: str) -> CreateAgentKeyResult:
-        owner, project = _parse_namespace(namespace)
-        resp = self._client._request("POST", f"/api/v1/{owner}/{project}/agents/{agent_id}/keys")
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request("POST", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys")
         return CreateAgentKeyResult(**resp.get("key", {}))
 
     def revoke_key(self, namespace: str, agent_id: str, key_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/agents/{agent_id}/keys/{key_id}"
+            "DELETE", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys/{key_id}"
         )
 
 
@@ -934,7 +941,7 @@ class _CollaboratorsNamespaceSync:
         affiliation: str | None = None,
         q: str | None = None,
     ) -> ListCollaboratorsResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -945,7 +952,7 @@ class _CollaboratorsNamespaceSync:
             }
         )
         resp = self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/collaborators", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/collaborators", params=params
         )
         collabs = [_parse_collaborator_item(c) for c in resp.get("collaborators", [])]
         invites = [_parse_pending_invitation(i) for i in resp.get("pendingInvitations", [])]
@@ -957,30 +964,30 @@ class _CollaboratorsNamespaceSync:
         )
 
     def invite(self, namespace: str, identifier: str, role: str = "read") -> PendingInvitationItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/collaborators",
+            f"/api/v1/{owner}/{workspace}/collaborators",
             json={"identifier": identifier, "role": role},
         )
         return _parse_pending_invitation(resp.get("invitation", {}))
 
     def update_role(self, namespace: str, user_id: str, role: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/collaborators/{user_id}",
+            f"/api/v1/{owner}/{workspace}/collaborators/{user_id}",
             json={"role": role},
         )
 
     def remove(self, namespace: str, user_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        self._client._request("DELETE", f"/api/v1/{owner}/{project}/collaborators/{user_id}")
+        owner, workspace = _parse_namespace(namespace)
+        self._client._request("DELETE", f"/api/v1/{owner}/{workspace}/collaborators/{user_id}")
 
     def revoke_invitation(self, namespace: str, invitation_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/collaborators/invitations/{invitation_id}"
+            "DELETE", f"/api/v1/{owner}/{workspace}/collaborators/invitations/{invitation_id}"
         )
 
 
@@ -1006,7 +1013,7 @@ class _OrganizationsNamespaceSync:
                 website=o.get("website"),
                 logo=o.get("logo"),
                 member_count=o.get("memberCount"),
-                project_count=o.get("projectCount"),
+                workspace_count=o.get("workspaceCount"),
                 created_at=o.get("createdAt") or o.get("joinedAt"),
             )
             for o in orgs
@@ -1054,7 +1061,7 @@ class _OrganizationsNamespaceSync:
             website=org.get("website"),
             logo=org.get("logo"),
             member_count=org.get("memberCount"),
-            project_count=org.get("projectCount"),
+            workspace_count=org.get("workspaceCount"),
             created_at=org.get("createdAt"),
         )
 
@@ -1362,8 +1369,8 @@ class _ScopesNamespaceSync:
 
     def list(self, namespace: str | None = None) -> list[ScopeItem]:
         if namespace:
-            owner, project = _parse_namespace(namespace)
-            path = f"/api/v1/{owner}/{project}/scopes"
+            owner, workspace = _parse_namespace(namespace)
+            path = f"/api/v1/{owner}/{workspace}/scopes"
         else:
             path = "/api/v1/scopes"
         resp = self._client._request("GET", path)
@@ -1391,7 +1398,7 @@ class _SweepNamespaceSync:
         min_cluster_size: int | None = None,
         max_cluster_size: int | None = None,
     ) -> ConsolidateSweepResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         body: dict[str, Any] = {}
         if min_similarity is not None:
             body["minSimilarity"] = min_similarity
@@ -1402,7 +1409,7 @@ class _SweepNamespaceSync:
 
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/lifecycle/sweep/consolidate",
+            f"/api/v1/{owner}/{workspace}/lifecycle/sweep/consolidate",
             json=body if body else None,
         )
         return ConsolidateSweepResponse.model_validate(resp)
@@ -1422,7 +1429,7 @@ class _PromotionsNamespaceSync:
         page: int | None = None,
         per_page: int | None = None,
     ) -> PaginatedResult[MemoryPromotionRequest]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "status": status,
@@ -1431,7 +1438,9 @@ class _PromotionsNamespaceSync:
                 "per_page": per_page,
             }
         )
-        resp = self._client._request("GET", f"/api/v1/{owner}/{project}/promotions", params=params)
+        resp = self._client._request(
+            "GET", f"/api/v1/{owner}/{workspace}/promotions", params=params
+        )
         raw_items = resp.get("requests") or resp.get("items") or resp.get("promotionRequests") or []
         items = [_parse_promotion_request(r) for r in raw_items]
         pagination = (
@@ -1456,12 +1465,12 @@ class _PromotionsNamespaceSync:
         reason: str | None = None,
         review_comment: str | None = None,
     ) -> dict[str, Any]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         review_reason = reason or review_comment
         body = {"reviewReason": review_reason} if review_reason else None
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/approve",
+            f"/api/v1/{owner}/{workspace}/promotions/{promotion_id}/approve",
             json=body,
         )
         promotion_req = (
@@ -1485,12 +1494,12 @@ class _PromotionsNamespaceSync:
         reason: str | None = None,
         review_comment: str | None = None,
     ) -> dict[str, Any]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         review_reason = reason or review_comment
         body = {"reviewReason": review_reason} if review_reason else None
         resp = self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/reject",
+            f"/api/v1/{owner}/{workspace}/promotions/{promotion_id}/reject",
             json=body,
         )
         promotion_req = (
@@ -1532,7 +1541,7 @@ class _MemoriesNamespaceAsync:
         author_type: str | None = None,
         subject: str | None = None,
     ) -> PaginatedResult[MemoryItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -1551,7 +1560,7 @@ class _MemoriesNamespaceAsync:
             }
         )
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/memories", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/memories", params=params
         )
         raw_items = resp.get("memories") or []
         items = [_parse_memory_item(s) for s in raw_items]
@@ -1559,8 +1568,10 @@ class _MemoriesNamespaceAsync:
         return PaginatedResult(items=items, pagination=pagination)
 
     async def get(self, namespace: str, memory_id: str) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
-        resp = await self._client._request("GET", f"/api/v1/{owner}/{project}/memories/{memory_id}")
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}"
+        )
         return _parse_memory_item(resp.get("memory") or {})
 
     async def create(
@@ -1568,19 +1579,20 @@ class _MemoriesNamespaceAsync:
         namespace: str,
         title: str,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         source: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
         subject: str | None = None,
         type: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         is_pinned: bool | None = None,
         expires_at: Any | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         exp_str = (
             expires_at.isoformat()
             if isinstance(expires_at, datetime.date | datetime.datetime)
@@ -1589,12 +1601,13 @@ class _MemoriesNamespaceAsync:
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "source": source,
             "tags": tags,
             "confidence": confidence,
             "subject": subject,
             "type": type,
+            "enforce": enforce,
             "status": status,
             "isPinned": is_pinned,
             "expiresAt": exp_str,
@@ -1603,7 +1616,7 @@ class _MemoriesNamespaceAsync:
         }
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories",
+            f"/api/v1/{owner}/{workspace}/memories",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
@@ -1614,26 +1627,28 @@ class _MemoriesNamespaceAsync:
         memory_id: str,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
         status: str | None = None,
         type: str | None = None,
+        enforce: bool | None = None,
         subject: str | None = None,
         is_pinned: bool | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
         reason: str | None = None,
     ) -> MemoryItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "tags": tags,
             "confidence": confidence,
             "status": status,
             "type": type,
+            "enforce": enforce,
             "subject": subject,
             "isPinned": is_pinned,
             "scope": scope,
@@ -1642,7 +1657,7 @@ class _MemoriesNamespaceAsync:
         }
         resp = await self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
@@ -1650,20 +1665,20 @@ class _MemoriesNamespaceAsync:
     async def delete(
         self, namespace: str, memory_id: str, all_versions: bool = False
     ) -> DeleteMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         query = "?allVersions=true" if all_versions else ""
         resp = await self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/memories/{memory_id}{query}"
+            "DELETE", f"/api/v1/{owner}/{workspace}/memories/{memory_id}{query}"
         )
         return _parse_delete_memory_response(resp)
 
     async def star(
         self, namespace: str, memory_id: str, starred: bool = True
     ) -> MemoryStarResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         method = "PUT" if starred else "DELETE"
         resp = await self._client._request(
-            method, f"/api/v1/{owner}/{project}/memories/{memory_id}/star"
+            method, f"/api/v1/{owner}/{workspace}/memories/{memory_id}/star"
         )
         return MemoryStarResponse(
             root_id=resp.get("rootId", ""),
@@ -1672,9 +1687,9 @@ class _MemoriesNamespaceAsync:
         )
 
     async def history(self, namespace: str, memory_id: str) -> MemoryHistoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/memories/{memory_id}/history"
+            "GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}/history"
         )
         hist = [
             MemoryHistoryItem(
@@ -1683,11 +1698,12 @@ class _MemoriesNamespaceAsync:
                 version=h.get("version", 1),
                 title=h.get("title", ""),
                 context=h.get("context"),
-                example=h.get("example"),
+                observation=h.get("observation"),
                 tags=h.get("tags") or [],
                 confidence=float(h.get("confidence", 0.5)),
                 status=h.get("status", "active"),
-                type=h.get("type", "fact"),
+                type=h.get("type", "directive"),
+                enforce=bool(h.get("enforce", False)),
                 subject=h.get("subject"),
                 scope=h.get("scope", "workspace"),
                 author_type=h.get("authorType", "user"),
@@ -1706,18 +1722,21 @@ class _MemoriesNamespaceAsync:
         )
 
     async def adopt(
-        self, namespace: str, memory_id: str, target_project_ids: list[str]
+        self,
+        namespace: str,
+        memory_id: str,
+        target_workspace_ids: list[str] | None = None,
     ) -> AdoptMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
+        targets = target_workspace_ids or []
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/adopt",
-            json={"targetProjectIds": target_project_ids},
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/adopt",
+            json={"targetWorkspaceIds": targets},
         )
         adopted = [
             AdoptedTarget(
-                project_id=a.get("projectId") or a.get("workspaceId"),
-                workspace_id=a.get("workspaceId") or a.get("projectId"),
+                workspace_id=a.get("workspaceId"),
                 memory_id=a.get("memoryId") or "",
                 already_existed=bool(a.get("alreadyExisted")),
             )
@@ -1733,16 +1752,16 @@ class _MemoriesNamespaceAsync:
         self,
         namespace: str,
         memory_id: str,
-        to_scope: str = "project",
+        to_scope: str = "workspace",
         reason: str | None = None,
     ) -> PromoteMemoryResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         body: dict[str, Any] = {"toScope": to_scope}
         if reason:
             body["reason"] = reason
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/promote",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/promote",
             json=body,
         )
         mem_data = resp.get("memory")
@@ -1772,14 +1791,14 @@ class _MemoriesNamespaceAsync:
     async def delete_relation(self, namespace: str, memory_id: str, relation_id: str) -> None:
         return await self.relations.delete(namespace, memory_id, relation_id)
 
-    async def list_project_relations(
+    async def list_workspace_relations(
         self,
         namespace: str,
         page: int | None = None,
         per_page: int | None = None,
         relation_type: str | None = None,
     ) -> PaginatedResult[MemoryRelationItem]:
-        return await self.relations.list_project(namespace, page, per_page, relation_type)
+        return await self.relations.list_workspace(namespace, page, per_page, relation_type)
 
 
 class _MemoryRelationsNamespaceAsync:
@@ -1787,9 +1806,9 @@ class _MemoryRelationsNamespaceAsync:
         self._client = client
 
     async def list(self, namespace: str, memory_id: str) -> MemoryRelationsResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/memories/{memory_id}/relations"
+            "GET", f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations"
         )
         return MemoryRelationsResponse(
             incoming=[_parse_memory_relation_item(r) for r in resp.get("incoming", [])],
@@ -1805,7 +1824,7 @@ class _MemoryRelationsNamespaceAsync:
         confidence: float = 0.9,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryRelationItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload = {
             "targetId": target_id,
             "relationType": relation_type,
@@ -1814,26 +1833,26 @@ class _MemoryRelationsNamespaceAsync:
         }
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/relations",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations",
             json=payload,
         )
         return _parse_memory_relation_item(resp.get("relation", {}))
 
     async def delete(self, namespace: str, memory_id: str, relation_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         await self._client._request(
             "DELETE",
-            f"/api/v1/{owner}/{project}/memories/{memory_id}/relations/{relation_id}",
+            f"/api/v1/{owner}/{workspace}/memories/{memory_id}/relations/{relation_id}",
         )
 
-    async def list_project(
+    async def list_workspace(
         self,
         namespace: str,
         page: int | None = None,
         per_page: int | None = None,
         relation_type: str | None = None,
     ) -> PaginatedResult[MemoryRelationItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -1842,7 +1861,7 @@ class _MemoryRelationsNamespaceAsync:
             }
         )
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/relations", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/relations", params=params
         )
         raw_items = resp.get("relations") or []
         items = [_parse_memory_relation_item(r) for r in raw_items]
@@ -1850,7 +1869,7 @@ class _MemoryRelationsNamespaceAsync:
         return PaginatedResult(items=items, pagination=pagination)
 
 
-class _ProjectsNamespaceAsync:
+class _WorkspacesNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
 
@@ -1874,8 +1893,8 @@ class _ProjectsNamespaceAsync:
             }
         )
         resp = await self._client._request("GET", "/api/v1/workspaces", params=params)
-        raw_projects = resp.get("projects") or resp.get("workspaces") or []
-        items = [_parse_project_item(p) for p in raw_projects]
+        raw_workspaces = resp.get("workspaces") or []
+        items = [_parse_workspace_item(p) for p in raw_workspaces]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
@@ -1900,15 +1919,15 @@ class _ProjectsNamespaceAsync:
             }
         )
         resp = await self._client._request("GET", f"/api/v1/{owner}/workspaces", params=params)
-        raw_projects = resp.get("projects") or resp.get("workspaces") or []
-        items = [_parse_project_item(p) for p in raw_projects]
+        raw_workspaces = resp.get("workspaces") or []
+        items = [_parse_workspace_item(p) for p in raw_workspaces]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return PaginatedResult(items=items, pagination=pagination)
 
     async def get(self, namespace: str) -> WorkspaceItem:
-        owner, project = _parse_namespace(namespace)
-        resp = await self._client._request("GET", f"/api/v1/{owner}/{project}")
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request("GET", f"/api/v1/{owner}/{workspace}")
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     async def create(
         self,
@@ -1932,7 +1951,7 @@ class _ProjectsNamespaceAsync:
             "/api/v1/workspaces",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     async def update(
         self,
@@ -1948,7 +1967,7 @@ class _ProjectsNamespaceAsync:
         tag_prompt: str | None = None,
         profile: str | None = None,
     ) -> WorkspaceItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "slug": slug,
@@ -1963,20 +1982,20 @@ class _ProjectsNamespaceAsync:
         }
         resp = await self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}",
+            f"/api/v1/{owner}/{workspace}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_project_item(resp.get("project") or resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or {})
 
     async def delete(self, namespace: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        await self._client._request("DELETE", f"/api/v1/{owner}/{project}")
+        owner, workspace = _parse_namespace(namespace)
+        await self._client._request("DELETE", f"/api/v1/{owner}/{workspace}")
 
     async def transfer(self, namespace: str, target_owner: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/transfer",
+            f"/api/v1/{owner}/{workspace}/transfer",
             json={"targetOwner": target_owner},
         )
 
@@ -1996,7 +2015,7 @@ class _AgentsNamespaceAsync:
         sort: str | None = None,
         order: str | None = None,
     ) -> PaginatedResult[AgentItem]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -2009,7 +2028,7 @@ class _AgentsNamespaceAsync:
             }
         )
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/agents", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/agents", params=params
         )
         raw_items = resp.get("agents") or []
         items = [_parse_agent_item(a) for a in raw_items]
@@ -2017,8 +2036,8 @@ class _AgentsNamespaceAsync:
         return PaginatedResult(items=items, pagination=pagination)
 
     async def get(self, namespace: str, agent_id: str) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
-        resp = await self._client._request("GET", f"/api/v1/{owner}/{project}/agents/{agent_id}")
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request("GET", f"/api/v1/{owner}/{workspace}/agents/{agent_id}")
         return _parse_agent_item(resp.get("agent", {}))
 
     async def create(
@@ -2031,7 +2050,7 @@ class _AgentsNamespaceAsync:
         description: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "slug": slug,
@@ -2042,7 +2061,7 @@ class _AgentsNamespaceAsync:
         }
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/agents",
+            f"/api/v1/{owner}/{workspace}/agents",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_agent_item(resp.get("agent", {}))
@@ -2057,7 +2076,7 @@ class _AgentsNamespaceAsync:
         status: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AgentItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "name": name,
             "model": model,
@@ -2067,26 +2086,26 @@ class _AgentsNamespaceAsync:
         }
         resp = await self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/agents/{agent_id}",
+            f"/api/v1/{owner}/{workspace}/agents/{agent_id}",
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_agent_item(resp.get("agent", {}))
 
     async def delete(self, namespace: str, agent_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        await self._client._request("DELETE", f"/api/v1/{owner}/{project}/agents/{agent_id}")
+        owner, workspace = _parse_namespace(namespace)
+        await self._client._request("DELETE", f"/api/v1/{owner}/{workspace}/agents/{agent_id}")
 
     async def create_key(self, namespace: str, agent_id: str) -> CreateAgentKeyResult:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = await self._client._request(
-            "POST", f"/api/v1/{owner}/{project}/agents/{agent_id}/keys"
+            "POST", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys"
         )
         return CreateAgentKeyResult(**resp.get("key", {}))
 
     async def revoke_key(self, namespace: str, agent_id: str, key_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         await self._client._request(
-            "DELETE", f"/api/v1/{owner}/{project}/agents/{agent_id}/keys/{key_id}"
+            "DELETE", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys/{key_id}"
         )
 
 
@@ -2103,7 +2122,7 @@ class _CollaboratorsNamespaceAsync:
         affiliation: str | None = None,
         q: str | None = None,
     ) -> ListCollaboratorsResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "page": page,
@@ -2114,7 +2133,7 @@ class _CollaboratorsNamespaceAsync:
             }
         )
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/collaborators", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/collaborators", params=params
         )
         collabs = [_parse_collaborator_item(c) for c in resp.get("collaborators", [])]
         invites = [_parse_pending_invitation(i) for i in resp.get("pendingInvitations", [])]
@@ -2128,31 +2147,33 @@ class _CollaboratorsNamespaceAsync:
     async def invite(
         self, namespace: str, identifier: str, role: str = "read"
     ) -> PendingInvitationItem:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/collaborators",
+            f"/api/v1/{owner}/{workspace}/collaborators",
             json={"identifier": identifier, "role": role},
         )
         return _parse_pending_invitation(resp.get("invitation", {}))
 
     async def update_role(self, namespace: str, user_id: str, role: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         await self._client._request(
             "PATCH",
-            f"/api/v1/{owner}/{project}/collaborators/{user_id}",
+            f"/api/v1/{owner}/{workspace}/collaborators/{user_id}",
             json={"role": role},
         )
 
     async def remove(self, namespace: str, user_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
-        await self._client._request("DELETE", f"/api/v1/{owner}/{project}/collaborators/{user_id}")
+        owner, workspace = _parse_namespace(namespace)
+        await self._client._request(
+            "DELETE", f"/api/v1/{owner}/{workspace}/collaborators/{user_id}"
+        )
 
     async def revoke_invitation(self, namespace: str, invitation_id: str) -> None:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         await self._client._request(
             "DELETE",
-            f"/api/v1/{owner}/{project}/collaborators/invitations/{invitation_id}",
+            f"/api/v1/{owner}/{workspace}/collaborators/invitations/{invitation_id}",
         )
 
 
@@ -2178,7 +2199,7 @@ class _OrganizationsNamespaceAsync:
                 website=o.get("website"),
                 logo=o.get("logo"),
                 member_count=o.get("memberCount"),
-                project_count=o.get("projectCount"),
+                workspace_count=o.get("workspaceCount"),
                 created_at=o.get("createdAt") or o.get("joinedAt"),
             )
             for o in orgs
@@ -2226,7 +2247,7 @@ class _OrganizationsNamespaceAsync:
             website=org.get("website"),
             logo=org.get("logo"),
             member_count=org.get("memberCount"),
-            project_count=org.get("projectCount"),
+            workspace_count=org.get("workspaceCount"),
             created_at=org.get("createdAt"),
         )
 
@@ -2531,8 +2552,8 @@ class _ScopesNamespaceAsync:
 
     async def list(self, namespace: str | None = None) -> list[ScopeItem]:
         if namespace:
-            owner, project = _parse_namespace(namespace)
-            path = f"/api/v1/{owner}/{project}/scopes"
+            owner, workspace = _parse_namespace(namespace)
+            path = f"/api/v1/{owner}/{workspace}/scopes"
         else:
             path = "/api/v1/scopes"
         resp = await self._client._request("GET", path)
@@ -2560,7 +2581,7 @@ class _SweepNamespaceAsync:
         min_cluster_size: int | None = None,
         max_cluster_size: int | None = None,
     ) -> ConsolidateSweepResponse:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         body: dict[str, Any] = {}
         if min_similarity is not None:
             body["minSimilarity"] = min_similarity
@@ -2571,7 +2592,7 @@ class _SweepNamespaceAsync:
 
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/lifecycle/sweep/consolidate",
+            f"/api/v1/{owner}/{workspace}/lifecycle/sweep/consolidate",
             json=body if body else None,
         )
         return ConsolidateSweepResponse.model_validate(resp)
@@ -2591,7 +2612,7 @@ class _PromotionsNamespaceAsync:
         page: int | None = None,
         per_page: int | None = None,
     ) -> PaginatedResult[MemoryPromotionRequest]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         params = _build_query_params(
             {
                 "status": status,
@@ -2601,7 +2622,7 @@ class _PromotionsNamespaceAsync:
             }
         )
         resp = await self._client._request(
-            "GET", f"/api/v1/{owner}/{project}/promotions", params=params
+            "GET", f"/api/v1/{owner}/{workspace}/promotions", params=params
         )
         raw_items = resp.get("requests") or resp.get("items") or resp.get("promotionRequests") or []
         items = [_parse_promotion_request(r) for r in raw_items]
@@ -2627,12 +2648,12 @@ class _PromotionsNamespaceAsync:
         reason: str | None = None,
         review_comment: str | None = None,
     ) -> dict[str, Any]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         review_reason = reason or review_comment
         body = {"reviewReason": review_reason} if review_reason else None
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/approve",
+            f"/api/v1/{owner}/{workspace}/promotions/{promotion_id}/approve",
             json=body,
         )
         promotion_req = (
@@ -2656,12 +2677,12 @@ class _PromotionsNamespaceAsync:
         reason: str | None = None,
         review_comment: str | None = None,
     ) -> dict[str, Any]:
-        owner, project = _parse_namespace(namespace)
+        owner, workspace = _parse_namespace(namespace)
         review_reason = reason or review_comment
         body = {"reviewReason": review_reason} if review_reason else None
         resp = await self._client._request(
             "POST",
-            f"/api/v1/{owner}/{project}/promotions/{promotion_id}/reject",
+            f"/api/v1/{owner}/{workspace}/promotions/{promotion_id}/reject",
             json=body,
         )
         promotion_req = (
@@ -2721,7 +2742,7 @@ class MemCell:
 
         # Mount resource namespaces
         self.memories = _MemoriesNamespaceSync(self)
-        self.workspaces = _ProjectsNamespaceSync(self)
+        self.workspaces = _WorkspacesNamespaceSync(self)
         self.agents = _AgentsNamespaceSync(self)
         self.collaborators = _CollaboratorsNamespaceSync(self)
         self.organizations = _OrganizationsNamespaceSync(self)
@@ -2865,7 +2886,7 @@ class MemCell:
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
+        enforce: bool | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
         my_memory: bool | None = None,
@@ -2878,13 +2899,12 @@ class MemCell:
         include_metadata: bool | list[str] | None = None,
     ) -> RecallResponse:
         path = _resolve_endpoint(namespace, "recall")
-        effective_type = type or kind
         payload: dict[str, Any] = {
             "query": query,
             "intent": query,
             "subject": subject,
-            "type": effective_type,
-            "kind": effective_type,
+            "type": type,
+            "enforce": enforce,
             "scope": scope,
             "scopes": scopes,
             "my_memory": my_memory,
@@ -2897,7 +2917,7 @@ class MemCell:
             "include_metadata": include_metadata,
         }
         if namespace and "/" not in namespace:
-            payload["project"] = namespace
+            payload["workspace"] = namespace
 
         data = self._request("POST", path, json={k: v for k, v in payload.items() if v is not None})
         raw_memories = data.get("memories") or data.get("results") or []
@@ -2916,11 +2936,11 @@ class MemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
-        kind: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -2928,7 +2948,9 @@ class MemCell:
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
+        active_memory_ids: list[str] | None = None,
         namespace: str | None = None,
         async_: bool | None = None,
     ) -> RememberResponse:
@@ -2938,27 +2960,27 @@ class MemCell:
             if isinstance(expires_at, datetime.date | datetime.datetime)
             else expires_at
         )
-        effective_type = type or kind
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "tags": tags,
             "subject": subject,
-            "type": effective_type,
-            "kind": effective_type,
+            "type": type,
+            "enforce": enforce,
             "status": status,
             "confidence": confidence,
             "scope": scope,
             "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
-            "raw": raw,
+            "raw": raw or content,
             "sessionId": session_id,
+            "activeMemoryIds": active_memory_ids,
             "async": async_,
         }
         if namespace and "/" not in namespace:
-            payload["project"] = namespace
+            payload["workspace"] = namespace
 
         data = self._request("POST", path, json={k: v for k, v in payload.items() if v is not None})
 
@@ -2968,14 +2990,18 @@ class MemCell:
                 job_id=data.get("jobId"),
                 status=data.get("status"),
                 created=[],
+                evolved=[],
                 note=data.get("note", "Job accepted for background execution."),
             )
 
         raw_created = data.get("created") or []
         created = [_parse_memory_item(s) for s in raw_created]
+        raw_evolved = data.get("evolved") or []
+        evolved = [_parse_memory_item(s) for s in raw_evolved]
 
         return RememberResponse(
             created=created,
+            evolved=evolved,
             reinforced=data.get("reinforced"),
             superseded=data.get("superseded"),
             note=data.get("note"),
@@ -3009,7 +3035,7 @@ class MemCell:
             "async": async_,
         }
         if namespace and "/" not in namespace:
-            req_payload["project"] = namespace
+            req_payload["workspace"] = namespace
 
         data = self._request(
             "POST", path, json={k: v for k, v in req_payload.items() if v is not None}
@@ -3057,7 +3083,7 @@ class MemCell:
             "payload": payload,
         }
         if namespace and "/" not in namespace:
-            req_payload["project"] = namespace
+            req_payload["workspace"] = namespace
 
         data = self._request(
             "POST", path, json={k: v for k, v in req_payload.items() if v is not None}
@@ -3171,7 +3197,7 @@ class AsyncMemCell:
 
         # Mount resource namespaces
         self.memories = _MemoriesNamespaceAsync(self)
-        self.workspaces = _ProjectsNamespaceAsync(self)
+        self.workspaces = _WorkspacesNamespaceAsync(self)
         self.agents = _AgentsNamespaceAsync(self)
         self.collaborators = _CollaboratorsNamespaceAsync(self)
         self.organizations = _OrganizationsNamespaceAsync(self)
@@ -3315,7 +3341,7 @@ class AsyncMemCell:
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
+        enforce: bool | None = None,
         scope: str | None = None,
         scopes: list[str] | None = None,
         my_memory: bool | None = None,
@@ -3328,13 +3354,12 @@ class AsyncMemCell:
         include_metadata: bool | list[str] | None = None,
     ) -> RecallResponse:
         path = _resolve_endpoint(namespace, "recall")
-        effective_type = type or kind
         payload: dict[str, Any] = {
             "query": query,
             "intent": query,
             "subject": subject,
-            "type": effective_type,
-            "kind": effective_type,
+            "type": type,
+            "enforce": enforce,
             "scope": scope,
             "scopes": scopes,
             "my_memory": my_memory,
@@ -3347,7 +3372,7 @@ class AsyncMemCell:
             "include_metadata": include_metadata,
         }
         if namespace and "/" not in namespace:
-            payload["project"] = namespace
+            payload["workspace"] = namespace
 
         data = await self._request(
             "POST", path, json={k: v for k, v in payload.items() if v is not None}
@@ -3368,10 +3393,11 @@ class AsyncMemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -3379,7 +3405,9 @@ class AsyncMemCell:
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
+        active_memory_ids: list[str] | None = None,
         namespace: str | None = None,
         async_: bool | None = None,
     ) -> RememberResponse:
@@ -3392,22 +3420,24 @@ class AsyncMemCell:
         payload: dict[str, Any] = {
             "title": title,
             "context": context,
-            "example": example,
+            "observation": observation,
             "tags": tags,
             "subject": subject,
             "type": type,
+            "enforce": enforce,
             "status": status,
             "confidence": confidence,
             "scope": scope,
             "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
-            "raw": raw,
+            "raw": raw or content,
             "sessionId": session_id,
+            "activeMemoryIds": active_memory_ids,
             "async": async_,
         }
         if namespace and "/" not in namespace:
-            payload["project"] = namespace
+            payload["workspace"] = namespace
 
         data = await self._request(
             "POST", path, json={k: v for k, v in payload.items() if v is not None}
@@ -3419,14 +3449,18 @@ class AsyncMemCell:
                 job_id=data.get("jobId"),
                 status=data.get("status"),
                 created=[],
+                evolved=[],
                 note=data.get("note", "Job accepted for background execution."),
             )
 
         raw_created = data.get("created") or []
         created = [_parse_memory_item(s) for s in raw_created]
+        raw_evolved = data.get("evolved") or []
+        evolved = [_parse_memory_item(s) for s in raw_evolved]
 
         return RememberResponse(
             created=created,
+            evolved=evolved,
             reinforced=data.get("reinforced"),
             superseded=data.get("superseded"),
             note=data.get("note"),
@@ -3460,7 +3494,7 @@ class AsyncMemCell:
             "async": async_,
         }
         if namespace and "/" not in namespace:
-            req_payload["project"] = namespace
+            req_payload["workspace"] = namespace
 
         data = await self._request(
             "POST", path, json={k: v for k, v in req_payload.items() if v is not None}
@@ -3508,7 +3542,7 @@ class AsyncMemCell:
             "payload": payload,
         }
         if namespace and "/" not in namespace:
-            req_payload["project"] = namespace
+            req_payload["workspace"] = namespace
 
         data = await self._request(
             "POST", path, json={k: v for k, v in req_payload.items() if v is not None}

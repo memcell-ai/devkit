@@ -210,7 +210,7 @@ def test_memories_resource_sync():
                 json={
                     "memories": [
                         {
-                            "id": "stmt_1",
+                            "id": "mem_1",
                             "title": "Direct connection pool setup",
                             "type": "directive",
                             "status": "active",
@@ -225,24 +225,24 @@ def test_memories_resource_sync():
                 201,
                 json={
                     "memory": {
-                        "id": "stmt_new",
+                        "id": "mem_new",
                         "title": body["title"],
                         "type": body.get("type", "directive"),
                     }
                 },
             )
-        if u.endswith("/memories/stmt_new") and method == "GET":
+        if u.endswith("/memories/mem_new") and method == "GET":
             return httpx.Response(
                 200,
-                json={"memory": {"id": "stmt_new", "title": "Existing", "type": "directive"}},
+                json={"memory": {"id": "mem_new", "title": "Existing", "type": "directive"}},
             )
-        if u.endswith("/memories/stmt_new") and method == "PATCH":
+        if u.endswith("/memories/mem_new") and method == "PATCH":
             body = json.loads(request.content.decode("utf-8"))
             return httpx.Response(
                 200,
-                json={"memory": {"id": "stmt_new", "title": body["title"], "type": "directive"}},
+                json={"memory": {"id": "mem_new", "title": body["title"], "type": "directive"}},
             )
-        if "/memories/stmt_new" in u and method == "DELETE":
+        if "/memories/mem_new" in u and method == "DELETE":
             all_v = "allVersions=true" in u
             return httpx.Response(
                 200,
@@ -250,7 +250,7 @@ def test_memories_resource_sync():
                     "status": "deleted",
                     "deletedCount": 2 if all_v else 1,
                     "deletedScope": "memory" if all_v else "version",
-                    "nextId": None if all_v else "stmt_v1",
+                    "nextId": None if all_v else "mem_v1",
                     "restoredVersion": None if all_v else 1,
                     "message": "Deleted memory" if all_v else "Deleted latest version of memory",
                 },
@@ -264,8 +264,8 @@ def test_memories_resource_sync():
                     "rootId": "root_1",
                     "totalVersions": 2,
                     "history": [
-                        {"id": "stmt_v2", "rootId": "root_1", "version": 2, "title": "V2"},
-                        {"id": "stmt_v1", "rootId": "root_1", "version": 1, "title": "V1"},
+                        {"id": "mem_v2", "rootId": "root_1", "version": 2, "title": "V2"},
+                        {"id": "mem_v1", "rootId": "root_1", "version": 1, "title": "V1"},
                     ],
                 },
             )
@@ -274,8 +274,10 @@ def test_memories_resource_sync():
                 200,
                 json={
                     "ok": True,
-                    "sourceMemoryId": "stmt_1",
-                    "adopted": [{"projectId": "p2", "memoryId": "stmt_2", "alreadyExisted": False}],
+                    "sourceMemoryId": "mem_1",
+                    "adopted": [
+                        {"workspaceId": "ws_2", "memoryId": "mem_2", "alreadyExisted": False}
+                    ],
                 },
             )
         if u.endswith("/promote") and method == "POST":
@@ -283,7 +285,7 @@ def test_memories_resource_sync():
                 200,
                 json={
                     "promoted": True,
-                    "memory": {"id": "stmt_1", "title": "Promoted", "status": "active"},
+                    "memory": {"id": "mem_1", "title": "Promoted", "status": "active"},
                 },
             )
         return httpx.Response(404)
@@ -293,39 +295,40 @@ def test_memories_resource_sync():
 
     listed = memcell.memories.list("acme/backend", page=2, per_page=15, type="directive")
     assert len(listed.items) == 1
-    assert listed.items[0].id == "stmt_1"
+    assert listed.items[0].id == "mem_1"
     assert listed.pagination.total == 25
 
     created = memcell.memories.create("acme/backend", title="Memory A", type="directive")
-    assert created.id == "stmt_new"
+    assert created.id == "mem_new"
 
-    fetched = memcell.memories.get("acme/backend", "stmt_new")
+    fetched = memcell.memories.get("acme/backend", "mem_new")
     assert fetched.title == "Existing"
 
-    updated = memcell.memories.update("acme/backend", "stmt_new", title="Updated Title")
+    updated = memcell.memories.update("acme/backend", "mem_new", title="Updated Title")
     assert updated.title == "Updated Title"
 
-    del_res = memcell.memories.delete("acme/backend", "stmt_new")
+    del_res = memcell.memories.delete("acme/backend", "mem_new")
     assert del_res.status == "deleted"
     assert del_res.deleted_count == 1
     assert del_res.deleted_scope == "version"
-    assert del_res.next_id == "stmt_v1"
+    assert del_res.next_id == "mem_v1"
     assert del_res.restored_version == 1
 
-    del_all = memcell.memories.delete("acme/backend", "stmt_new", all_versions=True)
+    del_all = memcell.memories.delete("acme/backend", "mem_new", all_versions=True)
     assert del_all.deleted_count == 2
     assert del_all.deleted_scope == "memory"
 
-    star_res = memcell.memories.star("acme/backend", "stmt_1", starred=True)
+    star_res = memcell.memories.star("acme/backend", "mem_1", starred=True)
     assert star_res.starred is True
 
-    hist_res = memcell.memories.history("acme/backend", "stmt_1")
+    hist_res = memcell.memories.history("acme/backend", "mem_1")
     assert len(hist_res.history) == 2
 
-    adopt_res = memcell.memories.adopt("acme/backend", "stmt_1", ["p2"])
-    assert adopt_res.adopted[0].memory_id == "stmt_2"
+    adopt_res = memcell.memories.adopt("acme/backend", "mem_1", ["ws_2"])
+    assert adopt_res.adopted[0].workspace_id == "ws_2"
+    assert adopt_res.adopted[0].memory_id == "mem_2"
 
-    promote_res = memcell.memories.promote("acme/backend", "stmt_1", to_scope="common")
+    promote_res = memcell.memories.promote("acme/backend", "mem_1", to_scope="common")
     assert promote_res.promoted is True
 
 
@@ -340,7 +343,7 @@ async def test_memories_resource_async():
                 json={
                     "memories": [
                         {
-                            "id": "stmt_1",
+                            "id": "mem_1",
                             "title": "Direct connection pool setup",
                             "type": "directive",
                             "status": "active",
@@ -352,16 +355,16 @@ async def test_memories_resource_async():
         if u.endswith("/memories") and method == "POST":
             return httpx.Response(
                 201,
-                json={"memory": {"id": "stmt_async", "title": "Async Title", "type": "fact"}},
+                json={"memory": {"id": "mem_async", "title": "Async Title", "type": "fact"}},
             )
-        if "/memories/stmt_async" in u and method == "DELETE":
+        if "/memories/mem_async" in u and method == "DELETE":
             return httpx.Response(
                 200,
                 json={
                     "status": "deleted",
                     "deletedCount": 1,
                     "deletedScope": "version",
-                    "nextId": "stmt_v0",
+                    "nextId": "mem_v0",
                     "restoredVersion": 1,
                     "message": "Deleted latest version of memory",
                 },
@@ -372,18 +375,18 @@ async def test_memories_resource_async():
     async with AsyncMemCell(api_key="mc_key", http_client=mock_client) as memcell:
         listed = await memcell.memories.list("acme/backend")
         assert len(listed.items) == 1
-        assert listed.items[0].id == "stmt_1"
+        assert listed.items[0].id == "mem_1"
 
         created = await memcell.memories.create("acme/backend", title="Async Title", type="fact")
-        assert created.id == "stmt_async"
+        assert created.id == "mem_async"
 
-        del_res = await memcell.memories.delete("acme/backend", "stmt_async")
+        del_res = await memcell.memories.delete("acme/backend", "mem_async")
         assert del_res.status == "deleted"
         assert del_res.deleted_scope == "version"
         assert del_res.restored_version == 1
 
 
-def test_projects_resource_sync():
+def test_workspaces_resource_sync():
     def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         method = request.method
@@ -392,7 +395,7 @@ def test_projects_resource_sync():
             return httpx.Response(
                 200,
                 json={
-                    "projects": [
+                    "workspaces": [
                         {"id": "p1", "name": "Core", "slug": "core", "visibility": "public"}
                     ],
                     "pagination": {"page": 1, "perPage": 30, "total": 1, "hasMore": False},
@@ -403,7 +406,7 @@ def test_projects_resource_sync():
                 200,
                 json={
                     "owner": "acme",
-                    "projects": [
+                    "workspaces": [
                         {"id": "p2", "name": "Backend", "slug": "backend", "visibility": "private"}
                     ],
                     "pagination": {"page": 1, "perPage": 10, "total": 1, "hasMore": False},
@@ -414,10 +417,10 @@ def test_projects_resource_sync():
                 201,
                 json={
                     "ok": True,
-                    "project": {
+                    "workspace": {
                         "id": "p_new",
-                        "name": "New Project",
-                        "slug": "new-project",
+                        "name": "New Workspace",
+                        "slug": "new-workspace",
                         "visibility": "private",
                     },
                 },
@@ -426,7 +429,7 @@ def test_projects_resource_sync():
             return httpx.Response(
                 200,
                 json={
-                    "project": {
+                    "workspace": {
                         "id": "p1",
                         "name": "Backend",
                         "slug": "backend",
@@ -438,7 +441,7 @@ def test_projects_resource_sync():
             return httpx.Response(
                 200,
                 json={
-                    "project": {
+                    "workspace": {
                         "id": "p1",
                         "name": "Backend V2",
                         "slug": "backend",
@@ -455,13 +458,13 @@ def test_projects_resource_sync():
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
-    caller_projects = memcell.workspaces.list(page=1, per_page=30)
-    assert caller_projects.items[0].slug == "core"
+    caller_workspaces = memcell.workspaces.list(page=1, per_page=30)
+    assert caller_workspaces.items[0].slug == "core"
 
-    owner_projects = memcell.workspaces.list_for_owner("acme", page=1, per_page=10)
-    assert owner_projects.items[0].slug == "backend"
+    owner_workspaces = memcell.workspaces.list_for_owner("acme", page=1, per_page=10)
+    assert owner_workspaces.items[0].slug == "backend"
 
-    created = memcell.workspaces.create(name="New Project")
+    created = memcell.workspaces.create(name="New Workspace")
     assert created.id == "p_new"
 
     got = memcell.workspaces.get("acme/backend")
@@ -475,14 +478,14 @@ def test_projects_resource_sync():
 
 
 @pytest.mark.asyncio
-async def test_projects_resource_async():
+async def test_workspaces_resource_async():
     def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         if "/api/v1/workspaces" in u:
             return httpx.Response(
                 200,
                 json={
-                    "projects": [
+                    "workspaces": [
                         {"id": "p1", "name": "Core", "slug": "core", "visibility": "public"}
                     ],
                     "pagination": {"page": 1, "perPage": 30, "total": 1, "hasMore": False},

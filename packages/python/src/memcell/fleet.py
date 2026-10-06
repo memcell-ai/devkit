@@ -16,7 +16,7 @@ def _build_fleet_query(
     scope: str | None = None,
     framework: str | None = None,
     team_id: str | None = None,
-    project_id: str | None = None,
+    workspace_id: str | None = None,
     page: int | None = None,
     per_page: int | None = None,
 ) -> str:
@@ -31,8 +31,8 @@ def _build_fleet_query(
         params["framework"] = framework
     if team_id:
         params["teamId"] = team_id
-    if project_id:
-        params["projectId"] = project_id
+    if workspace_id:
+        params["workspaceId"] = workspace_id
     if page is not None:
         params["page"] = page
     if per_page is not None:
@@ -56,7 +56,7 @@ class OrganizationFleetNamespace:
         scope: str | None = None,
         framework: str | None = None,
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         page: int | None = None,
         per_page: int | None = None,
     ) -> list[FleetAgent]:
@@ -66,7 +66,7 @@ class OrganizationFleetNamespace:
             scope=scope,
             framework=framework,
             team_id=team_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
             page=page,
             per_page=per_page,
         )
@@ -87,7 +87,7 @@ class OrganizationFleetNamespace:
         model: str | None = None,
         description: str | None = None,
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         generate_key: bool = True,
     ) -> CreateFleetAgentResult:
         payload: dict[str, Any] = {
@@ -105,8 +105,8 @@ class OrganizationFleetNamespace:
             payload["description"] = description
         if team_id:
             payload["teamId"] = team_id
-        if project_id:
-            payload["projectId"] = project_id
+        if workspace_id:
+            payload["workspaceId"] = workspace_id
 
         data = self._client._request(
             "POST",
@@ -136,20 +136,25 @@ class OrganizationFleetNamespace:
         self,
         org_slug: str,
         agent_id: str,
-        project_id: str,
+        workspace_id: str,
         permission: str = "read",
     ) -> dict[str, Any]:
         return self._client._request(
             "POST",
             f"/api/v1/organizations/{org_slug}/fleet/{agent_id}/grant",
-            json={"projectId": project_id, "permission": permission},
+            json={"workspaceId": workspace_id, "permission": permission},
         )
 
-    def revoke(self, org_slug: str, agent_id: str, project_id: str) -> dict[str, Any]:
+    def revoke(
+        self,
+        org_slug: str,
+        agent_id: str,
+        workspace_id: str,
+    ) -> dict[str, Any]:
         return self._client._request(
             "DELETE",
             f"/api/v1/organizations/{org_slug}/fleet/{agent_id}/grant",
-            json={"projectId": project_id},
+            json={"workspaceId": workspace_id},
         )
 
     def delete(self, org_slug: str, agent_id: str) -> dict[str, Any]:
@@ -173,7 +178,7 @@ class AsyncOrganizationFleetNamespace:
         scope: str | None = None,
         framework: str | None = None,
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         page: int | None = None,
         per_page: int | None = None,
     ) -> list[FleetAgent]:
@@ -183,7 +188,7 @@ class AsyncOrganizationFleetNamespace:
             scope=scope,
             framework=framework,
             team_id=team_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
             page=page,
             per_page=per_page,
         )
@@ -206,7 +211,7 @@ class AsyncOrganizationFleetNamespace:
         model: str | None = None,
         description: str | None = None,
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
         generate_key: bool = True,
     ) -> CreateFleetAgentResult:
         payload: dict[str, Any] = {
@@ -224,8 +229,8 @@ class AsyncOrganizationFleetNamespace:
             payload["description"] = description
         if team_id:
             payload["teamId"] = team_id
-        if project_id:
-            payload["projectId"] = project_id
+        if workspace_id:
+            payload["workspaceId"] = workspace_id
 
         data = await self._client._request(
             "POST",
@@ -253,20 +258,25 @@ class AsyncOrganizationFleetNamespace:
         self,
         org_slug: str,
         agent_id: str,
-        project_id: str,
+        workspace_id: str,
         permission: str = "read",
     ) -> dict[str, Any]:
         return await self._client._request(
             "POST",
             f"/api/v1/organizations/{org_slug}/fleet/{agent_id}/grant",
-            json={"projectId": project_id, "permission": permission},
+            json={"workspaceId": workspace_id, "permission": permission},
         )
 
-    async def revoke(self, org_slug: str, agent_id: str, project_id: str) -> dict[str, Any]:
+    async def revoke(
+        self,
+        org_slug: str,
+        agent_id: str,
+        workspace_id: str,
+    ) -> dict[str, Any]:
         return await self._client._request(
             "DELETE",
             f"/api/v1/organizations/{org_slug}/fleet/{agent_id}/grant",
-            json={"projectId": project_id},
+            json={"workspaceId": workspace_id},
         )
 
     async def delete(self, org_slug: str, agent_id: str) -> dict[str, Any]:
@@ -296,15 +306,31 @@ class ScopedOrganizationFleetSync:
     def resume(self, agent_id: str) -> FleetAgent:
         return self._fleet.resume(self.org_slug, agent_id)
 
-    def grant(self, agent_id: str, project_id: str, permission: str = "read") -> dict[str, Any]:
-        return self._fleet.grant(self.org_slug, agent_id, project_id, permission)
+    def grant(
+        self,
+        agent_id: str,
+        workspace_id: str,
+        permission: str = "read",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        return self._fleet.grant(
+            self.org_slug, agent_id, workspace_id, permission=permission, **kwargs
+        )
 
-    grant_project = grant
+    def grant_workspace(
+        self,
+        agent_id: str,
+        workspace_id: str,
+        permission: str = "read",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        return self.grant(agent_id, workspace_id, permission=permission, **kwargs)
 
-    def revoke(self, agent_id: str, project_id: str) -> dict[str, Any]:
-        return self._fleet.revoke(self.org_slug, agent_id, project_id)
+    def revoke(self, agent_id: str, workspace_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._fleet.revoke(self.org_slug, agent_id, workspace_id, **kwargs)
 
-    revoke_project = revoke
+    def revoke_workspace(self, agent_id: str, workspace_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self.revoke(agent_id, workspace_id, **kwargs)
 
     def delete(self, agent_id: str) -> dict[str, Any]:
         return self._fleet.delete(self.org_slug, agent_id)
@@ -331,16 +357,32 @@ class ScopedOrganizationFleetAsync:
         return await self._fleet.resume(self.org_slug, agent_id)
 
     async def grant(
-        self, agent_id: str, project_id: str, permission: str = "read"
+        self,
+        agent_id: str,
+        workspace_id: str,
+        permission: str = "read",
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        return await self._fleet.grant(self.org_slug, agent_id, project_id, permission)
+        return await self._fleet.grant(
+            self.org_slug, agent_id, workspace_id, permission=permission, **kwargs
+        )
 
-    grant_project = grant
+    async def grant_workspace(
+        self,
+        agent_id: str,
+        workspace_id: str,
+        permission: str = "read",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        return await self.grant(agent_id, workspace_id, permission=permission, **kwargs)
 
-    async def revoke(self, agent_id: str, project_id: str) -> dict[str, Any]:
-        return await self._fleet.revoke(self.org_slug, agent_id, project_id)
+    async def revoke(self, agent_id: str, workspace_id: str, **kwargs: Any) -> dict[str, Any]:
+        return await self._fleet.revoke(self.org_slug, agent_id, workspace_id, **kwargs)
 
-    revoke_project = revoke
+    async def revoke_workspace(
+        self, agent_id: str, workspace_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self.revoke(agent_id, workspace_id, **kwargs)
 
     async def delete(self, agent_id: str) -> dict[str, Any]:
         return await self._fleet.delete(self.org_slug, agent_id)

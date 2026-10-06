@@ -81,7 +81,7 @@ export class ScopedMemCell {
       this.client.memories.history(this.namespace, memoryId),
     adopt: (
       memoryId: string,
-      params: { targetProjectIds?: string[]; targetWorkspaceIds?: string[] },
+      params: { targetWorkspaceIds?: string[] },
     ): Promise<AdoptMemoryResponse> =>
       this.client.memories.adopt(this.namespace, memoryId, params),
     promote: (
@@ -151,7 +151,7 @@ export class ScopedMemCell {
   };
 
   /**
-   * Scopes registered within this project namespace.
+   * Scopes registered within this workspace namespace.
    */
   readonly scopes = {
     list: (): Promise<ScopeItem[]> => this.client.scopes.list(this.namespace),
@@ -330,7 +330,7 @@ export class ScopedMemCell {
   }
 
   /**
-   * Triggers an asynchronous consolidation sweep in this project space (ADR 0075).
+   * Triggers an asynchronous consolidation sweep in this workspace (ADR 0075).
    */
   async consolidateSweep(
     params?: ConsolidateSweepParams,
@@ -340,4 +340,3 @@ export class ScopedMemCell {
 }
 
 export { ScopedMemCell as ScopedWorkspace };
-export { ScopedMemCell as ScopedProjectNamespace };

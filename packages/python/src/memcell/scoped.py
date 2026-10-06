@@ -73,11 +73,16 @@ class _ScopedMemoriesSync:
     def history(self, memory_id: str) -> MemoryHistoryResponse:
         return self._client.memories.history(self._namespace, memory_id)
 
-    def adopt(self, memory_id: str, target_project_ids: list[str]) -> AdoptMemoryResponse:
-        return self._client.memories.adopt(self._namespace, memory_id, target_project_ids)
+    def adopt(
+        self,
+        memory_id: str,
+        target_workspace_ids: list[str] | None = None,
+    ) -> AdoptMemoryResponse:
+        targets = target_workspace_ids or []
+        return self._client.memories.adopt(self._namespace, memory_id, targets)
 
     def promote(
-        self, memory_id: str, to_scope: str = "project", reason: str | None = None
+        self, memory_id: str, to_scope: str = "workspace", reason: str | None = None
     ) -> PromoteMemoryResponse:
         return self._client.memories.promote(
             self._namespace, memory_id, to_scope=to_scope, reason=reason
@@ -101,8 +106,8 @@ class _ScopedMemoriesSync:
     def delete_relation(self, memory_id: str, relation_id: str) -> None:
         self._client.memories.delete_relation(self._namespace, memory_id, relation_id)
 
-    def list_project_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
-        return self._client.memories.list_project_relations(self._namespace, **kwargs)
+    def list_workspace_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+        return self._client.memories.list_workspace_relations(self._namespace, **kwargs)
 
     @property
     def relations(self) -> Any:
@@ -127,8 +132,8 @@ class _ScopedMemoriesSync:
             def delete(self, memory_id: str, relation_id: str) -> None:
                 scoped.delete_relation(memory_id, relation_id)
 
-            def list_project(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
-                return scoped.list_project_relations(**kwargs)
+            def list_workspace(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+                return scoped.list_workspace_relations(**kwargs)
 
         return _ScopedRelationsProxy()
 
@@ -248,11 +253,16 @@ class _ScopedMemoriesAsync:
     async def history(self, memory_id: str) -> MemoryHistoryResponse:
         return await self._client.memories.history(self._namespace, memory_id)
 
-    async def adopt(self, memory_id: str, target_project_ids: list[str]) -> AdoptMemoryResponse:
-        return await self._client.memories.adopt(self._namespace, memory_id, target_project_ids)
+    async def adopt(
+        self,
+        memory_id: str,
+        target_workspace_ids: list[str] | None = None,
+    ) -> AdoptMemoryResponse:
+        targets = target_workspace_ids or []
+        return await self._client.memories.adopt(self._namespace, memory_id, targets)
 
     async def promote(
-        self, memory_id: str, to_scope: str = "project", reason: str | None = None
+        self, memory_id: str, to_scope: str = "workspace", reason: str | None = None
     ) -> PromoteMemoryResponse:
         return await self._client.memories.promote(
             self._namespace, memory_id, to_scope=to_scope, reason=reason
@@ -276,8 +286,8 @@ class _ScopedMemoriesAsync:
     async def delete_relation(self, memory_id: str, relation_id: str) -> None:
         await self._client.memories.delete_relation(self._namespace, memory_id, relation_id)
 
-    async def list_project_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
-        return await self._client.memories.list_project_relations(self._namespace, **kwargs)
+    async def list_workspace_relations(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+        return await self._client.memories.list_workspace_relations(self._namespace, **kwargs)
 
     @property
     def relations(self) -> Any:
@@ -302,8 +312,8 @@ class _ScopedMemoriesAsync:
             async def delete(self, memory_id: str, relation_id: str) -> None:
                 await scoped.delete_relation(memory_id, relation_id)
 
-            async def list_project(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
-                return await scoped.list_project_relations(**kwargs)
+            async def list_workspace(self, **kwargs: Any) -> PaginatedResult[MemoryRelationItem]:
+                return await scoped.list_workspace_relations(**kwargs)
 
         return _AsyncScopedRelationsProxy()
 
@@ -393,7 +403,7 @@ class _ScopedPromotionsAsync:
 
 
 class ScopedMemCell:
-    """Synchronous memory handle scoped to a specific project namespace and default subject."""
+    """Synchronous memory handle scoped to a specific workspace namespace and default subject."""
 
     def __init__(
         self,
@@ -448,10 +458,11 @@ class ScopedMemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -459,16 +470,18 @@ class ScopedMemCell:
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
         async_: bool | None = None,
     ) -> RememberResponse:
         return self._client.remember(
             title=title,
             context=context,
-            example=example,
+            observation=observation,
             tags=tags,
             subject=subject or self.default_subject,
             type=type,
+            enforce=enforce,
             status=status,
             confidence=confidence,
             scope=scope,
@@ -476,6 +489,7 @@ class ScopedMemCell:
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,
+            content=content,
             session_id=session_id,
             namespace=self.namespace,
             async_=async_,
@@ -591,7 +605,7 @@ class ScopedMemCell:
         min_cluster_size: int | None = None,
         max_cluster_size: int | None = None,
     ) -> ConsolidateSweepResponse:
-        """Trigger an asynchronous consolidation sweep in this project namespace (ADR 0075)."""
+        """Trigger an asynchronous consolidation sweep in this workspace namespace (ADR 0075)."""
         return self._client.sweep.consolidate(
             self.namespace,
             min_similarity=min_similarity,
@@ -601,7 +615,7 @@ class ScopedMemCell:
 
 
 class AsyncScopedMemCell:
-    """Asynchronous memory handle scoped to a specific project namespace and default subject."""
+    """Asynchronous memory handle scoped to a specific workspace namespace and default subject."""
 
     def __init__(
         self,
@@ -656,10 +670,11 @@ class AsyncScopedMemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
@@ -667,16 +682,18 @@ class AsyncScopedMemCell:
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
         async_: bool | None = None,
     ) -> RememberResponse:
         return await self._client.remember(
             title=title,
             context=context,
-            example=example,
+            observation=observation,
             tags=tags,
             subject=subject or self.default_subject,
             type=type,
+            enforce=enforce,
             status=status,
             confidence=confidence,
             scope=scope,
@@ -684,6 +701,7 @@ class AsyncScopedMemCell:
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,
+            content=content,
             session_id=session_id,
             namespace=self.namespace,
             async_=async_,
@@ -803,7 +821,7 @@ class AsyncScopedMemCell:
         min_cluster_size: int | None = None,
         max_cluster_size: int | None = None,
     ) -> ConsolidateSweepResponse:
-        """Trigger an asynchronous consolidation sweep in this project namespace (ADR 0075)."""
+        """Trigger an asynchronous consolidation sweep in this workspace namespace (ADR 0075)."""
         return await self._client.sweep.consolidate(
             self.namespace,
             min_similarity=min_similarity,

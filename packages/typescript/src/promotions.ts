@@ -6,16 +6,19 @@ import type {
   MemoryPromotionRequest,
 } from "./types.js";
 
-function parseNamespace(namespace: string): { owner: string; project: string } {
+function parseNamespace(namespace: string): {
+  owner: string;
+  workspace: string;
+} {
   const parts = namespace.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error(
-      `Invalid namespace "${namespace}". Expected format "owner/project" (e.g. "acme/backend").`,
+      `Invalid namespace "${namespace}". Expected format "owner/workspace" (e.g. "acme/backend").`,
     );
   }
   return {
     owner: encodeURIComponent(parts[0]),
-    project: encodeURIComponent(parts[1]),
+    workspace: encodeURIComponent(parts[1]),
   };
 }
 
@@ -29,7 +32,7 @@ export class PromotionsNamespace {
     namespace: string,
     params?: ListPromotionsParams,
   ): Promise<PaginatedResult<MemoryPromotionRequest>> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.memoryId) q.set("memoryId", params.memoryId);
@@ -43,7 +46,7 @@ export class PromotionsNamespace {
     const json = await this.client.request<{
       promotionRequests: MemoryPromotionRequest[];
       total: number;
-    }>(`/api/v1/${owner}/${project}/promotions${query}`, {
+    }>(`/api/v1/${owner}/${workspace}/promotions${query}`, {
       method: "GET",
     });
 
@@ -67,9 +70,9 @@ export class PromotionsNamespace {
     promotionId: string,
     params?: { reason?: string },
   ): Promise<{ approved: boolean; memory: MemoryItem }> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<any>(
-      `/api/v1/${owner}/${project}/promotions/${encodeURIComponent(promotionId)}/approve`,
+      `/api/v1/${owner}/${workspace}/promotions/${encodeURIComponent(promotionId)}/approve`,
       {
         method: "POST",
         body: JSON.stringify(params || {}),
@@ -89,9 +92,9 @@ export class PromotionsNamespace {
     promotionId: string,
     params?: { reason?: string },
   ): Promise<{ rejected: boolean }> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     return await this.client.request<{ rejected: boolean }>(
-      `/api/v1/${owner}/${project}/promotions/${encodeURIComponent(promotionId)}/reject`,
+      `/api/v1/${owner}/${workspace}/promotions/${encodeURIComponent(promotionId)}/reject`,
       {
         method: "POST",
         body: JSON.stringify(params || {}),

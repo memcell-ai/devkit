@@ -1,16 +1,19 @@
 import type { MemCell } from "./client.js";
 import type { ScopeItem } from "./types.js";
 
-function parseNamespace(namespace: string): { owner: string; project: string } {
+function parseNamespace(namespace: string): {
+  owner: string;
+  workspace: string;
+} {
   const parts = namespace.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error(
-      `Invalid namespace "${namespace}". Expected format "owner/project" (e.g. "acme/backend").`,
+      `Invalid namespace "${namespace}". Expected format "owner/workspace" (e.g. "acme/backend").`,
     );
   }
   return {
     owner: encodeURIComponent(parts[0]),
-    project: encodeURIComponent(parts[1]),
+    workspace: encodeURIComponent(parts[1]),
   };
 }
 
@@ -24,8 +27,8 @@ export class ScopesNamespace {
   async list(namespace?: string): Promise<ScopeItem[]> {
     const path = namespace
       ? (() => {
-          const { owner, project } = parseNamespace(namespace);
-          return `/api/v1/${owner}/${project}/scopes`;
+          const { owner, workspace } = parseNamespace(namespace);
+          return `/api/v1/${owner}/${workspace}/scopes`;
         })()
       : "/api/v1/scopes";
 

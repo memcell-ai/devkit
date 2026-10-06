@@ -5,7 +5,7 @@ import type {
   FleetAgent,
   FleetAgentDetail,
   ListFleetAgentsParams,
-  AgentProjectGrant,
+  AgentWorkspaceGrant,
 } from "./types.js";
 
 function buildFleetQuery(params?: ListFleetAgentsParams): string {
@@ -18,7 +18,7 @@ function buildFleetQuery(params?: ListFleetAgentsParams): string {
   if (params.scope) q.set("scope", params.scope);
   if (params.framework) q.set("framework", params.framework);
   if (params.teamId) q.set("teamId", params.teamId);
-  if (params.workspaceId) q.set("projectId", params.workspaceId);
+  if (params.workspaceId) q.set("workspaceId", params.workspaceId);
 
   const str = q.toString();
   return str ? `?${str}` : "";
@@ -42,7 +42,7 @@ export class OrganizationFleetNamespace {
   }
 
   /**
-   * Fetches details, active credentials, and project grants of a fleet agent.
+   * Fetches details, active credentials, and workspace grants of a fleet agent.
    */
   async get(orgSlug: string, agentId: string): Promise<FleetAgentDetail> {
     return await this.client.request<FleetAgentDetail>(
@@ -102,38 +102,38 @@ export class OrganizationFleetNamespace {
   }
 
   /**
-   * Grants an agent cross-project access to a designated project.
+   * Grants an agent cross-workspace access to a designated workspace.
    */
   async grant(
     orgSlug: string,
     agentId: string,
-    projectId: string,
+    workspaceId: string,
     permission: "read" | "write" | "admin" = "read",
-  ): Promise<{ ok: boolean; grant: AgentProjectGrant }> {
-    return await this.client.request<{ ok: boolean; grant: AgentProjectGrant }>(
-      `/api/v1/organizations/${orgSlug}/fleet/${agentId}/grant`,
-      {
-        method: "POST",
-        body: JSON.stringify({ projectId, permission }),
-      },
-    );
+  ): Promise<{ ok: boolean; grant: AgentWorkspaceGrant }> {
+    return await this.client.request<{
+      ok: boolean;
+      grant: AgentWorkspaceGrant;
+    }>(`/api/v1/organizations/${orgSlug}/fleet/${agentId}/grant`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, permission }),
+    });
   }
 
   /**
-   * Revokes an agent's access to a project.
+   * Revokes an agent's access to a workspace.
    */
   async revoke(
     orgSlug: string,
     agentId: string,
-    projectId: string,
-  ): Promise<{ ok: boolean; agentId: string; projectId: string }> {
+    workspaceId: string,
+  ): Promise<{ ok: boolean; agentId: string; workspaceId: string }> {
     return await this.client.request<{
       ok: boolean;
       agentId: string;
-      projectId: string;
+      workspaceId: string;
     }>(`/api/v1/organizations/${orgSlug}/fleet/${agentId}/grant`, {
       method: "DELETE",
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ workspaceId }),
     });
   }
 
@@ -179,14 +179,14 @@ export class ScopedOrganizationFleet {
 
   async grant(
     agentId: string,
-    projectId: string,
+    workspaceId: string,
     permission: "read" | "write" | "admin" = "read",
   ) {
-    return this.fleet.grant(this.orgSlug, agentId, projectId, permission);
+    return this.fleet.grant(this.orgSlug, agentId, workspaceId, permission);
   }
 
-  async revoke(agentId: string, projectId: string) {
-    return this.fleet.revoke(this.orgSlug, agentId, projectId);
+  async revoke(agentId: string, workspaceId: string) {
+    return this.fleet.revoke(this.orgSlug, agentId, workspaceId);
   }
 
   async delete(agentId: string) {

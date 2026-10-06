@@ -122,7 +122,8 @@ describe("MemCell SDK (cli package export)", () => {
                 {
                   id: "st_1",
                   title: "Never skip verification",
-                  type: "guard",
+                  type: "directive",
+                  enforce: true,
                   confidence: 0.95,
                 },
               ],
@@ -143,7 +144,7 @@ describe("MemCell SDK (cli package export)", () => {
       const res1 = await memcell.recall({
         namespace: "org/repo",
         query: "deploy procedure",
-        type: ["guard", "directive"],
+        type: ["directive", "fact"],
         minConfidence: 0.8,
       });
 
@@ -185,7 +186,8 @@ describe("MemCell SDK (cli package export)", () => {
                   {
                     id: "st_1",
                     title: "Validate env before deploy",
-                    type: "guard",
+                    type: "directive",
+                    enforce: true,
                     isGuard: true,
                   },
                 ],
@@ -807,7 +809,7 @@ describe("MemCell SDK (cli package export)", () => {
                   sourceMemoryId: "stmt_1",
                   adopted: [
                     {
-                      projectId: "p2",
+                      workspaceId: "p2",
                       memoryId: "stmt_2",
                       alreadyExisted: false,
                     },
@@ -920,17 +922,17 @@ describe("MemCell SDK (cli package export)", () => {
           apiKey: "mc_key",
           fetch: mockFetch as any,
         });
-        const callerProjects = await memcell.workspaces.list({
+        const callerWorkspaces = await memcell.workspaces.list({
           page: 1,
           perPage: 30,
         });
-        expect(callerProjects.items[0]!.slug).toBe("core");
+        expect(callerWorkspaces.items[0]!.slug).toBe("core");
 
-        const ownerProjects = await memcell.workspaces.listForOwner("acme", {
+        const ownerWorkspaces = await memcell.workspaces.listForOwner("acme", {
           page: 1,
           perPage: 10,
         });
-        expect(ownerProjects.items[0]!.slug).toBe("backend");
+        expect(ownerWorkspaces.items[0]!.slug).toBe("backend");
       });
 
       it("creates, gets, updates, deletes, and transfers workspaces", async () => {
@@ -943,10 +945,10 @@ describe("MemCell SDK (cli package export)", () => {
               return new Response(
                 JSON.stringify({
                   ok: true,
-                  project: {
+                  workspace: {
                     id: "p_new",
-                    name: "New Project",
-                    slug: "new-project",
+                    name: "New Workspace",
+                    slug: "new-workspace",
                     visibility: "private",
                   },
                 }),
@@ -959,7 +961,7 @@ describe("MemCell SDK (cli package export)", () => {
             if (u.endsWith("/api/v1/acme/backend") && method === "GET") {
               return new Response(
                 JSON.stringify({
-                  project: {
+                  workspace: {
                     id: "p1",
                     name: "Backend",
                     slug: "backend",
@@ -975,7 +977,7 @@ describe("MemCell SDK (cli package export)", () => {
             if (u.endsWith("/api/v1/acme/backend") && method === "PATCH") {
               return new Response(
                 JSON.stringify({
-                  project: {
+                  workspace: {
                     id: "p1",
                     name: "Backend V2",
                     slug: "backend",
@@ -1012,7 +1014,7 @@ describe("MemCell SDK (cli package export)", () => {
           fetch: mockFetch as any,
         });
         const created = await memcell.workspaces.create({
-          name: "New Project",
+          name: "New Workspace",
         });
         expect(created.id).toBe("p_new");
 

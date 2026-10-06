@@ -166,7 +166,7 @@ export type {
   CreateFleetAgentParams,
   CreateFleetAgentResult,
   FleetAgentDetail,
-  AgentProjectGrant,
+  AgentWorkspaceGrant,
 
   // Audit & SIEM
   AuditEvent,

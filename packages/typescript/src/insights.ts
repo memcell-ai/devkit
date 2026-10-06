@@ -6,7 +6,7 @@ function buildInsightsQuery(params?: GetInsightsParams): string {
   const q = new URLSearchParams();
   if (params.timeframe) q.set("timeframe", params.timeframe);
   if (params.teamId) q.set("teamId", params.teamId);
-  if (params.workspaceId) q.set("projectId", params.workspaceId);
+  if (params.workspaceId) q.set("workspaceId", params.workspaceId);
 
   const str = q.toString();
   return str ? `?${str}` : "";

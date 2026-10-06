@@ -287,7 +287,7 @@ export class OrganizationMemCell {
   }
 
   /**
-   * Creates a scoped handle bound to a specific project within this organization.
+   * Creates a scoped handle bound to a specific workspace within this organization.
    *
    * @example
    * ```ts
@@ -295,18 +295,18 @@ export class OrganizationMemCell {
    * const context = await acmeDevops.recall({ query: "deployment checklists" });
    * ```
    */
-  scope(projectSlug: string, options?: ScopeOptions): ScopedMemCell {
-    const cleanProject = projectSlug.startsWith(`${this.orgSlug}/`)
-      ? projectSlug
-      : `${this.orgSlug}/${projectSlug}`;
-    return this.memcell.scope(cleanProject, options);
+  scope(workspaceSlug: string, options?: ScopeOptions): ScopedMemCell {
+    const cleanWorkspace = workspaceSlug.startsWith(`${this.orgSlug}/`)
+      ? workspaceSlug
+      : `${this.orgSlug}/${workspaceSlug}`;
+    return this.memcell.scope(cleanWorkspace, options);
   }
 
   /**
-   * Semantic alias for `scope(projectSlug, options)`.
+   * Scopes to a specific workspace within this organization.
    */
-  forProject(projectSlug: string, options?: ScopeOptions): ScopedMemCell {
-    return this.scope(projectSlug, options);
+  forWorkspace(workspaceSlug: string, options?: ScopeOptions): ScopedMemCell {
+    return this.scope(workspaceSlug, options);
   }
 
   /**

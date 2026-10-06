@@ -19,7 +19,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
                   id: "promo-1",
                   memoryId: "stmt-1",
                   fromScope: "user",
-                  toScope: "project",
+                  toScope: "workspace",
                   status: "pending",
                   requesterId: "usr-alice",
                   requesterReason: "Ready for team baseline",
@@ -49,7 +49,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
     expect(res.items).toHaveLength(1);
     expect(res.items[0]!.id).toBe("promo-1");
     expect(res.items[0]!.fromScope).toBe("user");
-    expect(res.items[0]!.toScope).toBe("project");
+    expect(res.items[0]!.toScope).toBe("workspace");
     expect(res.pagination.total).toBe(1);
   });
 
@@ -70,7 +70,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
               memory: {
                 id: "stmt-promoted-1",
                 title: "Always use TLS 1.3",
-                scope: "project",
+                scope: "workspace",
                 requiredRoles: ["security-lead"],
               },
             }),
@@ -101,7 +101,7 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
       reason: "Verified by lead reviewer",
     });
     expect(approved.approved).toBe(true);
-    expect(approved.memory.scope).toBe("project");
+    expect(approved.memory.scope).toBe("workspace");
 
     const rejected = await scoped.promotions.reject("promo-2", {
       reason: "Does not meet team guidelines",
@@ -136,11 +136,11 @@ describe("4-Tier Scopes & Epistemic Promotions API", () => {
     const res = await memcell.recall({
       namespace: "acme/backend",
       query: "database connection",
-      scopes: ["organization", "project"],
+      scopes: ["organization", "workspace"],
       myMemory: true,
     });
 
-    expect(capturedBody.scopes).toEqual(["organization", "project"]);
+    expect(capturedBody.scopes).toEqual(["organization", "workspace"]);
     expect(capturedBody.my_memory).toBe(true);
     expect(res.memories[0]!.scope).toBe("organization");
     expect(res.memories[0]!.requiredRoles).toEqual(["admin"]);

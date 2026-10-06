@@ -35,7 +35,7 @@ def test_fleet_and_governance_sync():
                         "health": "healthy",
                         "organizationId": "org_1",
                         "activeKeyCount": 1,
-                        "projectGrantCount": 0,
+                        "workspaceGrantCount": 0,
                         "createdAt": "2026-10-02T12:00:00Z",
                     },
                     "key": {
@@ -61,7 +61,7 @@ def test_fleet_and_governance_sync():
                             "health": "healthy",
                             "organizationId": "org_1",
                             "activeKeyCount": 1,
-                            "projectGrantCount": 0,
+                            "workspaceGrantCount": 0,
                             "createdAt": "2026-10-02T12:00:00Z",
                         }
                     ]
@@ -126,7 +126,7 @@ def test_fleet_and_governance_sync():
                 json={
                     "grant": {
                         "agentId": "ag_100",
-                        "projectId": body.get("projectId"),
+                        "workspaceId": body.get("workspaceId"),
                         "grantedAt": "2026-10-02T12:10:00Z",
                     }
                 },
@@ -212,7 +212,7 @@ def test_fleet_and_governance_sync():
                             "name": "Research Engineering",
                             "organizationId": "org_1",
                             "memberCount": 5,
-                            "projectCount": 2,
+                            "workspaceCount": 2,
                             "agentCount": 3,
                         }
                     ]
@@ -250,11 +250,11 @@ def test_fleet_and_governance_sync():
     assert resumed.status == "active"
     assert resumed.suspension_reason is None
 
-    # 3. Project grant and revoke
-    grant = org.fleet.grant_project("ag_100", "proj_42")
-    assert grant["grant"]["projectId"] == "proj_42"
+    # 3. Workspace grant and revoke
+    grant = org.fleet.grant_workspace("ag_100", "ws_42")
+    assert grant["grant"]["workspaceId"] == "ws_42"
 
-    org.fleet.revoke_project("ag_100", "proj_42")
+    org.fleet.revoke_workspace("ag_100", "ws_42")
 
     # 4. Enterprise Audit Logs & Export
     audit_events = org.audit.list()

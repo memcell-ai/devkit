@@ -145,7 +145,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 ### Agents (`memory.agents`)
 
-- `list(namespace, params)`: List agents registered in a project.
+- `list(namespace, params)`: List agents registered in a workspace.
 - `get(namespace, agentId)`: Retrieve agent details.
 - `create(namespace, params)`: Register an agent.
 - `update(namespace, agentId, params)`: Update agent configuration.
@@ -155,7 +155,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 ### Collaborators (`memory.collaborators`)
 
-- `list(namespace, params)`: List project collaborators and pending invitations.
+- `list(namespace, params)`: List workspace collaborators and pending invitations.
 - `invite(namespace, { identifier, role })`: Invite a user or email to collaborate.
 - `updateRole(namespace, userId, role)`: Update a collaborator's role.
 - `remove(namespace, userId)`: Remove a collaborator.

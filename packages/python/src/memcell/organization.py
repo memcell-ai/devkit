@@ -66,18 +66,18 @@ class OrganizationMemCell:
         """Scoped teams handle for this organization."""
         return ScopedOrganizationTeamsSync(self._client.organizations.teams, self.org_slug)
 
-    def scope(self, project_slug: str, subject: str | None = None) -> Any:
+    def scope(self, workspace_slug: str, subject: str | None = None) -> Any:
         from .scoped import ScopedMemCell
 
-        clean_slug = project_slug.strip().lstrip("/")
+        clean_slug = workspace_slug.strip().lstrip("/")
         if clean_slug.startswith(f"{self.org_slug}/"):
             namespace = clean_slug
         else:
             namespace = f"{self.org_slug}/{clean_slug}"
         return ScopedMemCell(self._client, namespace, subject=subject)
 
-    def for_project(self, project_slug: str, subject: str | None = None) -> Any:
-        return self.scope(project_slug, subject=subject)
+    def for_workspace(self, workspace_slug: str, subject: str | None = None) -> Any:
+        return self.scope(workspace_slug, subject=subject)
 
     def _resolve_namespace(self, namespace: str | None) -> str:
         if not namespace:
@@ -125,7 +125,7 @@ class OrganizationMemCell:
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
+        enforce: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -137,7 +137,7 @@ class OrganizationMemCell:
             namespace=self._resolve_namespace(namespace),
             subject=subject,
             type=type,
-            kind=kind,
+            enforce=enforce,
             min_confidence=min_confidence,
             limit=limit,
             tags=tags,
@@ -149,17 +149,18 @@ class OrganizationMemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
-        kind: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
         namespace: str | None = None,
         async_: bool | None = None,
@@ -167,17 +168,18 @@ class OrganizationMemCell:
         return self._client.remember(
             title=title,
             context=context,
-            example=example,
+            observation=observation,
             tags=tags,
             subject=subject,
             type=type,
-            kind=kind,
+            enforce=enforce,
             status=status,
             confidence=confidence,
             scope=scope,
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,
+            content=content,
             session_id=session_id,
             namespace=self._resolve_namespace(namespace),
             async_=async_,
@@ -264,18 +266,18 @@ class AsyncOrganizationMemCell:
         """Scoped teams handle for this organization."""
         return ScopedOrganizationTeamsAsync(self._client.organizations.teams, self.org_slug)
 
-    def scope(self, project_slug: str, subject: str | None = None) -> Any:
+    def scope(self, workspace_slug: str, subject: str | None = None) -> Any:
         from .scoped import AsyncScopedMemCell
 
-        clean_slug = project_slug.strip().lstrip("/")
+        clean_slug = workspace_slug.strip().lstrip("/")
         if clean_slug.startswith(f"{self.org_slug}/"):
             namespace = clean_slug
         else:
             namespace = f"{self.org_slug}/{clean_slug}"
         return AsyncScopedMemCell(self._client, namespace, subject=subject)
 
-    def for_project(self, project_slug: str, subject: str | None = None) -> Any:
-        return self.scope(project_slug, subject=subject)
+    def for_workspace(self, workspace_slug: str, subject: str | None = None) -> Any:
+        return self.scope(workspace_slug, subject=subject)
 
     def _resolve_namespace(self, namespace: str | None) -> str:
         if not namespace:
@@ -323,7 +325,7 @@ class AsyncOrganizationMemCell:
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
-        kind: str | list[str] | None = None,
+        enforce: bool | None = None,
         min_confidence: float | None = None,
         limit: int | None = None,
         tags: list[str] | None = None,
@@ -335,7 +337,7 @@ class AsyncOrganizationMemCell:
             namespace=self._resolve_namespace(namespace),
             subject=subject,
             type=type,
-            kind=kind,
+            enforce=enforce,
             min_confidence=min_confidence,
             limit=limit,
             tags=tags,
@@ -347,17 +349,18 @@ class AsyncOrganizationMemCell:
         self,
         title: str | None = None,
         context: str | None = None,
-        example: str | None = None,
+        observation: str | None = None,
         tags: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
-        kind: str | None = None,
+        enforce: bool = False,
         status: str | None = None,
         confidence: float | None = None,
         scope: str | None = None,
         metadata: dict[str, Any] | None = None,
         expires_at: Any | None = None,
         raw: str | None = None,
+        content: str | None = None,
         session_id: str | None = None,
         namespace: str | None = None,
         async_: bool | None = None,
@@ -365,17 +368,18 @@ class AsyncOrganizationMemCell:
         return await self._client.remember(
             title=title,
             context=context,
-            example=example,
+            observation=observation,
             tags=tags,
             subject=subject,
             type=type,
-            kind=kind,
+            enforce=enforce,
             status=status,
             confidence=confidence,
             scope=scope,
             metadata=metadata,
             expires_at=expires_at,
             raw=raw,
+            content=content,
             session_id=session_id,
             namespace=self._resolve_namespace(namespace),
             async_=async_,

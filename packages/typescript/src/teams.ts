@@ -34,7 +34,7 @@ export class OrganizationTeamsNamespace {
   }
 
   /**
-   * Fetches details of a team, including assigned projects and agents.
+   * Fetches details of a team, including assigned workspaces and agents.
    */
   async get(orgSlug: string, teamId: string): Promise<OrgTeamDetail> {
     return await this.client.request<OrgTeamDetail>(

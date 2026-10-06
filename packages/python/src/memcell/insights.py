@@ -9,15 +9,15 @@ from .models import EnterpriseInsights
 def _build_insights_query(
     timeframe: str | None = None,
     team_id: str | None = None,
-    project_id: str | None = None,
+    workspace_id: str | None = None,
 ) -> str:
     params: dict[str, Any] = {}
     if timeframe:
         params["timeframe"] = timeframe
     if team_id:
         params["teamId"] = team_id
-    if project_id:
-        params["projectId"] = project_id
+    if workspace_id:
+        params["workspaceId"] = workspace_id
 
     query_str = urlencode(params)
     return f"?{query_str}" if query_str else ""
@@ -34,12 +34,12 @@ class OrganizationInsightsNamespace:
         org_slug: str,
         timeframe: str = "30d",
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> EnterpriseInsights:
         query = _build_insights_query(
             timeframe=timeframe,
             team_id=team_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
         )
         data = self._client._request("GET", f"/api/v1/organizations/{org_slug}/insights{query}")
         return EnterpriseInsights(**data)
@@ -56,12 +56,12 @@ class AsyncOrganizationInsightsNamespace:
         org_slug: str,
         timeframe: str = "30d",
         team_id: str | None = None,
-        project_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> EnterpriseInsights:
         query = _build_insights_query(
             timeframe=timeframe,
             team_id=team_id,
-            project_id=project_id,
+            workspace_id=workspace_id,
         )
         data = await self._client._request(
             "GET", f"/api/v1/organizations/{org_slug}/insights{query}"

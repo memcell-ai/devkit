@@ -120,7 +120,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 - `delete(namespace, id)`: Delete a memory.
 - `star(namespace, id, starred=True)`: Star or unstar a memory.
 - `history(namespace, id)`: Retrieve complete version and mutation history.
-- `adopt(namespace, id, target_project_ids)`: Adopt a memory into other workspaces.
+- `adopt(namespace, id, target_workspace_ids)`: Adopt a memory into other workspaces.
 - `promote(namespace, id, to_scope="workspace")`: Promote a provisional memory to active.
 
 ### Workspaces (`memory.workspaces`)

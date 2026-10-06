@@ -15,19 +15,19 @@ export interface ConsolidateSweepResponse {
 }
 
 function parseNamespace(
-  namespace: string | { owner: string; project: string },
+  namespace: string | { owner: string; workspace: string },
 ): {
   owner: string;
-  project: string;
+  workspace: string;
 } {
   if (typeof namespace === "string") {
     const parts = namespace.split("/");
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
       throw new Error(
-        `Invalid namespace '${namespace}'. Expected format: 'owner/project'`,
+        `Invalid namespace '${namespace}'. Expected format: 'owner/workspace'`,
       );
     }
-    return { owner: parts[0], project: parts[1] };
+    return { owner: parts[0], workspace: parts[1] };
   }
   return namespace;
 }
@@ -46,12 +46,12 @@ export class SweepNamespace {
    * @returns 202 Accepted response containing `jobId` and streaming `phases`.
    */
   async consolidate(
-    namespace: string | { owner: string; project: string },
+    namespace: string | { owner: string; workspace: string },
     params?: ConsolidateSweepParams,
   ): Promise<ConsolidateSweepResponse> {
-    const { owner, project } = parseNamespace(namespace);
+    const { owner, workspace } = parseNamespace(namespace);
     return await this.client.request<ConsolidateSweepResponse>(
-      `/api/v1/${encodeURIComponent(owner)}/${encodeURIComponent(project)}/lifecycle/sweep/consolidate`,
+      `/api/v1/${encodeURIComponent(owner)}/${encodeURIComponent(workspace)}/lifecycle/sweep/consolidate`,
       {
         method: "POST",
         body: params ? JSON.stringify(params) : undefined,

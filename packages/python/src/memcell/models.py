@@ -5,14 +5,14 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-MemoryType = Literal["guard", "directive", "fact", "preference", "observation"]
-MEMORY_TYPES = ("guard", "directive", "fact", "preference", "observation")
+MemoryType = Literal["directive", "fact", "preference"]
+MEMORY_TYPES = ("directive", "fact", "preference")
 
-MEMORY_SCOPES = ("organization", "team", "workspace", "project", "user")
-MemoryScope = Literal["organization", "team", "workspace", "project", "user", str]
+MEMORY_SCOPES = ("organization", "team", "workspace", "user")
+MemoryScope = Literal["organization", "team", "workspace", "user", str]
 
 PromotionStatus = Literal["pending", "approved", "rejected"]
-RelationType = Literal["constrains", "justifies", "refines", "depends_on", "tensions_with"]
+RelationType = Literal["limits", "justifies", "refines", "depends_on", "tensions_with"]
 MemoryStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
 
@@ -40,7 +40,6 @@ class MemoryAuthor(BaseModel):
 class MemoryRelationItem(BaseModel):
     id: str
     workspace_id: str | None = None
-    project_id: str | None = None
     source_id: str
     target_id: str
     relation_type: RelationType
@@ -64,10 +63,11 @@ class MemoryItem(BaseModel):
     root_id: str | None = None
     title: str
     context: str | None = None
-    example: str | None = None
+    observation: str | None = None
     tags: list[str] = Field(default_factory=list)
     subject: str | None = None
-    type: MemoryType = "fact"
+    type: MemoryType = "directive"
+    enforce: bool = False
     status: MemoryStatus = "active"
     confidence: float = 0.5
     score: float | None = None
@@ -78,7 +78,6 @@ class MemoryItem(BaseModel):
     is_pinned: bool = False
     starred: bool | None = None
     star_count: int | None = None
-    is_guard: bool = False
     scope: str = "workspace"
     required_roles: list[str] = Field(default_factory=list)
     scope_promoted_at: datetime | None = None
@@ -95,11 +94,11 @@ class MemoryItem(BaseModel):
     @classmethod
     def _validate_type(cls, v: Any) -> str:
         if not v:
-            return "fact"
+            return "directive"
         s = str(v).lower()
-        if s in ("guard", "directive", "fact", "preference", "observation"):
+        if s in ("directive", "fact", "preference"):
             return s
-        return "fact"
+        return "directive"
 
 
 class MemoryStarResponse(BaseModel):
@@ -114,11 +113,12 @@ class MemoryHistoryItem(BaseModel):
     version: int
     title: str
     context: str | None = None
-    example: str | None = None
+    observation: str | None = None
     tags: list[str] = Field(default_factory=list)
     confidence: float = 0.5
     status: MemoryStatus = "active"
-    type: MemoryType = "fact"
+    type: MemoryType = "directive"
+    enforce: bool = False
     subject: str | None = None
     scope: str = "workspace"
     author_type: str = "user"
@@ -132,11 +132,11 @@ class MemoryHistoryItem(BaseModel):
     @classmethod
     def _validate_type(cls, v: Any) -> str:
         if not v:
-            return "fact"
+            return "directive"
         s = str(v).lower()
-        if s in ("guard", "directive", "fact", "preference", "observation"):
+        if s in ("directive", "fact", "preference"):
             return s
-        return "fact"
+        return "directive"
 
 
 class MemoryHistoryResponse(BaseModel):
@@ -147,7 +147,6 @@ class MemoryHistoryResponse(BaseModel):
 
 class AdoptedTarget(BaseModel):
     workspace_id: str | None = None
-    project_id: str | None = None
     memory_id: str | None = None
     already_existed: bool
 
@@ -210,6 +209,7 @@ class RememberResponse(BaseModel):
     """Result of explicitly filing memories into MemCell."""
 
     created: list[MemoryItem] = Field(default_factory=list)
+    evolved: list[MemoryItem] = Field(default_factory=list)
     reinforced: list[dict[str, Any]] | None = None
     superseded: list[dict[str, Any]] | None = None
     note: str | None = None
@@ -292,7 +292,7 @@ class WorkspaceItem(BaseModel):
 
 class AgentItem(BaseModel):
     id: str
-    project_id: str
+    workspace_id: str | None = None
     name: str
     slug: str
     kind: str = "coding_assistant"
@@ -368,7 +368,7 @@ class OrganizationItem(BaseModel):
     website: str | None = None
     logo: str | None = None
     member_count: int | None = None
-    project_count: int | None = None
+    workspace_count: int | None = None
     created_at: datetime | None = None
 
 
@@ -548,11 +548,11 @@ class FleetAgent(CamelModel):
     organization_id: str | None = None
     team_id: str | None = None
     team_name: str | None = None
-    project_id: str | None = None
-    project_name: str | None = None
+    workspace_id: str | None = None
+    workspace_name: str | None = None
     last_active_at: datetime | str | None = None
     active_key_count: int = 0
-    project_grant_count: int = 0
+    workspace_grant_count: int = 0
     suspension_reason: str | None = None
     suspended_at: datetime | str | None = None
     created_at: datetime | str | None = None
@@ -561,7 +561,7 @@ class FleetAgent(CamelModel):
 class FleetAgentDetail(CamelModel):
     agent: FleetAgent
     team_name: str | None = None
-    project_name: str | None = None
+    workspace_name: str | None = None
     keys: list[dict[str, Any]] = Field(default_factory=list)
     grants: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -583,7 +583,7 @@ class CreateFleetAgentResult(CamelModel):
 class AuditEvent(CamelModel):
     id: str
     organization_id: str
-    project_id: str | None = None
+    workspace_id: str | None = None
     team_id: str | None = None
     actor_type: str = "user"
     actor_id: str | None = None
@@ -652,7 +652,7 @@ class OrgTeam(CamelModel):
     name: str
     organization_id: str
     member_count: int = 0
-    project_count: int = 0
+    workspace_count: int = 0
     agent_count: int = 0
     created_at: datetime | str | None = None
     updated_at: datetime | str | None = None
@@ -660,7 +660,7 @@ class OrgTeam(CamelModel):
 
 class OrgTeamDetail(CamelModel):
     team: dict[str, Any]
-    projects: list[dict[str, Any]] = Field(default_factory=list)
+    workspaces: list[dict[str, Any]] = Field(default_factory=list)
     agents: list[dict[str, Any]] = Field(default_factory=list)
 
 

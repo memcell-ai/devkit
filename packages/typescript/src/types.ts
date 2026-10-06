@@ -1,12 +1,9 @@
-export type MemoryType =
-  "guard" | "directive" | "fact" | "preference" | "observation";
+export type MemoryType = "directive" | "fact" | "preference";
 
 export const MEMORY_TYPES: readonly MemoryType[] = [
-  "guard",
   "directive",
   "fact",
   "preference",
-  "observation",
 ];
 
 export const MEMORY_SCOPES = [
@@ -124,10 +121,11 @@ export interface MemoryItem {
   rootId?: string;
   title: string;
   context?: string | null;
-  example?: string | null;
+  observation?: string | null;
   tags?: string[];
   subject?: string | null;
   type?: MemoryType;
+  enforce?: boolean;
   status?: MemoryStatus;
   confidence?: number;
   score?: number;
@@ -138,8 +136,6 @@ export interface MemoryItem {
   isPinned?: boolean;
   starred?: boolean;
   starCount?: number;
-  isGuard?: boolean;
-  isInvariant?: boolean;
   scope?: MemoryScope;
   requiredRoles?: string[];
   scopePromotedAt?: string | Date | null;
@@ -155,6 +151,7 @@ export interface MemoryItem {
 
 export interface ListMemoriesParams extends PaginationParams {
   type?: MemoryType;
+  enforce?: boolean;
   status?: MemoryStatus;
   scope?: MemoryScope;
   q?: string;
@@ -170,12 +167,13 @@ export interface ListMemoriesParams extends PaginationParams {
 export interface CreateMemoryParams {
   title: string;
   context?: string | null;
-  example?: string | null;
+  observation?: string | null;
   source?: string | null;
   tags?: string[];
   confidence?: number;
   subject?: string | null;
   type?: MemoryType;
+  enforce?: boolean;
   status?: MemoryStatus;
   isPinned?: boolean;
   expiresAt?: string | Date | null;
@@ -187,11 +185,12 @@ export interface CreateMemoryParams {
 export interface UpdateMemoryParams {
   title?: string;
   context?: string | null;
-  example?: string | null;
+  observation?: string | null;
   tags?: string[];
   confidence?: number;
   status?: MemoryStatus;
   type?: MemoryType;
+  enforce?: boolean;
   subject?: string | null;
   isPinned?: boolean;
   scope?: MemoryScope;
@@ -206,11 +205,12 @@ export interface MemoryHistoryItem {
   version: number;
   title: string;
   context?: string | null;
-  example?: string | null;
+  observation?: string | null;
   tags?: string[];
   confidence: number;
   status: MemoryStatus;
   type?: MemoryType;
+  enforce?: boolean;
   subject?: string | null;
   scope?: string;
   authorType: "agent" | "user";
@@ -298,7 +298,7 @@ export interface ListPromotionsParams extends PaginationParams {
 // ─── Memory Relations Domain ───
 
 export type RelationType =
-  "constrains" | "justifies" | "refines" | "depends_on" | "tensions_with";
+  "limits" | "justifies" | "refines" | "depends_on" | "tensions_with";
 
 export interface MemoryRelationItem {
   id: string;
@@ -339,6 +339,7 @@ export interface RecallParams {
   query: string;
   subject?: string | null;
   type?: MemoryType | MemoryType[];
+  enforce?: boolean;
   scope?: MemoryScope;
   scopes?: MemoryScope[];
   myMemory?: boolean;
@@ -362,12 +363,13 @@ export interface RecallResponse {
 
 export interface RememberParams {
   namespace?: string;
-  title: string;
+  title?: string;
   context?: string | null;
-  example?: string | null;
+  observation?: string | null;
   tags?: string[];
   subject?: string | null;
   type?: MemoryType;
+  enforce?: boolean;
   status?: MemoryStatus;
   confidence?: number;
   scope?: MemoryScope;
@@ -375,13 +377,16 @@ export interface RememberParams {
   expiresAt?: string | Date | null;
   metadata?: Record<string, unknown>;
   raw?: string;
+  content?: string;
   sessionId?: string;
+  activeMemoryIds?: string[];
   async?: boolean;
 }
 
 export interface RememberResponse {
   created: MemoryItem[];
   reinforced?: Array<{ id: string; title: string; confidence?: number }>;
+  evolved?: MemoryItem[];
   superseded?: Array<{ id: string; title: string }>;
   note?: string;
   accepted?: boolean;
@@ -561,7 +566,7 @@ export type AgentStatus = "active" | "inactive" | "revoked";
 
 export interface AgentItem {
   id: string;
-  projectId: string;
+  workspaceId: string;
   name: string;
   slug: string;
   kind: AgentKind | string;
@@ -684,7 +689,7 @@ export interface OrganizationItem {
   logo?: string | null;
   joinedAt?: string | Date;
   memberCount?: number;
-  projectCount?: number;
+  workspaceCount?: number;
 }
 
 export interface CreateOrganizationParams {
@@ -908,7 +913,7 @@ export interface FleetAgent {
   id: string;
   name: string;
   slug: string;
-  scope: "project" | "team" | "organization";
+  scope: "workspace" | "team" | "organization";
   framework: string | null;
   model: string | null;
   status: "active" | "suspended" | "revoked";
@@ -917,11 +922,11 @@ export interface FleetAgent {
   organizationId: string | null;
   teamId: string | null;
   teamName?: string | null;
-  projectId: string | null;
-  projectName?: string | null;
+  workspaceId: string | null;
+  workspaceName?: string | null;
   lastActiveAt: string | null;
   activeKeyCount: number;
-  projectGrantCount: number;
+  workspaceGrantCount: number;
   suspensionReason: string | null;
   suspendedAt: string | null;
   createdAt: string;
@@ -930,7 +935,7 @@ export interface FleetAgent {
 export interface ListFleetAgentsParams {
   q?: string;
   status?: "active" | "suspended" | "revoked";
-  scope?: "project" | "team" | "organization";
+  scope?: "workspace" | "team" | "organization";
   framework?: string;
   teamId?: string;
   workspaceId?: string;
@@ -941,12 +946,12 @@ export interface ListFleetAgentsParams {
 export interface CreateFleetAgentParams {
   name: string;
   slug?: string;
-  scope?: "project" | "team" | "organization";
+  scope?: "workspace" | "team" | "organization";
   framework?: string | null;
   model?: string | null;
   description?: string | null;
   teamId?: string | null;
-  projectId?: string | null;
+  workspaceId?: string | null;
   generateKey?: boolean;
 }
 
@@ -964,7 +969,7 @@ export interface CreateFleetAgentResult {
 export interface FleetAgentDetail {
   agent: FleetAgent;
   teamName?: string | null;
-  projectName?: string | null;
+  workspaceName?: string | null;
   keys: Array<{
     id: string;
     keyPrefix: string;
@@ -973,17 +978,17 @@ export interface FleetAgentDetail {
   }>;
   grants: Array<{
     id: string;
-    projectId: string;
-    projectSlug: string;
+    workspaceId: string;
+    workspaceSlug: string;
     permission: string;
     createdAt: string;
   }>;
 }
 
-export interface AgentProjectGrant {
+export interface AgentWorkspaceGrant {
   id: string;
   agentId: string;
-  projectId: string;
+  workspaceId: string;
   permission: "read" | "write" | "admin";
   grantedBy: string | null;
   createdAt: string;
@@ -994,7 +999,7 @@ export interface AgentProjectGrant {
 export interface AuditEvent {
   id: string;
   organizationId: string;
-  projectId: string | null;
+  workspaceId: string | null;
   teamId: string | null;
   actorType: "user" | "agent" | "system";
   actorId: string | null;
@@ -1092,7 +1097,7 @@ export interface OrgTeam {
   name: string;
   organizationId: string;
   memberCount: number;
-  projectCount: number;
+  workspaceCount: number;
   agentCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1106,7 +1111,7 @@ export interface OrgTeamDetail {
     createdAt: string;
     updatedAt: string;
   };
-  projects: Array<{
+  workspaces: Array<{
     id: string;
     name: string;
     slug: string;

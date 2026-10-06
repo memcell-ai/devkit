@@ -49,7 +49,6 @@ export class WorkspacesNamespace {
   ): Promise<PaginatedResult<WorkspaceItem>> {
     const query = buildQuery(params);
     const json = await this.client.request<{
-      projects?: WorkspaceItem[];
       workspaces?: WorkspaceItem[];
       pagination: {
         page: number;
@@ -60,7 +59,7 @@ export class WorkspacesNamespace {
     }>(`/api/v1/workspaces${query}`, { method: "GET" });
 
     return {
-      items: json.workspaces || json.projects || [],
+      items: json.workspaces || [],
       pagination: json.pagination,
     };
   }
@@ -75,7 +74,6 @@ export class WorkspacesNamespace {
     const query = buildQuery(params);
     const json = await this.client.request<{
       owner: string;
-      projects?: WorkspaceItem[];
       workspaces?: WorkspaceItem[];
       pagination: {
         page: number;
@@ -88,7 +86,7 @@ export class WorkspacesNamespace {
     });
 
     return {
-      items: json.workspaces || json.projects || [],
+      items: json.workspaces || [],
       pagination: json.pagination,
     };
   }
@@ -99,10 +97,11 @@ export class WorkspacesNamespace {
   async get(namespace: string): Promise<WorkspaceItem> {
     const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{
-      project?: WorkspaceItem;
       workspace?: WorkspaceItem;
     }>(`/api/v1/${owner}/${workspace}`, { method: "GET" });
-    const item = json.workspace ?? json.project;
+    const item =
+      json.workspace ??
+      ((json as any)?.id ? (json as any as WorkspaceItem) : undefined);
     if (!item) {
       throw new Error(`Workspace not found: ${namespace}`);
     }
@@ -115,13 +114,14 @@ export class WorkspacesNamespace {
   async create(params: CreateWorkspaceParams): Promise<WorkspaceItem> {
     const json = await this.client.request<{
       ok: boolean;
-      project?: WorkspaceItem;
       workspace?: WorkspaceItem;
     }>("/api/v1/workspaces", {
       method: "POST",
       body: JSON.stringify(params),
     });
-    const item = json.workspace ?? json.project;
+    const item =
+      json.workspace ??
+      ((json as any)?.id ? (json as any as WorkspaceItem) : undefined);
     if (!item) {
       throw new Error("Failed to create workspace: empty response");
     }
@@ -137,13 +137,14 @@ export class WorkspacesNamespace {
   ): Promise<WorkspaceItem> {
     const { owner, workspace } = parseNamespace(namespace);
     const json = await this.client.request<{
-      project?: WorkspaceItem;
       workspace?: WorkspaceItem;
     }>(`/api/v1/${owner}/${workspace}`, {
       method: "PATCH",
       body: JSON.stringify(params),
     });
-    const item = json.workspace ?? json.project;
+    const item =
+      json.workspace ??
+      ((json as any)?.id ? (json as any as WorkspaceItem) : undefined);
     if (!item) {
       throw new Error(`Failed to update workspace: ${namespace}`);
     }

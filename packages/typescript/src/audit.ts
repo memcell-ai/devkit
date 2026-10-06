@@ -16,7 +16,7 @@ function buildAuditQuery(params?: ListAuditEventsParams): string {
   if (params.action) q.set("action", params.action);
   if (params.targetType) q.set("targetType", params.targetType);
   if (params.targetId) q.set("targetId", params.targetId);
-  if (params.workspaceId) q.set("projectId", params.workspaceId);
+  if (params.workspaceId) q.set("workspaceId", params.workspaceId);
   if (params.teamId) q.set("teamId", params.teamId);
   if (params.from) q.set("from", params.from);
   if (params.to) q.set("to", params.to);

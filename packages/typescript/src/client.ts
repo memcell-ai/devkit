@@ -51,7 +51,7 @@ export class MemCell {
   readonly agents: AgentsNamespace;
 
   /**
-   * Project collaborators and invitation APIs.
+   * Workspace collaborators and invitation APIs.
    */
   readonly collaborators: CollaboratorsNamespace;
 
@@ -192,7 +192,7 @@ export class MemCell {
       intent: params.query,
       subject: params.subject,
       type: effectiveType,
-      kind: effectiveType,
+      enforce: params.enforce,
       scope: params.scope,
       scopes: params.scopes,
       my_memory: params.myMemory,
@@ -206,7 +206,7 @@ export class MemCell {
     };
 
     if (params.namespace && !params.namespace.includes("/")) {
-      payload.project = params.namespace;
+      payload.workspace = params.namespace;
     }
 
     const json = await this.request<any>(path, {
@@ -220,10 +220,11 @@ export class MemCell {
       rootId: s.rootId,
       title: s.title,
       context: s.context ?? null,
-      example: s.example ?? null,
+      observation: s.observation ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
       type: s.type,
+      enforce: s.enforce ?? false,
       status: s.status,
       confidence: s.confidence,
       score: s.score,
@@ -239,14 +240,6 @@ export class MemCell {
       scopePromotedAt: s.scopePromotedAt ?? s.scope_promoted_at ?? null,
       scopePromotedBy: s.scopePromotedBy ?? s.scope_promoted_by ?? null,
       metadata: s.metadata,
-      isGuard:
-        s.isGuard ??
-        (s.type === "guard" ||
-          s.tags?.includes("guard") ||
-          s.tags?.includes("convention")),
-      isInvariant:
-        s.isInvariant ??
-        (s.type === "guard" || s.type === "directive" || s.status === "pinned"),
       expiresAt: s.expiresAt ?? null,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -272,11 +265,11 @@ export class MemCell {
     const payload: Record<string, unknown> = {
       title: params.title,
       context: params.context,
-      example: params.example,
+      observation: params.observation,
       tags: params.tags,
       subject: params.subject,
       type: effectiveType,
-      kind: effectiveType,
+      enforce: params.enforce,
       status: params.status,
       confidence: params.confidence,
       scope: params.scope,
@@ -286,13 +279,14 @@ export class MemCell {
         params.expiresAt instanceof Date
           ? params.expiresAt.toISOString()
           : params.expiresAt,
-      raw: params.raw,
+      raw: params.raw ?? params.content,
       sessionId: params.sessionId,
+      activeMemoryIds: params.activeMemoryIds,
       async: params.async,
     };
 
     if (params.namespace && !params.namespace.includes("/")) {
-      payload.project = params.namespace;
+      payload.workspace = params.namespace;
     }
 
     const json = await this.request<any>(path, {
@@ -306,6 +300,7 @@ export class MemCell {
         jobId: json.jobId,
         status: json.status,
         created: [],
+        evolved: [],
         note: json.note || "Job accepted for background execution.",
       };
     }
@@ -315,10 +310,28 @@ export class MemCell {
       id: s.id,
       title: s.title,
       context: s.context ?? null,
-      example: s.example ?? null,
+      observation: s.observation ?? null,
       tags: s.tags ?? [],
       subject: s.subject ?? null,
       type: s.type,
+      enforce: s.enforce ?? false,
+      status: s.status,
+      confidence: s.confidence,
+      scope: s.scope,
+      metadata: s.metadata,
+      expiresAt: s.expiresAt ?? null,
+    }));
+
+    const rawEvolved: any[] = json.evolved || [];
+    const evolved: MemoryItem[] = rawEvolved.map((s) => ({
+      id: s.id,
+      title: s.title,
+      context: s.context ?? null,
+      observation: s.observation ?? null,
+      tags: s.tags ?? [],
+      subject: s.subject ?? null,
+      type: s.type,
+      enforce: s.enforce ?? false,
       status: s.status,
       confidence: s.confidence,
       scope: s.scope,
@@ -328,6 +341,7 @@ export class MemCell {
 
     return {
       created,
+      evolved,
       reinforced: json.reinforced,
       superseded: json.superseded,
       note: json.note,
@@ -354,7 +368,7 @@ export class MemCell {
     };
 
     if (params.namespace && !params.namespace.includes("/")) {
-      payload.project = params.namespace;
+      payload.workspace = params.namespace;
     }
 
     const json = await this.request<any>(path, {
@@ -530,7 +544,7 @@ export class MemCell {
     };
 
     if (params.namespace && !params.namespace.includes("/")) {
-      payload.project = params.namespace;
+      payload.workspace = params.namespace;
     }
 
     const json = await this.request<any>(path, {
@@ -692,9 +706,9 @@ export class MemCell {
     if (namespace && namespace.includes("/")) {
       const parts = namespace.split("/");
       const owner = parts[0];
-      const project = parts[1];
-      if (owner && project) {
-        return `/api/v1/${encodeURIComponent(owner)}/${encodeURIComponent(project)}/${action}`;
+      const workspace = parts[1];
+      if (owner && workspace) {
+        return `/api/v1/${encodeURIComponent(owner)}/${encodeURIComponent(workspace)}/${action}`;
       }
     }
     return `/api/v1/${action}`;

@@ -36,7 +36,7 @@ import { MemCell } from "@memcell/sdk";
 
 const memory = new MemCell({ apiKey: process.env.MEMCELL_API_KEY! });
 
-// Recall relevant statements before an agent acts:
+// Recall relevant memories before an agent acts:
 const { promptContext } = await memory.recall({
   namespace: "acme/support",
   query: "refund verification and escalation thresholds",
@@ -57,7 +57,7 @@ from memcell import AsyncMemCell
 
 async def main():
     async with AsyncMemCell(api_key="mc_live_...") as memory:
-        # Recall relevant statements before an agent acts:
+        # Recall relevant memories before an agent acts:
         recall = await memory.recall(
             namespace="acme/support",
             query="refund verification and escalation thresholds",
@@ -73,7 +73,7 @@ asyncio.run(main())
 
 Both SDKs provide an automated execution wrapper (`wrapExecution` in TypeScript, `wrap_execution` in Python) that implements the complete agent learning cycle:
 
-1. **Pre-Flight Recall**: Automatically retrieves relevant statements and directives before agent execution.
+1. **Pre-Flight Recall**: Automatically retrieves relevant memories and directives before agent execution.
 2. **In-Flight Context**: Injects verified context into the execution callback.
 3. **Post-Flight Reinforcement**: Automatically reports execution outcomes (`worked` on success, `failed` on error) to update Bayesian confidence scores—with zero manual prompt maintenance.
 
