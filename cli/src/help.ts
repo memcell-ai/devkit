@@ -130,15 +130,20 @@ export function overview(): string {
 
 /** One command, or one resource's verbs. */
 export function detail(topic: string): string {
-  const matching = COMMANDS.filter((c) => c.path[0] === topic && !c.hidden);
+  const matching = COMMANDS.filter(
+    (c) =>
+      !c.hidden &&
+      (c.path[0] === topic || c.path.join(" ") === topic || c.path.join(" ").startsWith(topic)),
+  );
   if (matching.length === 0) return overview();
 
-  const flags = [...new Set(matching.flatMap((c) => c.takes ?? []))].map(
-    (name) => FLAGS[name] ?? { name, what: "" },
+  const flags = Array.from(new Set(matching.flatMap((c) => c.takes ?? [])))
+    .map((name) => FLAGS[name])
+    .filter((f): f is (typeof FLAGS)[string] => Boolean(f));
+  const flagLengths = flags.map(
+    (f) => (f.takes ? `--${f.name} <${f.takes}>` : `--${f.name}`).length,
   );
-  const width =
-    Math.max(...flags.map((f) => (f.takes ? `--${f.name} <${f.takes}>` : `--${f.name}`).length)) +
-    2;
+  const width = Math.max(0, ...flagLengths) + 2;
 
   return render([
     row(0, [text("")]),
