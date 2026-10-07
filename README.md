@@ -2,30 +2,44 @@
   <img src="https://memcell.ai/icon.svg" width="56" alt="MemCell Logo" />
 </p>
 
-<h1 align="center">MemCell Client SDKs</h1>
+<h1 align="center">MemCell DevKit</h1>
 
 <p align="center">
-  <strong>The official multi-language client libraries for <a href="https://memcell.ai">MemCell</a>.</strong><br />
-  Persistent, adaptive memory and reasoning substrate for AI agents, workflows, and pipelines.
+  <strong>The official developer toolkit for <a href="https://memcell.ai">MemCell</a>.</strong><br />
+  Living, persistent memory for AI agents across any harness, workflow, or pipeline.
 </p>
 
 <p align="center">
-  <a href="https://github.com/memcell-ai/sdk/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0" /></a>
+  <a href="https://github.com/memcell-ai/devkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0" /></a>
   <a href="https://memcell.ai/docs"><img src="https://img.shields.io/badge/docs-memcell.ai-blue" alt="Documentation" /></a>
 </p>
 
-This monorepo houses the official client libraries for MemCell:
+This monorepo houses the official developer surfaces and client libraries for MemCell:
 
-| Language                 | Package                                 | Target                           | Package Link                                                                                                           |
-| :----------------------- | :-------------------------------------- | :------------------------------- | :--------------------------------------------------------------------------------------------------------------------- |
-| **TypeScript / Node.js** | [`@memcell/sdk`](./packages/typescript) | Node $\ge 18$, Bun, Deno, Edge   | [![npm version](https://img.shields.io/npm/v/@memcell/sdk.svg?style=flat)](https://www.npmjs.com/package/@memcell/sdk) |
-| **Python**               | [`memcell`](./packages/python)          | Python $\ge 3.10$ (Sync & Async) | [![PyPI version](https://img.shields.io/pypi/v/memcell.svg?style=flat)](https://pypi.org/project/memcell)              |
+| Component                    | Package                       | Directory     | Distribution                                                                                                           |
+| :--------------------------- | :---------------------------- | :------------ | :--------------------------------------------------------------------------------------------------------------------- |
+| **TypeScript / Node.js SDK** | [`@memcell/sdk`](./sdks/node) | `sdks/node`   | [![npm version](https://img.shields.io/npm/v/@memcell/sdk.svg?style=flat)](https://www.npmjs.com/package/@memcell/sdk) |
+| **Python SDK**               | [`memcell`](./sdks/python)    | `sdks/python` | [![PyPI version](https://img.shields.io/pypi/v/memcell.svg?style=flat)](https://pypi.org/project/memcell)              |
+| **Developer CLI**            | [`memcell`](./cli)            | `cli`         | [![npm version](https://img.shields.io/npm/v/memcell.svg?style=flat)](https://www.npmjs.com/package/memcell)           |
 
 ---
 
 ## Direct Start
 
-### TypeScript / JavaScript
+### 1. Developer CLI
+
+```bash
+# Wire a workspace in your current directory
+npx memcell connect
+
+# Inspect living memory status
+npx memcell status
+
+# Recall memories before taking action
+npx memcell recall "customer refund policy"
+```
+
+### 2. TypeScript / JavaScript SDK
 
 ```bash
 npm install @memcell/sdk
@@ -38,14 +52,14 @@ const memory = new MemCell({ apiKey: process.env.MEMCELL_API_KEY! });
 
 // Recall relevant memories before an agent acts:
 const { promptContext } = await memory.recall({
-  namespace: "acme/support",
+  workspace: "acme/support",
   query: "refund verification and escalation thresholds",
 });
 
 console.log(promptContext);
 ```
 
-### Python
+### 3. Python SDK
 
 ```bash
 pip install memcell
@@ -58,70 +72,44 @@ from memcell import AsyncMemCell
 async def main():
     async with AsyncMemCell(api_key="mc_live_...") as memory:
         # Recall relevant memories before an agent acts:
-        recall = await memory.recall(
-            namespace="acme/support",
+        res = await memory.recall(
+            workspace="acme/support",
             query="refund verification and escalation thresholds",
         )
-        print(recall.prompt_context)
+        print(res.prompt_context)
 
 asyncio.run(main())
 ```
 
 ---
 
-## The Closed-Loop Execution Wrapper
-
-Both SDKs provide an automated execution wrapper (`wrapExecution` in TypeScript, `wrap_execution` in Python) that implements the complete agent learning cycle:
-
-1. **Pre-Flight Recall**: Automatically retrieves relevant memories and directives before agent execution.
-2. **In-Flight Context**: Injects verified context into the execution callback.
-3. **Post-Flight Reinforcement**: Automatically reports execution outcomes (`worked` on success, `failed` on error) to update Bayesian confidence scores—with zero manual prompt maintenance.
-
-For full examples, see:
-
-- [TypeScript SDK Guide](./packages/typescript/README.md)
-- [Python SDK Guide](./packages/python/README.md)
-
----
-
-## Repository Structure
-
-```
-sdk/
-├── packages/
-│   ├── typescript/        # Modern TypeScript SDK (@memcell/sdk)
-│   └── python/            # Modern Python SDK (memcell)
-├── .github/workflows/     # Unified CI and multi-package release-please workflows
-└── release-please-config.json
-```
-
----
-
-## Development & Testing
-
-### Prerequisites
-
-- Node.js $\ge 20$ & pnpm $\ge 10$
-- Python $\ge 3.10$ & pytest / uv
-
-### Running Local Tests
+## Monorepo Development
 
 ```bash
-# Install root Node dependencies
+# Install all dependencies across the workspace
 pnpm install
 
-# Run TypeScript tests & type checking
-pnpm test:ts
-pnpm typecheck
+# Build all TypeScript packages (sdks/node and cli)
+pnpm run build
 
-# Run Python tests
-pnpm test:py
-# or directly:
-cd packages/python && pytest
+# Run all test suites across Node, CLI, and Python
+pnpm test
+
+# Run type checks
+pnpm run typecheck
+
+# Check code formatting
+pnpm run format:check
 ```
 
 ---
+
+## Ecosystem
+
+- **Engine**: Core cognitive memory service at [memcell-ai/memcell](https://github.com/memcell-ai/memcell)
+- **MCP Server & Registry**: [memcell-ai/mcp](https://github.com/memcell-ai/mcp)
+- **Documentation**: [memcell.ai/docs](https://memcell.ai/docs)
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) for details.
+Apache-2.0

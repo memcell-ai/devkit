@@ -14,8 +14,8 @@
   "homepage": "https://memcell.io",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/memcell-ai/sdk.git",
-    "directory": "packages/typescript"
+    "url": "git+https://github.com/memcell-ai/devkit.git",
+    "directory": "sdks/node"
   },
   "license": "Apache-2.0",
   "publishConfig": {

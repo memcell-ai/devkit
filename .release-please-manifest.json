@@ -1,4 +1,5 @@
 {
-  "packages/typescript": "1.3.0",
-  "packages/python": "0.1.5"
+  "sdks/node": "1.3.0",
+  "sdks/python": "0.1.5",
+  "cli": "0.10.12"
 }

@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
-      typescript_released: ${{ steps.release.outputs['packages/typescript--release_created'] }}
-      python_released: ${{ steps.release.outputs['packages/python--release_created'] }}
+      node_released: ${{ steps.release.outputs['sdks/node--release_created'] }}
+      python_released: ${{ steps.release.outputs['sdks/python--release_created'] }}
+      cli_released: ${{ steps.release.outputs['cli--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -27,9 +28,9 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  publish-typescript:
+  publish-node:
     needs: release-please
-    if: needs.release-please.outputs.typescript_released == 'true'
+    if: needs.release-please.outputs.node_released == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,18 +50,18 @@ jobs:
       - name: Verify package output
         run: |
           set -euo pipefail
-          test -f packages/typescript/dist/index.js
-          test -f packages/typescript/dist/index.d.ts
+          test -f sdks/node/dist/index.js
+          test -f sdks/node/dist/index.d.ts
       - name: Publish to npm
         run: |
-          cd packages/typescript
+          cd sdks/node
           npm publish --provenance --access public
       - name: the attestation is on the registry
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(node -p "require('./packages/typescript/package.json').version")"
+          version="$(node -p "require('./sdks/node/package.json').version")"
           if [ "$(gh api "repos/${{ github.repository }}" --jq .private)" = "true" ]; then
             echo "@memcell/sdk@$version has no provenance: the repository is private"
             exit 0
@@ -73,6 +74,55 @@ jobs:
             sleep 5
           done
           echo "@memcell/sdk@$version has no provenance attestation" >&2
+          exit 1
+
+  publish-cli:
+    needs: release-please
+    if: needs.release-please.outputs.cli_released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: npm that can speak OIDC
+        run: npm install -g 'npm@^11.5.1'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "@memcell/sdk" run build
+      - run: pnpm --filter "memcell" run build
+      - name: Verify package output
+        run: |
+          set -euo pipefail
+          test -f cli/dist/bin.js
+          test -f cli/dist/index.js
+      - name: Publish to npm
+        run: |
+          cd cli
+          npm publish --provenance --access public
+      - name: the attestation is on the registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./cli/package.json').version")"
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .private)" = "true" ]; then
+            echo "memcell@$version has no provenance: the repository is private"
+            exit 0
+          fi
+          for i in $(seq 1 12); do
+            if curl -fsS "https://registry.npmjs.org/memcell" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d).versions['$version'];process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
+              echo "memcell@$version is attested"; exit 0
+            fi
+            sleep 5
+          done
+          echo "memcell@$version has no provenance attestation" >&2
           exit 1
 
   publish-python:
@@ -93,9 +143,9 @@ jobs:
       - name: Build distributions
         run: |
           python -m pip install --upgrade pip build
-          cd packages/python
+          cd sdks/python
           python -m build
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: packages/python/dist/
+          packages-dir: sdks/python/dist/

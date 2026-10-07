@@ -1,17 +1,18 @@
 {
-  "name": "memcell-sdk-monorepo",
+  "name": "memcell-devkit-monorepo",
   "private": true,
   "packageManager": "pnpm@10.18.0",
-  "description": "Official MemCell client SDKs for TypeScript and Python",
+  "description": "Official MemCell DevKit — TypeScript & Python SDKs and CLI",
   "scripts": {
-    "build": "pnpm --filter \"@memcell/*\" run build",
-    "typecheck": "pnpm --filter \"@memcell/*\" run typecheck",
-    "test:ts": "pnpm --filter \"@memcell/*\" run test",
-    "test:py": "cd packages/python && pytest",
-    "test": "pnpm run test:ts && pnpm run test:py",
-    "format": "prettier --write \"packages/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"packages/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
-    "lint:py": "cd packages/python && ruff check && ruff format --check",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test:node": "pnpm --filter \"@memcell/sdk\" run test",
+    "test:cli": "pnpm --filter \"memcell\" run test",
+    "test:py": "cd sdks/python && pytest",
+    "test": "pnpm run test:node && pnpm run test:cli && pnpm run test:py",
+    "format": "prettier --write \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
+    "lint:py": "cd sdks/python && ruff check && ruff format --check",
     "lint": "pnpm run typecheck && pnpm run lint:py"
   },
   "devDependencies": {

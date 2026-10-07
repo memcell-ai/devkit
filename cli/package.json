@@ -58,16 +58,17 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@memcell/sdk": "^1.1.0",
+    "@memcell/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "smol-toml": "^1.7.1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/memcell-ai/cli.git"
+    "url": "git+https://github.com/memcell-ai/devkit.git",
+    "directory": "cli"
   },
   "bugs": {
-    "url": "https://github.com/memcell-ai/cli/issues"
+    "url": "https://github.com/memcell-ai/devkit/issues"
   },
   "prettier": {
     "semi": true,

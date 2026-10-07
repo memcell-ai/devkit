@@ -3,15 +3,20 @@
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
   "packages": {
-    "packages/typescript": {
+    "sdks/node": {
       "release-type": "node",
       "package-name": "@memcell/sdk",
-      "component": "typescript"
+      "component": "node"
     },
-    "packages/python": {
+    "sdks/python": {
       "release-type": "python",
       "package-name": "memcell",
       "component": "python"
+    },
+    "cli": {
+      "release-type": "node",
+      "package-name": "memcell",
+      "component": "cli"
     }
   }
 }
