@@ -19,6 +19,7 @@ import type {
   ListCollaboratorsResponse,
   ListMemoriesParams,
   ListWorkspaceRelationsParams,
+  ListWorkspaceActivityParams,
   ListPromotionsParams,
   MemoryHistoryResponse,
   MemoryItem,
@@ -46,6 +47,7 @@ import type {
   WrapExecutionOptions,
 } from "./types.js";
 import type { MemCell } from "./client.js";
+import { ScopedWorkspaceWebhooks } from "./webhooks.js";
 
 export class ScopedMemCell {
   readonly defaultSubject: string | null;
@@ -177,6 +179,11 @@ export class ScopedMemCell {
       this.client.promotions.reject(this.namespace, promotionId, params),
   };
 
+  /**
+   * Scoped workspace webhooks operations bound to this namespace.
+   */
+  readonly webhooks: ScopedWorkspaceWebhooks;
+
   constructor(
     private readonly client: MemCell,
     readonly namespace: string,
@@ -184,6 +191,27 @@ export class ScopedMemCell {
   ) {
     this.defaultSubject = options?.subject ?? null;
     this.defaultFormat = options?.format ?? "xml";
+    this.webhooks = new ScopedWorkspaceWebhooks(
+      client.webhooks,
+      this.namespace,
+    );
+  }
+
+  /**
+   * Retrieves audit and outcome activity for this workspace.
+   */
+  async activity(params?: ListWorkspaceActivityParams) {
+    return await this.client.workspaces.activity(this.namespace, params);
+  }
+
+  /**
+   * Retrieves cognitive KPIs and telemetry for this workspace.
+   */
+  async insights(timeframe: "24h" | "7d" | "30d" = "30d") {
+    return await this.client.insights.getForWorkspace(
+      this.namespace,
+      timeframe,
+    );
   }
 
   /**

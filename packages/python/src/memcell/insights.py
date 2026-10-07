@@ -44,6 +44,21 @@ class OrganizationInsightsNamespace:
         data = self._client._request("GET", f"/api/v1/organizations/{org_slug}/insights{query}")
         return EnterpriseInsights(**data)
 
+    def get_for_workspace(
+        self,
+        namespace: str,
+        timeframe: str = "30d",
+    ) -> EnterpriseInsights:
+        parts = namespace.split("/")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError(f'Invalid namespace "{namespace}". Expected format "owner/workspace".')
+        data = self._client._request(
+            "GET",
+            f"/api/v1/{parts[0]}/{parts[1]}/insights",
+            params={"timeframe": timeframe},
+        )
+        return EnterpriseInsights(**data)
+
 
 class AsyncOrganizationInsightsNamespace:
     """Asynchronous enterprise cognitive insights namespace."""
@@ -65,6 +80,21 @@ class AsyncOrganizationInsightsNamespace:
         )
         data = await self._client._request(
             "GET", f"/api/v1/organizations/{org_slug}/insights{query}"
+        )
+        return EnterpriseInsights(**data)
+
+    async def get_for_workspace(
+        self,
+        namespace: str,
+        timeframe: str = "30d",
+    ) -> EnterpriseInsights:
+        parts = namespace.split("/")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError(f'Invalid namespace "{namespace}". Expected format "owner/workspace".')
+        data = await self._client._request(
+            "GET",
+            f"/api/v1/{parts[0]}/{parts[1]}/insights",
+            params={"timeframe": timeframe},
         )
         return EnterpriseInsights(**data)
 

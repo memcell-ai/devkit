@@ -2,7 +2,9 @@ import type { MemCell } from "./client.js";
 import type {
   CreateWorkspaceParams,
   ListWorkspacesParams,
+  ListWorkspaceActivityParams,
   PaginatedResult,
+  WorkspaceActivityItem,
   WorkspaceItem,
   TransferWorkspaceParams,
   UpdateWorkspaceParams,
@@ -179,5 +181,41 @@ export class WorkspacesNamespace {
         body: JSON.stringify(params),
       },
     );
+  }
+
+  /**
+   * Retrieves audit and outcome activity for a workspace.
+   */
+  async activity(
+    namespace: string,
+    params?: ListWorkspaceActivityParams,
+  ): Promise<PaginatedResult<WorkspaceActivityItem>> {
+    const { owner, workspace } = parseNamespace(namespace);
+    const q = new URLSearchParams();
+    if (params?.page !== undefined) q.set("page", String(params.page));
+    if (params?.perPage !== undefined)
+      q.set("per_page", String(params.perPage));
+    if (params?.outcome) q.set("outcome", params.outcome);
+    if (params?.subject) q.set("subject", params.subject);
+    if (params?.memoryId) q.set("memory_id", params.memoryId);
+    const query = q.toString() ? `?${q.toString()}` : "";
+
+    const json = await this.client.request<{
+      items?: WorkspaceActivityItem[];
+      total: number;
+      page: number;
+      perPage: number;
+      hasMore: boolean;
+    }>(`/api/v1/${owner}/${workspace}/activity${query}`, { method: "GET" });
+
+    return {
+      items: json.items || [],
+      pagination: {
+        page: json.page,
+        perPage: json.perPage,
+        total: json.total,
+        hasMore: json.hasMore,
+      },
+    };
   }
 }

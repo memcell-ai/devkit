@@ -37,6 +37,9 @@ export {
   TeamMembersNamespace,
   ScopedTeamMembers,
 } from "./teams.js";
+export { WebhooksNamespace, ScopedWorkspaceWebhooks } from "./webhooks.js";
+export { OperatorNamespace } from "./operator.js";
+export { InvitationsNamespace } from "./invitations.js";
 export { AuthManager } from "./auth.js";
 export {
   MemCellError,
@@ -182,4 +185,20 @@ export type {
   OrgTeam,
   OrgTeamDetail,
   TeamMemberItem,
+
+  // Workspace Webhooks
+  WorkspaceWebhookItem,
+  CreateWorkspaceWebhookParams,
+  UpdateWorkspaceWebhookParams,
+  WebhookPingResult,
+
+  // Workspace Activity
+  WorkspaceActivityItem,
+  ListWorkspaceActivityParams,
+
+  // Invitations
+  InvitationItem,
+
+  // Operator
+  OperatorStats,
 } from "./types.js";

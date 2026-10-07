@@ -28,6 +28,28 @@ export class OrganizationInsightsNamespace {
       { method: "GET" },
     );
   }
+
+  /**
+   * Retrieves cognitive KPIs and telemetry for a specific workspace.
+   */
+  async getForWorkspace(
+    namespace: string,
+    timeframe: "24h" | "7d" | "30d" = "30d",
+  ): Promise<EnterpriseInsights> {
+    const parts = namespace.split("/");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      throw new Error(
+        `Invalid namespace "${namespace}". Expected format "owner/workspace".`,
+      );
+    }
+    const owner = encodeURIComponent(parts[0]);
+    const workspace = encodeURIComponent(parts[1]);
+    const query = `?timeframe=${encodeURIComponent(timeframe)}`;
+    return await this.client.request<EnterpriseInsights>(
+      `/api/v1/${owner}/${workspace}/insights${query}`,
+      { method: "GET" },
+    );
+  }
 }
 
 export class ScopedOrganizationInsights {

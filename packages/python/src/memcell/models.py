@@ -673,3 +673,68 @@ class TeamMemberItem(CamelModel):
     handle: str | None = None
     image: str | None = None
     created_at: datetime | str | None = None
+
+
+# ─── Workspace Webhooks Models ───
+
+
+class WorkspaceWebhookItem(CamelModel):
+    id: str
+    workspace_id: str
+    name: str
+    url: str
+    secret: str | None = None
+    events: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class WebhookPingResult(CamelModel):
+    ok: bool
+    status_code: int = Field(alias="statusCode", default=200)
+    status_text: str = Field(alias="statusText", default="OK")
+    error: str | None = None
+
+
+# ─── Workspace Activity Models ───
+
+
+class WorkspaceActivityItem(CamelModel):
+    id: str
+    timestamp: datetime | str | None = None
+    outcome: str = "worked"
+    memory_id: str | None = None
+    subject: str | None = None
+    note: str | None = None
+    agent_id: str | None = None
+    caller: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+# ─── Invitations Models ───
+
+
+class InvitationItem(CamelModel):
+    id: str
+    organization_id: str | None = None
+    organization_slug: str | None = None
+    workspace_id: str | None = None
+    email: str
+    role: str = "member"
+    status: str = "pending"
+    created_at: datetime | str | None = None
+    expires_at: datetime | str | None = None
+
+
+# ─── Operator Models ───
+
+
+class OperatorStats(CamelModel):
+    total_users: int = 0
+    total_workspaces: int = 0
+    total_memories: int = 0
+    total_agents: int = 0
+    active_recalls_24h: int = 0
+    uptime_seconds: float = 0.0
+    version: str = "1.0.0"

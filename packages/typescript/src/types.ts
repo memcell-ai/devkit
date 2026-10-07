@@ -1137,3 +1137,86 @@ export interface TeamMemberItem {
   image: string | null;
   createdAt: string;
 }
+
+// ─── Workspace Webhooks Domain ───
+
+export interface WorkspaceWebhookItem {
+  id: string;
+  workspaceId: string;
+  name: string;
+  url: string;
+  secret: string | null;
+  events: string[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWorkspaceWebhookParams {
+  name: string;
+  url: string;
+  secret?: string | null;
+  events?: string[];
+  enabled?: boolean;
+}
+
+export interface UpdateWorkspaceWebhookParams {
+  name?: string;
+  url?: string;
+  secret?: string | null;
+  events?: string[];
+  enabled?: boolean;
+}
+
+export interface WebhookPingResult {
+  ok: boolean;
+  statusCode: number;
+  statusText: string;
+  error?: string;
+}
+
+// ─── Workspace Activity Domain ───
+
+export interface WorkspaceActivityItem {
+  id: string;
+  timestamp: string;
+  outcome: "worked" | "failed" | "avoided" | "observed";
+  memoryId?: string;
+  subject?: string;
+  note?: string;
+  agentId?: string;
+  caller?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ListWorkspaceActivityParams extends PaginationParams {
+  outcome?: "worked" | "failed";
+  subject?: string;
+  memoryId?: string;
+}
+
+// ─── Invitations Domain ───
+
+export interface InvitationItem {
+  id: string;
+  organizationId?: string;
+  organizationSlug?: string;
+  workspaceId?: string;
+  email: string;
+  role: string;
+  status: "pending" | "accepted" | "declined" | "expired";
+  createdAt: string;
+  expiresAt: string;
+}
+
+// ─── Operator Domain ───
+
+export interface OperatorStats {
+  totalUsers: number;
+  totalWorkspaces: number;
+  totalMemories: number;
+  totalAgents: number;
+  activeRecalls24h: number;
+  uptimeSeconds: number;
+  version: string;
+}

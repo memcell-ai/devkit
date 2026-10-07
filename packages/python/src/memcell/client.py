@@ -16,6 +16,7 @@ from .auth import AuthManager
 from .exceptions import MemCellError, RateLimitError
 from .fleet import AsyncOrganizationFleetNamespace, OrganizationFleetNamespace
 from .insights import AsyncOrganizationInsightsNamespace, OrganizationInsightsNamespace
+from .invitations import AsyncInvitationsNamespace, InvitationsNamespace
 from .models import (
     AccountProfile,
     AdoptedTarget,
@@ -59,10 +60,13 @@ from .models import (
     SSOProviderSummary,
     SSOVerificationToken,
     UsageQuotas,
+    WorkspaceActivityItem,
     WorkspaceItem,
     WorkspaceOwner,
 )
+from .operator import AsyncOperatorNamespace, OperatorNamespace
 from .teams import AsyncOrganizationTeamsNamespace, OrganizationTeamsNamespace
+from .webhooks import AsyncWorkspaceWebhooksNamespace, WorkspaceWebhooksNamespace
 
 if TYPE_CHECKING:
     from .organization import AsyncOrganizationMemCell, OrganizationMemCell
@@ -820,6 +824,36 @@ class _WorkspacesNamespaceSync:
             "POST",
             f"/api/v1/{owner}/{workspace}/transfer",
             json={"targetOwner": target_owner},
+        )
+
+    def activity(
+        self,
+        namespace: str,
+        page: int = 1,
+        per_page: int = 25,
+        outcome: str | None = None,
+        subject: str | None = None,
+        memory_id: str | None = None,
+    ) -> PaginatedResult[WorkspaceActivityItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params: dict[str, Any] = {"page": page, "per_page": per_page}
+        if outcome:
+            params["outcome"] = outcome
+        if subject:
+            params["subject"] = subject
+        if memory_id:
+            params["memory_id"] = memory_id
+        data = self._client._request("GET", f"/api/v1/{owner}/{workspace}/activity", params=params)
+        raw_items = data.get("items") or []
+        items = [WorkspaceActivityItem(**i) for i in raw_items]
+        return PaginatedResult(
+            items=items,
+            pagination=PaginationMetadata(
+                page=data.get("page", page),
+                per_page=data.get("perPage") or data.get("per_page", per_page),
+                total=data.get("total", len(items)),
+                has_more=data.get("hasMore") or data.get("has_more", False),
+            ),
         )
 
 
@@ -1999,6 +2033,38 @@ class _WorkspacesNamespaceAsync:
             json={"targetOwner": target_owner},
         )
 
+    async def activity(
+        self,
+        namespace: str,
+        page: int = 1,
+        per_page: int = 25,
+        outcome: str | None = None,
+        subject: str | None = None,
+        memory_id: str | None = None,
+    ) -> PaginatedResult[WorkspaceActivityItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params: dict[str, Any] = {"page": page, "per_page": per_page}
+        if outcome:
+            params["outcome"] = outcome
+        if subject:
+            params["subject"] = subject
+        if memory_id:
+            params["memory_id"] = memory_id
+        data = await self._client._request(
+            "GET", f"/api/v1/{owner}/{workspace}/activity", params=params
+        )
+        raw_items = data.get("items") or []
+        items = [WorkspaceActivityItem(**i) for i in raw_items]
+        return PaginatedResult(
+            items=items,
+            pagination=PaginationMetadata(
+                page=data.get("page", page),
+                per_page=data.get("perPage") or data.get("per_page", per_page),
+                total=data.get("total", len(items)),
+                has_more=data.get("hasMore") or data.get("has_more", False),
+            ),
+        )
+
 
 class _AgentsNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
@@ -2751,6 +2817,14 @@ class MemCell:
         self.scopes = _ScopesNamespaceSync(self)
         self.sweep = _SweepNamespaceSync(self)
         self.promotions = _PromotionsNamespaceSync(self)
+        self.webhooks = WorkspaceWebhooksNamespace(self)
+        self.operator = OperatorNamespace(self)
+        self.invitations = InvitationsNamespace(self)
+        self.teams = OrganizationTeamsNamespace(self)
+
+    @property
+    def insights(self) -> OrganizationInsightsNamespace:
+        return self.organizations.insights
 
     def close(self) -> None:
         if not self._custom_client:
@@ -3206,6 +3280,14 @@ class AsyncMemCell:
         self.scopes = _ScopesNamespaceAsync(self)
         self.sweep = _SweepNamespaceAsync(self)
         self.promotions = _PromotionsNamespaceAsync(self)
+        self.webhooks = AsyncWorkspaceWebhooksNamespace(self)
+        self.operator = AsyncOperatorNamespace(self)
+        self.invitations = AsyncInvitationsNamespace(self)
+        self.teams = AsyncOrganizationTeamsNamespace(self)
+
+    @property
+    def insights(self) -> AsyncOrganizationInsightsNamespace:
+        return self.organizations.insights
 
     async def aclose(self) -> None:
         if not self._custom_client:

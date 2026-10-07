@@ -13,6 +13,7 @@ from .models import (
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
     DeleteMemoryResponse,
+    EnterpriseInsights,
     FeedbackResponse,
     JobEvent,
     ListCollaboratorsResponse,
@@ -31,7 +32,9 @@ from .models import (
     ReportResponse,
     ScopedExecutionContext,
     ScopeItem,
+    WorkspaceActivityItem,
 )
+from .webhooks import ScopedWorkspaceWebhooksAsync, ScopedWorkspaceWebhooksSync
 
 T = TypeVar("T")
 
@@ -420,6 +423,13 @@ class ScopedMemCell:
         self.collaborators = _ScopedCollaboratorsSync(client, namespace)
         self.scopes = _ScopedScopesSync(client, namespace)
         self.promotions = _ScopedPromotionsSync(client, namespace)
+        self.webhooks = ScopedWorkspaceWebhooksSync(client.webhooks, namespace)
+
+    def activity(self, **kwargs: Any) -> PaginatedResult[WorkspaceActivityItem]:
+        return self._client.workspaces.activity(self.namespace, **kwargs)
+
+    def insights(self, timeframe: str = "30d") -> EnterpriseInsights:
+        return self._client.insights.get_for_workspace(self.namespace, timeframe=timeframe)
 
     def recall(
         self,
@@ -632,6 +642,13 @@ class AsyncScopedMemCell:
         self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
         self.scopes = _ScopedScopesAsync(client, namespace)
         self.promotions = _ScopedPromotionsAsync(client, namespace)
+        self.webhooks = ScopedWorkspaceWebhooksAsync(client.webhooks, namespace)
+
+    async def activity(self, **kwargs: Any) -> PaginatedResult[WorkspaceActivityItem]:
+        return await self._client.workspaces.activity(self.namespace, **kwargs)
+
+    async def insights(self, timeframe: str = "30d") -> EnterpriseInsights:
+        return await self._client.insights.get_for_workspace(self.namespace, timeframe=timeframe)
 
     async def recall(
         self,

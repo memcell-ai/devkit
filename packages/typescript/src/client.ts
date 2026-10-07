@@ -10,6 +10,11 @@ import { AccountNamespace } from "./account.js";
 import { ScopesNamespace } from "./scopes.js";
 import { SweepNamespace } from "./sweep.js";
 import { PromotionsNamespace } from "./promotions.js";
+import { WebhooksNamespace } from "./webhooks.js";
+import { OperatorNamespace } from "./operator.js";
+import { InvitationsNamespace } from "./invitations.js";
+import { OrganizationTeamsNamespace } from "./teams.js";
+import { OrganizationInsightsNamespace } from "./insights.js";
 import {
   MemCellError,
   RateLimitError,
@@ -85,6 +90,33 @@ export class MemCell {
    */
   readonly promotions: PromotionsNamespace;
 
+  /**
+   * Workspace webhook lifecycle and test dispatch APIs.
+   */
+  readonly webhooks: WebhooksNamespace;
+
+  /**
+   * Platform operator management and telemetry APIs.
+   */
+  readonly operator: OperatorNamespace;
+
+  /**
+   * Pending invitations management APIs.
+   */
+  readonly invitations: InvitationsNamespace;
+
+  /**
+   * Organization team management APIs.
+   */
+  readonly teams: OrganizationTeamsNamespace;
+
+  /**
+   * Enterprise cognitive KPIs, token avoidance economics, and latency telemetry.
+   */
+  get insights(): OrganizationInsightsNamespace {
+    return this.organizations.insights;
+  }
+
   constructor(config: MemCellConfig = {}) {
     let base = config.baseUrl;
     if (
@@ -128,6 +160,10 @@ export class MemCell {
     this.scopes = new ScopesNamespace(this);
     this.sweep = new SweepNamespace(this);
     this.promotions = new PromotionsNamespace(this);
+    this.webhooks = new WebhooksNamespace(this);
+    this.operator = new OperatorNamespace(this);
+    this.invitations = new InvitationsNamespace(this);
+    this.teams = new OrganizationTeamsNamespace(this);
   }
 
   /**

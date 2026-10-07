@@ -21,6 +21,7 @@ from .insights import (
     ScopedOrganizationInsightsAsync,
     ScopedOrganizationInsightsSync,
 )
+from .invitations import AsyncInvitationsNamespace, InvitationsNamespace
 from .models import (
     MEMORY_SCOPES,
     MEMORY_TYPES,
@@ -44,6 +45,7 @@ from .models import (
     FleetAgent,
     FleetAgentDetail,
     FleetAgentKeyCreated,
+    InvitationItem,
     JobEvent,
     LatencyMs,
     ListCollaboratorsResponse,
@@ -53,6 +55,7 @@ from .models import (
     MemoryScope,
     MemoryStatus,
     MemoryType,
+    OperatorStats,
     OrganizationItem,
     OrganizationSSOResult,
     OrgInvitationItem,
@@ -79,9 +82,13 @@ from .models import (
     SSOVerificationToken,
     TeamMemberItem,
     UsageQuotas,
+    WebhookPingResult,
+    WorkspaceActivityItem,
     WorkspaceItem,
     WorkspaceOwner,
+    WorkspaceWebhookItem,
 )
+from .operator import AsyncOperatorNamespace, OperatorNamespace
 from .organization import AsyncOrganizationMemCell, OrganizationMemCell
 from .scoped import AsyncScopedMemCell, ScopedExecutionResult, ScopedMemCell
 from .teams import (
@@ -91,6 +98,12 @@ from .teams import (
     ScopedOrganizationTeamsAsync,
     ScopedOrganizationTeamsSync,
     TeamMembersNamespace,
+)
+from .webhooks import (
+    AsyncWorkspaceWebhooksNamespace,
+    ScopedWorkspaceWebhooksAsync,
+    ScopedWorkspaceWebhooksSync,
+    WorkspaceWebhooksNamespace,
 )
 
 __version__ = "0.1.5"
@@ -104,7 +117,9 @@ __all__ = [
     "AgentItem",
     "AgentKeyItem",
     "ApiRequestQuotas",
+    "AsyncInvitationsNamespace",
     "AsyncMemCell",
+    "AsyncOperatorNamespace",
     "AsyncOrganizationAuditNamespace",
     "AsyncOrganizationFleetNamespace",
     "AsyncOrganizationInsightsNamespace",
@@ -113,6 +128,7 @@ __all__ = [
     "AsyncScopedMemCell",
     "AsyncSiemDestinationsNamespace",
     "AsyncTeamMembersNamespace",
+    "AsyncWorkspaceWebhooksNamespace",
     "AuditEvent",
     "AuthManager",
     "CollaboratorItem",
@@ -128,6 +144,8 @@ __all__ = [
     "FleetAgent",
     "FleetAgentDetail",
     "FleetAgentKeyCreated",
+    "InvitationItem",
+    "InvitationsNamespace",
     "JobEvent",
     "LatencyMs",
     "ListCollaboratorsResponse",
@@ -139,6 +157,8 @@ __all__ = [
     "MemoryScope",
     "MemoryStatus",
     "MemoryType",
+    "OperatorNamespace",
+    "OperatorStats",
     "OrgInvitationItem",
     "OrgMemberItem",
     "OrgTeam",
@@ -178,12 +198,18 @@ __all__ = [
     "ScopedOrganizationInsightsSync",
     "ScopedOrganizationTeamsAsync",
     "ScopedOrganizationTeamsSync",
+    "ScopedWorkspaceWebhooksAsync",
+    "ScopedWorkspaceWebhooksSync",
     "SiemDestination",
     "SiemDestinationsNamespace",
     "TeamMemberItem",
     "TeamMembersNamespace",
     "UsageQuotas",
+    "WebhookPingResult",
+    "WorkspaceActivityItem",
     "WorkspaceItem",
     "WorkspaceOwner",
+    "WorkspaceWebhookItem",
+    "WorkspaceWebhooksNamespace",
     "__version__",
 ]
