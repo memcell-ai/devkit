@@ -1,0 +1,1194 @@
+import { mkdtemp, writeFile, readFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+// The loop, as the hooks fire it. What is pinned is which leg runs at which
+// moment, and the two principles that keep a hook safe to install in somebody's
+// session: it fails open on every path, and it never judges — it reports an
+// outcome only where the memory itself said the material corroborated a
+// memory a recall had served.
+
+const home = await mkdtemp(join(tmpdir(), "memcell-hook-home-"));
+const project = await mkdtemp(join(tmpdir(), "memcell-hook-proj-"));
+
+vi.mock("node:os", async (original) => ({
+  ...(await original<typeof import("node:os")>()),
+  homedir: () => home,
+}));
+
+const calls: {
+  path: string;
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+}[] = [];
+let answer: (path: string) => unknown = () => ({});
+
+vi.stubGlobal(
+  "fetch",
+  async (url: string, init: { body: string; headers: Record<string, string> }) => {
+    const path = new URL(url).pathname.replace("/api/v1/", "");
+    calls.push({
+      path,
+      body: JSON.parse(init.body) as Record<string, unknown>,
+      headers: init.headers,
+    });
+    const body = answer(path);
+    // A number is a refusal with that status — the difference between an
+    // outage and a refusal the content earned is the whole point of one of
+    // the suites below.
+    if (typeof body === "number") return { ok: false, status: body, json: async () => ({}) };
+    // A refusal that SAYS something — `{ refuse, message }`. The instance
+    // always sends its reason on a 4xx; a fake that never does cannot show
+    // whether the hook keeps it.
+    if (body && typeof body === "object" && "refuse" in body) {
+      const r = body as { refuse: number; message: string };
+      return { ok: false, status: r.refuse, json: async () => ({ message: r.message }) };
+    }
+    if (body === null) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => body };
+  },
+);
+
+const { runMoment } = await import("../src/loop/hook.js");
+const { LEGS } = await import("../src/loop/moments.js");
+const { saveAgentKey } = await import("../src/keyring.js");
+const { saveProject } = await import("../src/workspace.js");
+
+const transcript = join(project, "t.jsonl");
+const projectLog = (space: string = "api") => join(home, ".memcell", "projects", space, "hook.log");
+
+beforeAll(async () => {
+  await saveProject({ instance: "http://memcell.test", space: "api" }, project);
+  await saveAgentKey({
+    instance: "http://memcell.test",
+    keyId: "key_1",
+    key: "mc_ktest",
+    project,
+  });
+  await mkdir(join(home, ".memcell"), { recursive: true });
+  await writeFile(
+    transcript,
+    [
+      JSON.stringify({ message: { role: "user", content: "how do we handle money?" } }),
+      JSON.stringify({
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Amounts are integer cents." },
+            // What the turn WROTE, as the transcript records it: the names
+            // ride the hand-over; the reads and the contents never do.
+            {
+              type: "tool_use",
+              name: "Edit",
+              input: { file_path: `${project}/src/money.ts` },
+            },
+            {
+              type: "tool_use",
+              name: "Write",
+              input: { file_path: `${project}/src/money.test.ts` },
+            },
+            { type: "tool_use", name: "Read", input: { file_path: `${project}/README.md` } },
+          ],
+        },
+      }),
+    ].join("\n"),
+  );
+});
+
+/** stdin as an agent hands it over. */
+function fed(payload: unknown) {
+  const chunks = [Buffer.from(JSON.stringify(payload))];
+  Object.defineProperty(process, "stdin", {
+    value: Object.assign({
+      isTTY: false,
+      [Symbol.asyncIterator]: async function* () {
+        yield* chunks;
+      },
+    }),
+    configurable: true,
+  });
+}
+
+const reset = () => {
+  calls.length = 0;
+  answer = () => ({});
+};
+
+describe("which leg runs when", () => {
+  it("recalls before the agent acts, and only then", () => {
+    expect(LEGS["session-start"]).toEqual(["recall"]);
+    expect(LEGS["prompt-submit"]).toEqual(["recall"]);
+    // Remembering at prompt-submit would hand over a turn that has not
+    // happened; reporting there would report on nothing.
+    expect(LEGS["turn-end"]).toEqual(["remember", "report"]);
+    expect(LEGS["session-end"]).toEqual(["remember", "report"]);
+  });
+});
+
+describe("recall", () => {
+  it("asks the prompt at prompt-submit and injects what comes back", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m1",
+      results: [{ memoryId: "s1", text: "Amounts are cents.", confidence: 0.8, layer: "team" }],
+    });
+    fed({ session_id: "r1", cwd: project, prompt: "how do we handle money?" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    expect(calls[0]!.path).toBe("recall");
+    expect(calls[0]!.body.intent).toBe("how do we handle money?");
+    expect(out.context).toContain("Amounts are cents.");
+    // The confidence rides along: a memory stripped of it invites
+    // treating a guess as a fact.
+    expect(out.context).toContain("0.80");
+  });
+
+  it("leads with what this session has already gone against", async () => {
+    // The correction only works if the agent reads it. Buried fifteenth in a
+    // list it is one more fact; the session has already demonstrated that is
+    // not enough, which is the whole reason it is being said twice.
+    reset();
+    answer = () => ({
+      momentId: "m2",
+      results: [
+        { memoryId: "s1", text: "Amounts are cents.", confidence: 0.8, layer: "team" },
+        {
+          memoryId: "s2",
+          text: "Never call the gateway from a migration.",
+          confidence: 0.7,
+          layer: "team",
+          diverged: true,
+        },
+      ],
+    });
+    fed({ session_id: "r9", cwd: project, prompt: "add the migration" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    const context = out.context ?? "";
+    expect(context).toContain("already gone against these this session");
+    // It leads: the warning comes before the ordinary recall heading.
+    expect(context.indexOf("Never call the gateway from a migration.")).toBeLessThan(
+      context.indexOf("From this workspace's memory"),
+    );
+    // And it is not repeated below as an ordinary memory.
+    expect(context.split("Never call the gateway from a migration.")).toHaveLength(2);
+    // Everything else still arrives, in its own section.
+    expect(context).toContain("Amounts are cents.");
+  });
+
+  it("says nothing about divergence when there is none", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m3",
+      results: [{ memoryId: "s1", text: "Amounts are cents.", confidence: 0.8, layer: "team" }],
+    });
+    fed({ session_id: "r10", cwd: project, prompt: "how do we handle money?" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    expect(out.context).not.toContain("gone against");
+  });
+
+  it("separates operational guards from conventions into their own prominent section", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m4",
+      results: [
+        {
+          memoryId: "s1",
+          text: "Amounts are cents.",
+          confidence: 0.8,
+          layer: "team",
+          kind: "convention",
+        },
+        {
+          memoryId: "s2",
+          text: "Manual database mocks are prohibited — use seedSubjects().",
+          confidence: 0.95,
+          layer: "team",
+          kind: "gotcha",
+        },
+      ],
+    });
+    fed({ session_id: "r11", cwd: project, prompt: "write test" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    const context = out.context ?? "";
+    expect(context).toContain("OPERATIONAL GUARDS & INVARIANTS");
+    expect(context).toContain("[GUARD] Manual database mocks are prohibited");
+    expect(context.indexOf("OPERATIONAL GUARDS & INVARIANTS")).toBeLessThan(
+      context.indexOf("From this workspace's memory"),
+    );
+    expect(context).toContain("Amounts are cents.");
+  });
+
+  it("warns loudly when prompt mentions a guarded flow without its required trigger syntax", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m5",
+      results: [
+        {
+          memoryId: "s-rel",
+          text: "Release flow is executed only when explicitly triggered by [release] in a message; no automatic or standing release cadence.",
+          confidence: 0.64,
+          layer: "team",
+          kind: "convention",
+        },
+      ],
+    });
+    fed({ session_id: "r12", cwd: project, prompt: "time for release pipeline" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    const context = out.context ?? "";
+    expect(context).toContain("🚨 OPERATIONAL GUARD TRIGGER REQUIRED:");
+    expect(context).toContain("Directive [s-rel] requires the explicit trigger '[release]'");
+    expect(context).toContain("You MUST HALT and refuse to proceed");
+  });
+
+  it("permits the operation when the prompt includes the required trigger token", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m6",
+      results: [
+        {
+          memoryId: "s-rel",
+          text: "Release flow is executed only when explicitly triggered by [release] in a message; no automatic or standing release cadence.",
+          confidence: 0.64,
+          layer: "team",
+          kind: "convention",
+        },
+      ],
+    });
+    fed({ session_id: "r13", cwd: project, prompt: "time for release pipeline [release]" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    const context = out.context ?? "";
+    expect(context).not.toContain("🚨 OPERATIONAL GUARD TRIGGER REQUIRED:");
+    expect(context).toContain("OPERATIONAL GUARDS & INVARIANTS");
+    expect(context).toContain(
+      "Release flow is executed only when explicitly triggered by [release]",
+    );
+  });
+
+  it("asks about the work itself at session start, where there is no prompt yet", async () => {
+    reset();
+    answer = () => ({ momentId: "m2", results: [] });
+    fed({ session_id: "r2", cwd: project });
+
+    await runMoment("session-start", "claude");
+    expect(calls[0]!.path).toBe("recall");
+    expect(String(calls[0]!.body.intent)).toContain("api");
+  });
+
+  it("says nothing when memory has nothing — silence, not noise in the turn", async () => {
+    reset();
+    answer = () => ({ momentId: "m3", results: [], note: "This memory is empty." });
+    fed({ session_id: "r3", cwd: project, prompt: "anything" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    // Even with something to say. Somebody is watching the cursor here, and
+    // the same sentence on every prompt is noise rather than help.
+    expect(out.context).toBeUndefined();
+  });
+
+  it("passes the memory's own words on once, at the start, when it found nothing", async () => {
+    // An empty recall and a broken hook look identical from inside a
+    // session, and an agent told nothing concludes the wiring is wrong.
+    // What the emptiness MEANS is memcell's to say, so the hook carries the
+    // sentence rather than composing one.
+    reset();
+    answer = () => ({
+      momentId: "m4",
+      results: [],
+      note: "This memory is empty — nothing has been filed here yet.",
+    });
+    fed({ session_id: "r4", cwd: project });
+
+    const out = await runMoment("session-start", "claude");
+    expect(out.context).toBe("This memory is empty — nothing has been filed here yet.");
+  });
+
+  it("carries what the memory said into the log, so a quiet firing is readable", async () => {
+    reset();
+    answer = () => ({ momentId: "m5", results: [], note: "Nothing here answers that." });
+    fed({ session_id: "r5", cwd: project, prompt: "anything" });
+
+    await runMoment("prompt-submit", "claude");
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("Nothing here answers that.");
+  });
+});
+
+describe("remember, and the report it justifies", () => {
+  // The turn's name is the session plus the read offset, so an offset that
+  // stands still names the next turn identically to this one and the
+  // instance stands the delivery down as already handed over — forever. A
+  // reader that returns material without advancing is therefore held back
+  // here, at the seam where the name is made, rather than trusted.
+  it("holds back material that arrived without the offset advancing", async () => {
+    reset();
+    answer = () => ({ created: [], reinforced: [], attributed: [] });
+
+    // A reader that hands over text and leaves the offset exactly where it
+    // found it — the shape that wedged every session on the machine.
+    const capture = await import("../src/adapters/capture.js");
+    const stuck = vi
+      .spyOn(capture, "readJsonlSlice")
+      .mockImplementation(async (_path, from, onEntry) => {
+        onEntry({
+          type: "assistant",
+          message: { role: "assistant", content: "A decision worth keeping, at length." },
+        });
+        return from;
+      });
+
+    fed({ session_id: "stuck", cwd: project, transcript_path: transcript });
+    await runMoment("turn-end", "claude");
+    stuck.mockRestore();
+
+    // Nothing was handed over, so nothing can be named twice.
+    expect(calls.find((c) => c.path.endsWith("remember"))).toBeUndefined();
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("without advancing");
+  });
+
+  it("hands the turn's material over, and reports back what the engine attributed", async () => {
+    reset();
+    answer = (path) =>
+      path === "recall"
+        ? {
+            momentId: "m9",
+            results: [{ memoryId: "s9", text: "Cents.", confidence: 0.5, layer: "me" }],
+          }
+        : path.endsWith("remember")
+          ? {
+              created: [],
+              reinforced: [{ memoryId: "s9" }],
+              attributed: [{ memoryId: "s9", outcome: "worked" }],
+            }
+          : {};
+
+    fed({ session_id: "loop", cwd: project, prompt: "money?" });
+    await runMoment("prompt-submit", "claude");
+
+    reset();
+    answer = (path) =>
+      path.endsWith("remember")
+        ? {
+            created: [],
+            reinforced: [{ memoryId: "s9" }],
+            attributed: [{ memoryId: "s9", outcome: "worked" }],
+          }
+        : {};
+    fed({ session_id: "loop", cwd: project, transcript_path: transcript });
+    await runMoment("turn-end", "claude");
+
+    const rememberCall = calls.find((c) => c.path.endsWith("remember"));
+    expect(String(rememberCall!.body.raw)).toContain("integer cents");
+    // The files the turn wrote ride the hand-over by NAME, relative to the
+    // project — and only the writes: the Read of README.md does not travel.
+    expect(rememberCall!.body.touched).toEqual(["src/money.ts", "src/money.test.ts"]);
+    expect(String(rememberCall!.body.raw)).not.toContain("README");
+
+    // THE HOOK IS A PIPE: it never posts an outcome of its own. The engine
+    // judged and the remember response carried the credit; the hook only reports
+    // what came back.
+    expect(calls.find((c) => c.path.includes("/outcomes"))).toBeUndefined();
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("report · 1 worked");
+  });
+
+  it("posts no outcome of its own — attribution is the engine's, not the hook's", async () => {
+    reset();
+    answer = (path) =>
+      path.endsWith("remember")
+        ? { created: [], reinforced: [{ memoryId: "stranger" }], attributed: [] }
+        : {};
+    fed({ session_id: "solo", cwd: project, transcript_path: transcript });
+
+    await runMoment("turn-end", "claude");
+    expect(calls.find((c) => c.path.includes("/outcomes"))).toBeUndefined();
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("nothing the session bore on");
+  });
+
+  it("hands over nothing when the transcript has not moved", async () => {
+    reset();
+    answer = () => ({ created: [], reinforced: [] });
+    fed({ session_id: "again", cwd: project, transcript_path: transcript });
+    await runMoment("turn-end", "claude");
+    const first = calls.filter((c) => c.path.endsWith("remember")).length;
+
+    reset();
+    fed({ session_id: "again", cwd: project, transcript_path: transcript });
+    await runMoment("turn-end", "claude");
+    // The second firing has nothing new: a turn ships what is new, never the
+    // whole conversation again.
+    expect(calls.filter((c) => c.path.endsWith("remember"))).toHaveLength(0);
+    expect(first).toBe(1);
+  });
+});
+
+describe("the working session", () => {
+  it("puts the same session on every leg it fires, so the record can group them", async () => {
+    reset();
+    answer = (path) =>
+      path === "recall"
+        ? {
+            momentId: "m9",
+            results: [{ memoryId: "s9", text: "x", confidence: 0.8, layer: "team" }],
+          }
+        : { created: [], reinforced: [{ memoryId: "s9" }], attributed: [] };
+    await writeFile(
+      transcript,
+      JSON.stringify({
+        message: { role: "assistant", content: "The pooler drops advisory locks." },
+      }),
+    );
+    fed({ session_id: "sess-real", cwd: project, transcript_path: transcript });
+
+    await runMoment("session-start", "claude");
+    await runMoment("turn-end", "claude");
+
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.every((c) => c.headers["x-memcell-session"] === "sess-real")).toBe(true);
+  });
+
+  it("sends no session at all where the harness gave none", async () => {
+    // "unknown" on the wire would read back as one long session containing
+    // every unidentified firing on the machine — a fiction the record cannot
+    // tell from a fact.
+    reset();
+    answer = () => ({ momentId: "m10", results: [] });
+    fed({ cwd: project, prompt: "anything" });
+
+    await runMoment("prompt-submit", "claude");
+    expect(calls[0]!.headers["x-memcell-session"]).toBeUndefined();
+  });
+});
+
+describe("failing open", () => {
+  it("says nothing and does not throw when every door refuses", async () => {
+    reset();
+    answer = () => null;
+    fed({ session_id: "down", cwd: project, prompt: "anything" });
+    await expect(runMoment("prompt-submit", "claude")).resolves.toMatchObject({});
+  });
+
+  it("sends its deadline and the turn's name with the call", async () => {
+    // The budget rides every call — the instance works TO the caller's
+    // deadline instead of being cut off by it. The turn's name rides the
+    // hand-over, fixed before the read moves the offset, so a retried
+    // delivery of this turn carries the same name.
+    reset();
+    answer = (path) =>
+      path === "recall"
+        ? { momentId: "m-b", results: [] }
+        : { created: [], reinforced: [], attributed: [] };
+    fed({ session_id: "s-budget", cwd: project, prompt: "anything", transcript_path: transcript });
+    await runMoment("prompt-submit", "claude");
+    await runMoment("turn-end", "claude");
+
+    const recall = calls.find((c) => c.path === "recall");
+    expect(Number(recall!.headers["x-memcell-budget"])).toBeGreaterThanOrEqual(8_000);
+    const rememberCall = calls.find((c) => c.path.endsWith("remember"));
+    expect(Number(rememberCall!.headers["x-memcell-budget"])).toBeGreaterThan(0);
+    expect(rememberCall!.headers["x-memcell-turn"]).toMatch(/^s-budget:/);
+  });
+
+  it("retries once on a network failure, with the same turn name", async () => {
+    // A refusal is an answer and is never retried; a network failure is
+    // not, and gets exactly one more try. The turn's name is what makes
+    // the retry safe: a delivery whose response was lost lands once.
+    reset();
+    let drops = 1;
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (url: unknown, init: unknown) => {
+      if (String(url).endsWith("remember") && drops-- > 0) throw new TypeError("socket hangup");
+      return (real as (u: unknown, i: unknown) => unknown)(url, init);
+    }) as typeof fetch;
+    try {
+      answer = (path) =>
+        path === "recall"
+          ? { momentId: "m-r", results: [] }
+          : { created: [{ memoryId: "st1" }], reinforced: [], attributed: [] };
+      fed({ session_id: "s-retry", cwd: project, prompt: "x", transcript_path: transcript });
+      await runMoment("turn-end", "claude");
+    } finally {
+      globalThis.fetch = real;
+    }
+
+    const deliveries = calls.filter((c) => c.path.endsWith("remember"));
+    expect(deliveries).toHaveLength(1); // the drop never reached the recorder
+    // The tag carries the agent, not the session, so anchor on the last
+    // remember line — the one this turn wrote after its retry.
+    const log = await readFile(projectLog(), "utf8");
+    const tail = log.slice(log.lastIndexOf(" remember "));
+    expect(tail).toContain("1 kept");
+    expect(tail).not.toContain("could not be reached");
+  });
+
+  it("logs a refusal as a refusal, never as an honest zero", async () => {
+    // The first full run against a misconfigured instance logged
+    // "0 served" and "0 kept, 0 reinforced" for a whole session while the
+    // server errored on every call. The agent side stays silent — fail
+    // open — but the log is where an operator reads why nothing landed,
+    // and there a refusal and an empty judgment are different facts.
+    reset();
+    answer = () => null;
+    fed({ session_id: "down-2", cwd: project, prompt: "anything", transcript_path: transcript });
+    await runMoment("prompt-submit", "claude");
+    await runMoment("turn-end", "claude");
+
+    const log = await readFile(projectLog(), "utf8");
+    const today = log.slice(log.indexOf("down-2") - 200);
+    expect(today).toContain("answered 503");
+    expect(today).toContain("not captured, holding this turn for the next firing");
+    expect(today).toContain("not asked");
+    expect(today).not.toContain("0 served");
+    expect(today).not.toContain("0 kept");
+  });
+
+  it("says the link is there but the key is gone, which is a different problem", async () => {
+    // The first real session the hooks ever ran in logged "not linked here"
+    // three times while the `.memcell` file sat in the directory. The link
+    // was fine; the machine had forgotten the key — after a reset — and the
+    // message sent somebody to check the one thing that was not wrong.
+    reset();
+    const { forgetAgentKey } = await import("../src/keyring.js");
+    await forgetAgentKey("http://memcell.test", "key_1");
+    fed({ session_id: "gone", cwd: project, prompt: "anything" });
+
+    const out = await runMoment("prompt-submit", "claude");
+    expect(out.context).toBeUndefined();
+    expect(calls).toHaveLength(0);
+
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("no key for");
+    expect(log).toContain("memcell connect");
+
+    // Put it back for whatever runs after this.
+    await saveAgentKey({
+      instance: "http://memcell.test",
+      keyId: "key_1",
+      key: "mc_ktest",
+      project,
+    });
+  });
+
+  it("does nothing at all where the directory is not linked", async () => {
+    reset();
+    const elsewhere = await mkdtemp(join(tmpdir(), "memcell-unlinked-"));
+    fed({ session_id: "nowhere", cwd: elsewhere, prompt: "anything" });
+    const out = await runMoment("prompt-submit", "claude");
+    expect(calls).toHaveLength(0);
+    expect(out.context).toBeUndefined();
+  });
+
+  it("writes a line whichever way it went, so 'fired and found nothing' is tellable from 'never fired'", async () => {
+    const projLog = await readFile(projectLog(), "utf8");
+    const globalLog = await readFile(join(home, ".memcell", "hook.log"), "utf8");
+    expect(projLog).toContain("recall · 0 served");
+    expect(globalLog).toContain("not wired");
+  });
+});
+
+describe("the wired invocation is portable", () => {
+  // A wiring is written on one machine and read on others, so it names
+  // `memcell` and nothing else — no interpreter path, no entry path, no
+  // agent id. That makes it committable, and it survives a version manager
+  // moving the interpreter out from under it.
+  //
+  // What this costs is written down because it was paid once already: on
+  // Windows, agents run hooks through a bash that does not share npm's
+  // PATH, and a bare `memcell` wired fine and then failed on every session
+  // start. Absolute paths bought that back and cost portability. So the
+  // bare word is the contract and `connect` earns it — it asks whether a
+  // hook's shell can resolve `memcell` and says plainly when it cannot,
+  // which turns a silent forever-failure into one sentence at wiring time.
+  const held = { argv: process.argv, execPath: process.execPath };
+  afterEach(() => {
+    process.argv = held.argv;
+    Object.defineProperty(process, "execPath", { value: held.execPath });
+  });
+
+  it("names the bare word, whatever interpreter and entry are running", async () => {
+    const { hookCommand } = await import("../src/loop/moments.js");
+    process.argv = [
+      held.execPath,
+      "C:\\Users\\ahmer iqbal\\AppData\\Roaming\\npm\\node_modules\\memcell\\dist\\index.js",
+    ];
+    Object.defineProperty(process, "execPath", { value: "C:\\Program Files\\nodejs\\node.exe" });
+    expect(hookCommand("session-start", "claude")).toBe("memcell hook session-start claude");
+  });
+
+  it("a throwaway npx run wires the same word, never its cache", async () => {
+    const { hookCommand, hookMatches } = await import("../src/loop/moments.js");
+    process.argv = [held.execPath, "/Users/x/.npm/_npx/abc123/node_modules/memcell/dist/index.js"];
+    const command = hookCommand("prompt-submit", "claude");
+    expect(command).toBe("memcell hook prompt-submit claude");
+    // Every older form is still recognised as ours, so a re-install
+    // replaces one rather than wiring a second beside it.
+    expect(hookMatches(command, "prompt-submit", "claude")).toBe(true);
+    expect(
+      hookMatches("memcell hook prompt-submit claude --agent old", "prompt-submit", "claude"),
+    ).toBe(true);
+    expect(
+      hookMatches(
+        '"/usr/bin/node" "/x/memcell" hook prompt-submit claude',
+        "prompt-submit",
+        "claude",
+      ),
+    ).toBe(true);
+  });
+
+  it("connect can tell whether a hook's shell will find it", async () => {
+    // The mitigation the bare word depends on. Without this question being
+    // asked out loud, an unresolvable `memcell` is a loop that does nothing
+    // and says nothing.
+    const { memcellOnPath } = await import("../src/adapters/shared.js");
+    expect(typeof (await memcellOnPath())).toBe("boolean");
+  });
+});
+
+describe("a hand-over the instance will never take", () => {
+  /** Everything the remember door was actually sent, in order. */
+  const handedOver = () =>
+    calls.filter((c) => c.path.includes("remember")).map((c) => String(c.body.raw ?? ""));
+
+  /** Add a turn to the record, so the next firing has something new. */
+  const grow = async (path: string, what: string) => {
+    const line = JSON.stringify({ message: { role: "assistant", content: what } });
+    await writeFile(path, `${line}\n`, { flag: "a" });
+  };
+
+  it("moves past a turn the door refused, instead of re-sending it forever", async () => {
+    // The failure this exists for, measured on 2026-08-26: one session's
+    // record reached 879 MB against a door that takes 600k characters. Every
+    // turn-end read the whole file, was refused, rolled the offset back, and
+    // read a LARGER file next time. Seventy refusals over two days, and the
+    // log said "holding this turn for the next firing" every one of them.
+    reset();
+    const record = join(project, "refused.jsonl");
+    await writeFile(record, "");
+    await grow(record, "the first turn, which the door will refuse");
+
+    answer = (path) => (path.includes("remember") ? 400 : {});
+    fed({ session_id: "wedged", cwd: project, transcript_path: record });
+    await runMoment("turn-end", "claude");
+
+    await grow(record, "the second turn, which is new work");
+    fed({ session_id: "wedged", cwd: project, transcript_path: record });
+    await runMoment("turn-end", "claude");
+
+    const sent = handedOver();
+    expect(sent).toHaveLength(2);
+    // The second delivery must not contain the first turn again. Holding a
+    // refusal the content earned is not a retry — it is a loop that grows.
+    expect(sent[1]).not.toContain("the first turn");
+    expect(sent[1]).toContain("the second turn");
+
+    const log = await readFile(projectLog(), "utf8");
+    expect(log).toContain("not worth re-sending; moving past it");
+  });
+
+  it("still holds a turn the instance merely could not take right now", async () => {
+    // The other half, and why this cannot simply always advance: an outage,
+    // a spent budget or a restart are all worth waiting on, and a turn
+    // dropped on one of those is work the record never sees.
+    reset();
+    const record = join(project, "outage.jsonl");
+    await writeFile(record, "");
+    await grow(record, "the first turn, during an outage");
+
+    answer = (path) => (path.includes("remember") ? 503 : {});
+    fed({ session_id: "waiting", cwd: project, transcript_path: record });
+    await runMoment("turn-end", "claude");
+
+    await grow(record, "the second turn, still during it");
+    fed({ session_id: "waiting", cwd: project, transcript_path: record });
+    await runMoment("turn-end", "claude");
+
+    const sent = handedOver();
+    expect(sent).toHaveLength(2);
+    // Both turns ride the redelivery — the first was never taken.
+    expect(sent[1]).toContain("the first turn");
+    expect(sent[1]).toContain("the second turn");
+  });
+
+  it("never hands over more than the door will take", async () => {
+    // The client knows the ceiling rather than discovering it by being
+    // refused. Learned the hard way costs a turn's work per turn, forever.
+    reset();
+    const record = join(project, "huge.jsonl");
+    await writeFile(record, "");
+    await grow(record, `${"the beginning, long since scrolled past. ".repeat(20_000)}`);
+    await grow(record, "and the conclusion the turn actually reached");
+
+    answer = () => ({ created: [], reinforced: [], attributed: [] });
+    fed({ session_id: "huge", cwd: project, transcript_path: record });
+    await runMoment("turn-end", "claude");
+
+    const [sent] = handedOver();
+    expect(sent!.length).toBeLessThanOrEqual(600_000);
+    // The TAIL ships: on a turn this long the end is the conclusion and the
+    // start is the search that got there.
+    expect(sent).toContain("the conclusion the turn actually reached");
+  });
+});
+
+describe("the pairing survives the process", () => {
+  // Each hook firing is its own process. `before-act` is the ONLY thing that
+  // ever sees which memory was put in front of which act — the instance cannot
+  // recover that from the transcript, which is the entire reason the pairing
+  // is recorded on this side. It is written into the session note and handed
+  // over with the turn.
+  //
+  // Every path out of `before-act` returned early, and the note was kept at
+  // the bottom of the function, so none of them reached it. The pairing was
+  // written to memory and died with the process on every act since the leg
+  // was introduced: no pairing row was ever written, and a memory whose
+  // guidance fired every single turn read as one whose guidance had never fired.
+  //
+  // This asserts the note ON DISK, not the return value, because the return
+  // value was always right.
+  const noteOf = async (id: string) =>
+    JSON.parse(await readFile(join(home, ".memcell", "sessions", `${id}.json`), "utf8")) as {
+      activeMemories?: unknown[];
+      standing?: unknown[];
+      servedAt?: { memoryId: string; act: string; tool: string; became: string }[];
+    };
+
+  it("keeps what was put in front of an act, where the next process can read it", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m9",
+      results: [
+        {
+          memoryId: "s-guard",
+          text: "Never widen a consented scope.",
+          confidence: 0.8,
+          layer: "team",
+          appliesAt: ["change"],
+        },
+      ],
+    });
+    fed({ session_id: "pair1", cwd: project, prompt: "widen the scope" });
+    await runMoment("prompt-submit", "claude");
+    expect((await noteOf("pair1")).activeMemories).toHaveLength(1);
+
+    reset();
+    fed({
+      session_id: "pair1",
+      cwd: project,
+      tool_name: "Edit",
+      tool_input: { file_path: `${project}/src/scope.ts` },
+    });
+    await runMoment("before-act", "claude");
+
+    const kept = (await noteOf("pair1")).servedAt ?? [];
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatchObject({ memoryId: "s-guard", act: "change", became: "served" });
+  });
+
+  it("keeps it on the paths that say nothing, too", async () => {
+    // Four of the six ways out of this leg return before anything is said —
+    // no tool, no act, no memory bearing on it, already said this session.
+    // They still have to leave the note where they found it rather than
+    // dropping a pairing an earlier act recorded.
+    reset();
+    answer = () => ({
+      momentId: "m10",
+      results: [
+        {
+          memoryId: "s-guard",
+          text: "Never widen a consented scope.",
+          confidence: 0.8,
+          layer: "team",
+          appliesAt: ["change"],
+        },
+      ],
+    });
+    fed({ session_id: "pair2", cwd: project, prompt: "widen the scope" });
+    await runMoment("prompt-submit", "claude");
+
+    reset();
+    fed({
+      session_id: "pair2",
+      cwd: project,
+      tool_name: "Edit",
+      tool_input: { file_path: `${project}/src/scope.ts` },
+    });
+    await runMoment("before-act", "claude");
+    expect((await noteOf("pair2")).servedAt).toHaveLength(1);
+
+    // A read bears on nothing here: the leg returns without saying anything.
+    reset();
+    fed({
+      session_id: "pair2",
+      cwd: project,
+      tool_name: "Read",
+      tool_input: { file_path: `${project}/README.md` },
+    });
+    await runMoment("before-act", "claude");
+    expect((await noteOf("pair2")).servedAt).toHaveLength(1);
+  });
+});
+
+describe("a turn the door refuses", () => {
+  // Capture was wedged for nine days and the log could not say why.
+  //
+  // Two faults, one on each side. The hook guarded `material.text.length >=
+  // 20` while the door measures `raw.trim().length` — so a turn whose delta
+  // was mostly whitespace passed here and was refused there. A refused turn
+  // is HELD and retried, so the same material came back every firing and
+  // nothing behind it could land either: 204 refusals, all of them this.
+  //
+  // And the refusal's own sentence was dropped at the transport, so the log
+  // read "the instance answered 400" two hundred times with no reason in it.
+
+  const logText = async () => readFile(projectLog(), "utf8").catch(() => "");
+
+  it("says WHAT the instance refused, not just that it did", async () => {
+    reset();
+    answer = (path) =>
+      path.includes("remember") ? { refuse: 400, message: "Needs a few sentences." } : {};
+    fed({ session_id: "refused-1", cwd: project, transcript_path: transcript });
+    await runMoment("turn-end", "claude");
+
+    // The REASON, which is the whole point: a bare status told nobody what
+    // to fix, and the same turn was refused every firing for nine days.
+    const said = await logText();
+    expect(said).toContain("Needs a few sentences.");
+  });
+
+  it("does not hand over a turn the door will refuse for being empty", async () => {
+    // Whitespace is not material. The hook counted it as material and the
+    // door does not, so this turn was SENT and refused — every firing,
+    // forever, holding everything behind it.
+    const thin = join(project, "thin.jsonl");
+    await writeFile(
+      thin,
+      JSON.stringify({
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: `${"   \n\t  \n".repeat(8)}` }],
+        },
+      }),
+    );
+
+    reset();
+    answer = () => ({});
+    fed({ session_id: "thin-1", cwd: project, transcript_path: thin });
+    await runMoment("turn-end", "claude");
+
+    expect(calls.filter((c) => c.path.includes("remember"))).toHaveLength(0);
+  });
+});
+
+describe("after-act delivering staged guidance and failure recovery", () => {
+  it("delivers staged guidance in after-act that before-act advisory produced", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-cursor",
+      guardMode: "advisory",
+      results: [
+        {
+          memoryId: "s-advise",
+          text: "Prefer using upsert helper over raw write.",
+          confidence: 0.8,
+          layer: "team",
+          appliesAt: ["change"],
+        },
+      ],
+    });
+    fed({ session_id: "cursor-advisory-1", cwd: project, prompt: "modify the user store" });
+    await runMoment("prompt-submit", "cursor");
+
+    reset();
+    fed({
+      session_id: "cursor-advisory-1",
+      cwd: project,
+      tool_name: "Edit",
+      tool_input: { file_path: `${project}/src/store.ts` },
+    });
+    const beforeResult = await runMoment("before-act", "cursor");
+    expect(beforeResult.context).toContain("Prefer using upsert helper over raw write.");
+
+    // Now after-act fires (e.g. postToolUse in Cursor)
+    reset();
+    fed({
+      session_id: "cursor-advisory-1",
+      cwd: project,
+      tool_name: "Edit",
+    });
+    const afterResult = await runMoment("after-act", "cursor");
+    expect(afterResult.context).toContain("Prefer using upsert helper over raw write.");
+
+    // Next after-act call has no more pending guidance
+    reset();
+    fed({
+      session_id: "cursor-advisory-1",
+      cwd: project,
+      tool_name: "Edit",
+    });
+    const subsequentResult = await runMoment("after-act", "cursor");
+    expect(subsequentResult.context).toBeUndefined();
+  });
+
+  it("delivers tool failure recovery guidance on after-act", async () => {
+    reset();
+    fed({
+      session_id: "cursor-fail-1",
+      cwd: project,
+      tool_name: "Shell",
+      error_message: "Process exited with code 127: command not found",
+    });
+    const afterResult = await runMoment("after-act", "cursor");
+    expect(afterResult.context).toContain("Tool execution failed on Shell");
+    expect(afterResult.context).toContain("command not found");
+  });
+
+  it("evaluates subagent delegations through before-act guard", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-subagent",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-subagent",
+          text: "Never launch external subagents without approval.",
+          confidence: 0.9,
+          layer: "team",
+          appliesAt: ["send"],
+          refuses: true,
+        },
+      ],
+    });
+    fed({ session_id: "cursor-sub-1", cwd: project, prompt: "delegate task" });
+    await runMoment("prompt-submit", "cursor");
+
+    reset();
+    fed({
+      session_id: "cursor-sub-1",
+      cwd: project,
+      subagent_type: "Explore",
+      prompt: "find all configuration files",
+    });
+    const beforeResult = await runMoment("before-act", "cursor");
+    expect(beforeResult.refuse).toBe("Never launch external subagents without approval.");
+  });
+
+  it("evaluates subagentStart with task field", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-subagent-task",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-subagent-task",
+          text: "Never launch external subagents without approval.",
+          confidence: 0.9,
+          layer: "team",
+          appliesAt: ["send"],
+          refuses: true,
+        },
+      ],
+    });
+    fed({ session_id: "cursor-sub-2", cwd: project, prompt: "delegate task" });
+    await runMoment("prompt-submit", "cursor");
+
+    reset();
+    fed({
+      session_id: "cursor-sub-2",
+      workspace_roots: [project],
+      subagent_type: "generalPurpose",
+      task: "Run comprehensive audit",
+    });
+    const beforeResult = await runMoment("before-act", "cursor");
+    expect(beforeResult.refuse).toBe("Never launch external subagents without approval.");
+  });
+
+  it("evaluates preToolUse with Task tool", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-task-tool",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-task-tool",
+          text: "Never launch external subagents without approval.",
+          confidence: 0.9,
+          layer: "team",
+          appliesAt: ["send"],
+          refuses: true,
+        },
+      ],
+    });
+    fed({ session_id: "cursor-task-3", cwd: project, prompt: "run task" });
+    await runMoment("prompt-submit", "cursor");
+
+    reset();
+    fed({
+      session_id: "cursor-task-3",
+      workspace_roots: [project],
+      tool_name: "Task",
+      tool_input: { task: "Run audit" },
+    });
+    const beforeResult = await runMoment("before-act", "cursor");
+    expect(beforeResult.refuse).toBe("Never launch external subagents without approval.");
+  });
+
+  it("resolves project directory from workspace_roots when cwd is absent", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-roots",
+      results: [],
+    });
+    fed({
+      session_id: "cursor-roots-1",
+      workspace_roots: [project],
+      prompt: "test roots",
+    });
+    const res = await runMoment("prompt-submit", "cursor");
+    expect(res).toBeDefined();
+  });
+});
+
+describe("Claude Code hook loop integrations", () => {
+  it("delivers tool failure recovery guidance on after-act with Claude error payload", async () => {
+    reset();
+    fed({
+      session_id: "claude-fail-1",
+      cwd: project,
+      tool_name: "Bash",
+      error: "Command failed with exit code 1: git checkout main",
+      hook_event_name: "PostToolUseFailure",
+    });
+    const afterResult = await runMoment("after-act", "claude");
+    expect(afterResult.context).toContain(
+      "Tool execution failed on Bash: Command failed with exit code 1: git checkout main",
+    );
+    expect(afterResult.heard.hookEventName).toBe("PostToolUseFailure");
+
+    const { claude } = await import("../src/adapters/claude.js");
+    const spoken = claude.speak("after-act", afterResult.context ?? null, afterResult.heard);
+    const parsed = JSON.parse(spoken!) as {
+      hookSpecificOutput: { hookEventName: string; additionalContext: string };
+    };
+    expect(parsed.hookSpecificOutput.hookEventName).toBe("PostToolUseFailure");
+    expect(parsed.hookSpecificOutput.additionalContext).toContain("Tool execution failed on Bash");
+  });
+
+  it("seeds subagent context on SubagentStart", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-subagent-start",
+      results: [
+        {
+          memoryId: "s-sub-seed",
+          text: "Always sanitize input before calling APIs.",
+          confidence: 0.95,
+          layer: "project",
+        },
+      ],
+    });
+    fed({
+      session_id: "claude-sub-seed-1",
+      cwd: project,
+      agent_type: "Research",
+      agent_id: "agent-123",
+      hook_event_name: "SubagentStart",
+    });
+    const sessionResult = await runMoment("session-start", "claude");
+    expect(sessionResult.context).toContain("Always sanitize input before calling APIs.");
+    expect(sessionResult.heard.hookEventName).toBe("SubagentStart");
+
+    const { claude } = await import("../src/adapters/claude.js");
+    const spoken = claude.speak(
+      "session-start",
+      sessionResult.context ?? null,
+      sessionResult.heard,
+    );
+    const parsed = JSON.parse(spoken!) as {
+      hookSpecificOutput: { hookEventName: string; additionalContext: string };
+    };
+    expect(parsed.hookSpecificOutput.hookEventName).toBe("SubagentStart");
+    expect(parsed.hookSpecificOutput.additionalContext).toContain("Always sanitize input");
+  });
+
+  it("evaluates delegation through before-act guard for Agent tool", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-claude-agent",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-claude-agent",
+          text: "Never spawn subagents without user approval.",
+          confidence: 0.95,
+          layer: "team",
+          appliesAt: ["send"],
+          refuses: true,
+        },
+      ],
+    });
+    fed({ session_id: "claude-agent-1", cwd: project, prompt: "delegate task" });
+    await runMoment("prompt-submit", "claude");
+
+    reset();
+    fed({
+      session_id: "claude-agent-1",
+      cwd: project,
+      tool_name: "Agent",
+      tool_input: { prompt: "run subagent task" },
+    });
+    const beforeResult = await runMoment("before-act", "claude");
+    expect(beforeResult.refuse).toBe("Never spawn subagents without user approval.");
+
+    const { claude } = await import("../src/adapters/claude.js");
+    expect(claude.refuse).toBeDefined();
+    const spoken = claude.refuse!(beforeResult.refuse!);
+    const parsed = JSON.parse(spoken!) as {
+      hookSpecificOutput: {
+        hookEventName: string;
+        permissionDecision: string;
+        permissionDecisionReason: string;
+      };
+    };
+    expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(parsed.hookSpecificOutput.permissionDecisionReason).toBe(
+      "Never spawn subagents without user approval.",
+    );
+  });
+
+  it("evaluates delegation through before-act guard for Workflow tool", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-claude-workflow",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-claude-workflow",
+          text: "Never spawn workflows without user approval.",
+          confidence: 0.95,
+          layer: "team",
+          appliesAt: ["send"],
+          refuses: true,
+        },
+      ],
+    });
+    fed({ session_id: "claude-wf-1", cwd: project, prompt: "trigger workflow" });
+    await runMoment("prompt-submit", "claude");
+
+    reset();
+    fed({
+      session_id: "claude-wf-1",
+      cwd: project,
+      tool_name: "Workflow",
+      tool_input: { name: "deploy-pipeline" },
+    });
+    const beforeResult = await runMoment("before-act", "claude");
+    expect(beforeResult.refuse).toBe("Never spawn workflows without user approval.");
+  });
+});

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "ai.memcell/memcell",
+  "title": "MemCell",
+  "description": "Living memory for AI coding agents: recall before acting, report outcomes so confidence is earned.",
+  "repository": {
+    "url": "https://github.com/memcell-ai/cli",
+    "source": "github"
+  },
+  "version": "0.10.12",
+  "websiteUrl": "https://memcell.ai",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "memcell",
+      "version": "0.10.12",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "description": "the stdio face of the paired instance's /mcp door"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://memcell.ai/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <agent key>. Get one with `npx memcell connect` in a project, or from https://memcell.ai/agents",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://memcell.ai/mcp/public/{memory}",
+      "variables": {
+        "memory": {
+          "description": "a public memory's slug from https://memcell.ai/commons — readable without an account",
+          "isRequired": true
+        }
+      }
+    }
+  ]
+}

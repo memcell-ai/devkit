@@ -1,0 +1,154 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { call, MemcellError } from "../src/client.js";
+
+// What the HTTP client does when the answer is not the happy one.
+//
+// A terminal talks to whatever address it is given, and that address is
+// often wrong: a website instead of an instance, a dead port, a gateway
+// returning HTML. None of those should reach a person as a stack trace or a
+// raw "Unexpected token '<'" — the parser leaking through. Every one has to
+// come back as a sentence.
+
+const BASE = "http://instance.test";
+
+afterEach(() => vi.unstubAllGlobals());
+
+function answers(status: number, body: string, contentType = "application/json") {
+  vi.stubGlobal("fetch", async () =>
+    Object.assign(
+      new Response(body, { status, headers: { "content-type": contentType } }),
+      // Response.ok is derived from status, so the real Response is enough.
+      {},
+    ),
+  );
+}
+
+describe("the client, when the answer is not JSON", () => {
+  it("turns an HTML error page into a sentence, not a parse error", async () => {
+    answers(404, "<!DOCTYPE html><html><body>Not found</body></html>", "text/html");
+    const error = await call(BASE, "/api/v1/pair/claim", { method: "POST" }).catch((e) => e);
+    expect(error).toBeInstanceOf(MemcellError);
+    expect((error as MemcellError).message).not.toMatch(/Unexpected token|DOCTYPE|<html/);
+    expect((error as MemcellError).message).toContain("not memcell");
+  });
+
+  it("turns a 200 that is a web page into a sentence", async () => {
+    // The exact shape of the reported bug: a website answered where an
+    // instance was expected, and JSON.parse blew up on the markup.
+    answers(200, "<!DOCTYPE html><html><body>hello</body></html>", "text/html");
+    const error = await call(BASE, "/api/v1/pair/claim", { method: "POST" }).catch((e) => e);
+    expect(error).toBeInstanceOf(MemcellError);
+    expect((error as MemcellError).message).not.toMatch(/Unexpected token|DOCTYPE/);
+    expect((error as MemcellError).message).toContain("did not answer as a memcell instance");
+  });
+
+  it("keeps a JSON error's own message", async () => {
+    answers(404, JSON.stringify({ message: "That pairing is not open." }));
+    const error = await call(BASE, "/api/v1/pair/claim", { method: "POST" }).catch((e) => e);
+    expect((error as MemcellError).message).toBe("That pairing is not open.");
+  });
+
+  it("says it could not reach an instance that is not there", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    const error = await call(BASE, "/api/v1/pair/claim", { method: "POST" }).catch((e) => e);
+    expect((error as MemcellError).message).toContain("Could not reach");
+  });
+
+  it("returns the body when the answer really is JSON", async () => {
+    answers(200, JSON.stringify({ pair: "ABC123" }));
+    const body = await call<{ pair: string }>(BASE, "/api/v1/pair", { method: "POST" });
+    expect(body.pair).toBe("ABC123");
+  });
+});
+
+describe("an instance that accepts the connection and never answers", () => {
+  it("gives up rather than hanging the terminal, and says which it was", async () => {
+    // A command somebody typed must end. Without a deadline the call waits
+    // forever with nothing printed — verified against a socket that accepts
+    // and never replies.
+    vi.stubGlobal("fetch", (_url: string, init?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "TimeoutError";
+          reject(err);
+        });
+      });
+    });
+
+    const { call, MemcellError } = await import("../src/client.js");
+    const failed = await call("http://nowhere.test", "/api/v1/recall", {
+      method: "POST",
+      bearer: "mc_k",
+      timeoutMs: 20,
+    }).catch((e) => e);
+
+    expect(failed).toBeInstanceOf(MemcellError);
+    // A timeout and a refusal are different facts to debug on.
+    expect((failed as Error).message).toContain("did not answer in time");
+  });
+});
+
+describe("rate limiting & 429 backoff retry in call()", () => {
+  it("automatically retries on 429 and returns successful response", async () => {
+    let callCount = 0;
+    vi.stubGlobal("fetch", async () => {
+      callCount++;
+      if (callCount === 1) {
+        return new Response(
+          JSON.stringify({
+            error: "rate_limited",
+            message: "Rate limit exceeded on door 'recall'. Please retry in 0s.",
+          }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json", "Retry-After": "0" },
+          },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, memory: "recovered" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const result = await call<{ ok: boolean; memory: string }>(BASE, "/api/v1/recall", {
+      method: "POST",
+      retries: 2,
+    });
+    expect(callCount).toBe(2);
+    expect(result.memory).toBe("recovered");
+  });
+
+  it("throws MemcellError with rate limit message when 429 retries are exhausted", async () => {
+    let callCount = 0;
+    vi.stubGlobal("fetch", async () => {
+      callCount++;
+      return new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: "Rate limit exceeded on door 'remember'. Please retry in 30s.",
+          door: "remember",
+          retryAfter: 30,
+        }),
+        {
+          status: 429,
+          headers: { "content-type": "application/json", "Retry-After": "0" },
+        },
+      );
+    });
+
+    const error = await call(BASE, "/api/v1/remember", {
+      method: "POST",
+      retries: 1,
+    }).catch((e) => e);
+
+    expect(callCount).toBe(2);
+    expect(error).toBeInstanceOf(MemcellError);
+    expect((error as MemcellError).status).toBe(429);
+    expect((error as MemcellError).message).toContain("Rate limit exceeded on door 'remember'");
+  });
+});
