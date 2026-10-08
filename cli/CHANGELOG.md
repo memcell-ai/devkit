@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/memcell-ai/devkit/compare/cli-v1.4.0...cli-v0.6.0) (2026-10-08)
+
+
+### Features
+
+* **adapters:** wire antigravity, cline, goose and windsurf ([a017d25](https://github.com/memcell-ai/devkit/commit/a017d2588370476d3c10779706f18c47029dba41))
+* **cli:** native OS service, 1.4.0 baseline, fail-fast bundle extraction ([#3](https://github.com/memcell-ai/devkit/issues/3)) ([342fd96](https://github.com/memcell-ai/devkit/commit/342fd965ff3e1d788bf1d3a8b3f748a66a29917b))
+
 ## [0.10.12](https://github.com/memcell-ai/cli/compare/memcell-v0.10.11...memcell-v0.10.12) (2026-09-30)
 
 
