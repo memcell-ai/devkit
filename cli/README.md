@@ -133,17 +133,19 @@ Displays memories followed, errors avoided, estimated tokens saved from prevente
 
 | Command                         | Description                                                            |
 | :------------------------------ | :--------------------------------------------------------------------- |
+| `memcell start [--daemon]`      | Run local MemCell server with embedded PGlite vector engine            |
+| `memcell stop`                  | Halt background local server daemon                                    |
 | `memcell connect`               | Connect this directory to MemCell, install hooks, and configure MCP    |
-| `memcell status`                | Check authentication standing, active project, and connection health   |
+| `memcell status`                | Check authentication standing, active workspace, and connection health |
 | `memcell stats`                 | Show memories followed, errors avoided, and token savings              |
 | `memcell recall <intent>`       | Query memory for verified memories and past outcomes before acting     |
-| `memcell remember <text>`       | File a project convention or directive (`--at` for lifecycle triggers) |
+| `memcell remember <text>`       | File a memory directive or fact (`--at` for lifecycle triggers)        |
 | `memcell report <id> <outcome>` | Report `worked`, `failed`, or `avoided` to update confidence           |
 | `memcell ingest <file>`         | Distill a document or specification into atomic memories               |
 | `memcell import [files...]`     | Import existing guideline files (`CLAUDE.md`, etc.)                    |
-| `memcell export`                | Export project memories as a portable document (`--format json\|md`)   |
+| `memcell export`                | Export workspace memories as a portable document (`--format json\|md`) |
 | `memcell orgs`                  | List or switch active organization (`memcell orgs switch <slug>`)      |
-| `memcell projects`              | List or switch active project (`memcell projects use <slug>`)          |
+| `memcell workspaces`            | List or switch active workspace (`memcell workspaces use <slug>`)      |
 | `memcell hook remove`           | Cleanly remove all MemCell hooks from this directory                   |
 | `memcell reset`                 | Clear all cached credentials, keys, and tokens on this machine         |
 
@@ -172,6 +174,6 @@ memcell reset
 
 - **Documentation**: [https://memcell.ai/docs](https://memcell.ai/docs)
 - **Website**: [https://memcell.ai](https://memcell.ai)
-- **Issues**: [https://github.com/memcell-ai/cli/issues](https://github.com/memcell-ai/cli/issues)
+- **Issues**: [https://github.com/memcell-ai/devkit/issues](https://github.com/memcell-ai/devkit/issues)
 
-Apache License 2.0 · © 2026 OpenOri
+Apache License 2.0 · © 2026 Memcell, Inc.

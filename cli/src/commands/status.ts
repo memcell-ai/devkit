@@ -4,6 +4,7 @@ import { agentKeyForProject, listConnectedProjects } from "../keyring.js";
 import { credentialFor, DEFAULT_INSTANCE, knownInstances } from "../instance.js";
 import { findWorkspace } from "../workspace.js";
 import { badge, blank, cmd, good, label, place, row, say, value, warn } from "../ui.js";
+import { getRunningServer } from "./server.js";
 
 // What this machine knows, checked rather than recited: the stored session
 // is presented to the instance, and what comes back is what gets printed in
@@ -13,6 +14,15 @@ export async function status(instance: string, _from: string): Promise<number> {
   const credential = await credentialFor(instance);
   const hosted = instance === DEFAULT_INSTANCE;
   const found = await findWorkspace();
+  const localServer = await getRunningServer();
+
+  const serverRow = localServer
+    ? row(
+        1,
+        [label("Server".padEnd(11, " ")), good("running")],
+        [place(`http://localhost:${localServer.port} (PID ${localServer.pid})`)],
+      )
+    : null;
 
   const projectDisplay = found
     ? found.project.owner
@@ -26,6 +36,7 @@ export async function status(instance: string, _from: string): Promise<number> {
     const others = (await knownInstances()).filter((known) => known !== instance);
     say(
       row(0, [badge("memcell"), place(instance)], [instanceScope]),
+      serverRow,
       row(1, [label("Status".padEnd(11, " ")), warn("not signed in")]),
       found ? row(1, [label("Workspace".padEnd(11, " ")), value(projectDisplay!)]) : null,
       found
@@ -46,6 +57,7 @@ export async function status(instance: string, _from: string): Promise<number> {
     if (!session) {
       say(
         row(0, [badge("memcell"), place(instance)], [instanceScope]),
+        serverRow,
         row(1, [label("Status".padEnd(11, " ")), warn("session expired")]),
         found ? row(1, [label("Workspace".padEnd(11, " ")), value(projectDisplay!)]) : null,
         found
@@ -71,6 +83,7 @@ export async function status(instance: string, _from: string): Promise<number> {
       say(
         row(0, [badge("memcell"), place(instance)], [instanceScope]),
         row(1, [label("Account".padEnd(11, " ")), value(accountDisplay)]),
+        serverRow,
         row(1, [label("Workspace".padEnd(11, " ")), value(projectDisplay!)]),
         found.project.paused
           ? row(
@@ -90,6 +103,7 @@ export async function status(instance: string, _from: string): Promise<number> {
     say(
       row(0, [badge("memcell"), place(instance)], [instanceScope]),
       row(1, [label("Account".padEnd(11, " ")), value(accountDisplay)]),
+      serverRow,
       row(1, [label("Workspace".padEnd(11, " ")), warn("not connected in this directory")]),
       row(1, [label("Directory".padEnd(11, " ")), place(process.cwd())]),
       ...connected.map((c) =>

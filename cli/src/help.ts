@@ -29,8 +29,19 @@ interface Category {
 
 const CATEGORIES: Category[] = [
   {
-    title: "Lifecycle & Authentication",
-    commands: ["login", "logout", "connect", "status", "reset", "pause", "resume"],
+    title: "Lifecycle & Local Server",
+    commands: [
+      "start",
+      "stop",
+      "service",
+      "login",
+      "logout",
+      "connect",
+      "status",
+      "reset",
+      "pause",
+      "resume",
+    ],
   },
   {
     title: "Agent Reasoning & Memory Loop",

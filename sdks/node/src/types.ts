@@ -1,9 +1,12 @@
-export type MemoryType = "directive" | "fact" | "preference";
+export type MemoryType =
+  "directive" | "fact" | "preference" | "guard" | "observation";
 
 export const MEMORY_TYPES: readonly MemoryType[] = [
   "directive",
   "fact",
   "preference",
+  "guard",
+  "observation",
 ];
 
 export const MEMORY_SCOPES = [
@@ -80,6 +83,7 @@ export class RateLimitError extends MemCellError {
 export interface MemCellConfig {
   auth?: MemCellAuth;
   apiKey?: string;
+  token?: string;
   accessToken?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -119,6 +123,7 @@ export interface MemoryAuthor {
 export interface MemoryItem {
   id: string;
   rootId?: string;
+  version?: number;
   title: string;
   context?: string | null;
   observation?: string | null;
@@ -225,6 +230,7 @@ export interface MemoryHistoryResponse {
   rootId: string;
   totalVersions: number;
   history: MemoryHistoryItem[];
+  items?: MemoryHistoryItem[];
 }
 
 export interface MemoryStarResponse {
@@ -336,7 +342,8 @@ export interface ListWorkspaceRelationsParams extends PaginationParams {
 
 export interface RecallParams {
   namespace?: string;
-  query: string;
+  query?: string;
+  intent?: string;
   subject?: string | null;
   type?: MemoryType | MemoryType[];
   enforce?: boolean;

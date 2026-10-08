@@ -1,0 +1,9 @@
+[project]
+name = "memcell-example-python-market-research"
+version = "0.1.0"
+description = "Market Research Synthesizer with Provisional Memories"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "memcell",
+]

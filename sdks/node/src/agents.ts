@@ -135,11 +135,18 @@ export class AgentsNamespace {
     agentId: string,
   ): Promise<CreateAgentKeyResponse["key"]> {
     const { owner, workspace } = parseNamespace(namespace);
-    const json = await this.client.request<CreateAgentKeyResponse>(
+    const json = await this.client.request<any>(
       `/api/v1/${owner}/${workspace}/agents/${encodeURIComponent(agentId)}/keys`,
       { method: "POST" },
     );
-    return json.key;
+    if (json && typeof json.key === "object" && json.key !== null) {
+      return json.key;
+    }
+    return {
+      id: json?.keyId || json?.id || "",
+      key: typeof json?.key === "string" ? json.key : "",
+      preview: json?.keyPrefix || json?.preview || "",
+    };
   }
 
   /**

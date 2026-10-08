@@ -151,7 +151,7 @@ export async function createToken(
     say(
       row(0, [badge("memcell"), label("account token create"), place(instance)]),
       row(1, [good("created token")], [value(token.name)], [idSeg(token.id)]),
-      row(2, [label("token:"), value(token.token)]),
+      row(2, [label("token:"), value(token.token || (token as any).rawToken)]),
       row(2, [label("copy this token now — it will never be displayed again")]),
     );
     return 0;

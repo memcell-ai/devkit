@@ -161,6 +161,27 @@ export async function text(
     : { value: fallback, scope: "default" };
 }
 
+/** The same chain, for a setting that is a number and has a fallback. */
+export async function number(
+  key: string,
+  fallback: number,
+  flag?: string,
+): Promise<{ value: number; scope: Scope | "default" }> {
+  const found = await get(key, { flag });
+  if (found) {
+    if (typeof found.value === "number" && !Number.isNaN(found.value)) {
+      return { value: found.value, scope: found.scope };
+    }
+    if (typeof found.value === "string") {
+      const parsed = parseInt(found.value, 10);
+      if (!Number.isNaN(parsed)) {
+        return { value: parsed, scope: found.scope };
+      }
+    }
+  }
+  return { value: fallback, scope: "default" };
+}
+
 /**
  * The project file config reads and writes — the nearest `.memcell` at or
  * above here, or one in this directory if there is none.

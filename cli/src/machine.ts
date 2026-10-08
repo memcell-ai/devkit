@@ -52,4 +52,13 @@ export const MACHINE_STATE: readonly { path: string; what: string; then?: string
   { path: "projects", what: "project-scoped logs and caches" },
   { path: "hook.log", what: "the log of every hook firing" },
   { path: "update.json", what: "cached update notification state" },
+  { path: "daemon.json", what: "background local server daemon process state" },
+  {
+    path: "service.json",
+    what: "background OS system service registration state",
+    then: "reinstall with memcell service install",
+  },
+  { path: "server.log", what: "local server execution logs" },
+  { path: "server", what: "cached local server standalone distribution bundle" },
+  { path: "data", what: "local PGlite vector storage and database" },
 ] as const;

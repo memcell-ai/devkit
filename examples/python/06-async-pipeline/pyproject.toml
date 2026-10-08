@@ -1,0 +1,9 @@
+[project]
+name = "memcell-example-python-async-pipeline"
+version = "0.1.0"
+description = "High-throughput async batch processing with AsyncMemcellClient"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "memcell",
+]

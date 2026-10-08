@@ -1,7 +1,7 @@
 import { AuthManager } from "./auth.js";
 import { ScopedMemCell } from "./scoped.js";
 import { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
-import { MemoriesNamespace } from "./memories.js";
+import { MemoriesNamespace, MemoryRelationsNamespace } from "./memories.js";
 import { WorkspacesNamespace } from "./workspaces.js";
 import { AgentsNamespace } from "./agents.js";
 import { CollaboratorsNamespace } from "./collaborators.js";
@@ -44,6 +44,11 @@ export class MemCell {
    * Memories management APIs (atomic epistemic memory units).
    */
   readonly memories: MemoriesNamespace;
+
+  /**
+   * Epistemic memory relations and knowledge graph APIs.
+   */
+  readonly relations: MemoryRelationsNamespace;
 
   /**
    * Workspace boundary management APIs.
@@ -134,16 +139,20 @@ export class MemCell {
     if (!auth) {
       if (config.apiKey) {
         auth = { apiKey: config.apiKey };
+      } else if (config.token) {
+        auth = { apiKey: config.token };
       } else if (config.accessToken) {
         auth = { accessToken: config.accessToken };
       } else if (
         typeof process !== "undefined" &&
-        process.env?.MEMCELL_API_KEY
+        (process.env?.MEMCELL_API_KEY || process.env?.MEMCELL_TOKEN)
       ) {
-        auth = { apiKey: process.env.MEMCELL_API_KEY };
+        auth = {
+          apiKey: (process.env.MEMCELL_API_KEY || process.env.MEMCELL_TOKEN)!,
+        };
       } else {
         throw new Error(
-          "MemCell authentication required. Provide apiKey, accessToken, or auth configuration.",
+          "MemCell authentication required. Provide apiKey, token, accessToken, or auth configuration.",
         );
       }
     }
@@ -151,6 +160,7 @@ export class MemCell {
     this.authManager = new AuthManager(auth, this.baseUrl, this.customFetch);
 
     this.memories = new MemoriesNamespace(this);
+    this.relations = this.memories.relations;
     this.workspaces = new WorkspacesNamespace(this);
     this.agents = new AgentsNamespace(this);
     this.collaborators = new CollaboratorsNamespace(this);
@@ -223,9 +233,14 @@ export class MemCell {
     const path = this.resolveEndpoint(params.namespace, "recall");
     const effectiveType = params.type;
 
+    const query =
+      (typeof params.query === "string" && params.query) ||
+      (typeof params.intent === "string" && params.intent) ||
+      "";
+
     const payload: Record<string, unknown> = {
-      query: params.query,
-      intent: params.query,
+      query,
+      intent: query,
       subject: params.subject,
       type: effectiveType,
       enforce: params.enforce,

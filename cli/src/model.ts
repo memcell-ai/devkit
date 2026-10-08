@@ -82,6 +82,29 @@ export const FLAGS: Record<string, FlagSpec> = {
   },
   reason: { name: "reason", takes: "why", what: "why the commons should carry it" },
   "no-watch": { name: "no-watch", what: "do not follow the crawl" },
+  daemon: {
+    name: "daemon",
+    short: "d",
+    what: "run local server as a background daemon process",
+  },
+  service: {
+    name: "service",
+    what: "manage or run as an OS system service (launchd / systemd / task scheduler)",
+  },
+  "on-boot": {
+    name: "on-boot",
+    what: "automatically launch the local server upon OS boot or user login",
+  },
+  port: {
+    name: "port",
+    takes: "port",
+    what: "port to bind the local server on (default: 3000)",
+  },
+  "data-dir": {
+    name: "data-dir",
+    takes: "path",
+    what: "directory for local PGlite data storage",
+  },
   global: { name: "global", short: "g", what: "this machine, rather than this workspace" },
   pair: { name: "pair", takes: "id", what: "the pairing shown on the connect page" },
   format: {

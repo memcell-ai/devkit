@@ -5,8 +5,8 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-MemoryType = Literal["directive", "fact", "preference"]
-MEMORY_TYPES = ("directive", "fact", "preference")
+MemoryType = Literal["directive", "fact", "preference", "guard", "observation"]
+MEMORY_TYPES = ("directive", "fact", "preference", "guard", "observation")
 
 MEMORY_SCOPES = ("organization", "team", "workspace", "user")
 MemoryScope = Literal["organization", "team", "workspace", "user", str]
@@ -61,6 +61,7 @@ class MemoryItem(BaseModel):
 
     id: str
     root_id: str | None = None
+    version: int | None = 1
     title: str
     context: str | None = None
     observation: str | None = None
@@ -96,7 +97,7 @@ class MemoryItem(BaseModel):
         if not v:
             return "directive"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference"):
+        if s in ("directive", "fact", "preference", "guard", "observation"):
             return s
         return "directive"
 
@@ -134,7 +135,7 @@ class MemoryHistoryItem(BaseModel):
         if not v:
             return "directive"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference"):
+        if s in ("directive", "fact", "preference", "guard", "observation"):
             return s
         return "directive"
 

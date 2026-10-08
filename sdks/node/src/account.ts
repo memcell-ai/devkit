@@ -69,12 +69,20 @@ export class AccountNamespace {
     ): Promise<CreatedPersonalTokenResult> => {
       const json = await this.client.request<{
         success: boolean;
-        token: CreatedPersonalTokenResult;
+        token: any;
       }>("/api/v1/account/tokens", {
         method: "POST",
         body: JSON.stringify(params),
       });
-      return json.token;
+      const raw = json.token || {};
+      return {
+        id: raw.id,
+        name: raw.name,
+        token: raw.rawToken || raw.token || "",
+        preview: raw.prefix || raw.preview || "",
+        expiresAt: raw.expiresAt ?? null,
+        createdAt: raw.createdAt || new Date().toISOString(),
+      };
     },
 
     /**

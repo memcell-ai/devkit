@@ -116,7 +116,7 @@ def _normalize_memory_type(val: Any) -> MemoryType:
     if not val:
         return "directive"
     s = str(val).lower()
-    if s in ("directive", "fact", "preference"):
+    if s in ("directive", "fact", "preference", "guard", "observation"):
         return s  # type: ignore
     return "directive"
 
@@ -152,6 +152,7 @@ def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
     return MemoryItem(
         id=str(data.get("id") or data.get("memoryId") or ""),
         root_id=data.get("rootId") or data.get("root_id"),
+        version=int(data.get("version", 1)) if data.get("version") is not None else 1,
         title=data.get("title", ""),
         context=data.get("context"),
         observation=data.get("observation"),
@@ -644,6 +645,24 @@ class _MemoryRelationsNamespaceSync:
             outgoing=[_parse_memory_relation_item(r) for r in resp.get("outgoing", [])],
         )
 
+    def relate(
+        self,
+        namespace: str,
+        source_id: str | None = None,
+        target_id: str | None = None,
+        relation_type: str | None = None,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        src = source_id or kwargs.get("sourceId") or ""
+        tgt = target_id or kwargs.get("targetId") or ""
+        rel = relation_type or kwargs.get("type") or "limits"
+        conf = confidence if confidence is not None else kwargs.get("confidence", 0.9)
+        meta = metadata or kwargs.get("metadata")
+        relation = self.create(namespace, src, tgt, rel, confidence=conf, metadata=meta)
+        return {"ok": True, "relation": relation}
+
     def create(
         self,
         namespace: str,
@@ -754,7 +773,7 @@ class _WorkspacesNamespaceSync:
     def get(self, namespace: str) -> WorkspaceItem:
         owner, workspace = _parse_namespace(namespace)
         resp = self._client._request("GET", f"/api/v1/{owner}/{workspace}")
-        return _parse_workspace_item(resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or resp.get("project") or {})
 
     def create(
         self,
@@ -812,7 +831,15 @@ class _WorkspacesNamespaceSync:
             f"/api/v1/{owner}/{workspace}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_workspace_item(resp.get("workspace") or {})
+        raw = resp.get("workspace") or resp.get("project")
+        if not raw and resp.get("ok"):
+            target_slug = resp.get("workspaceSlug") or resp.get("projectSlug") or workspace
+            target_owner = resp.get("ownerSlug") or owner
+            try:
+                return self.get(f"{target_owner}/{target_slug}")
+            except Exception:
+                pass
+        return _parse_workspace_item(raw or {})
 
     def delete(self, namespace: str) -> None:
         owner, workspace = _parse_namespace(namespace)
@@ -953,7 +980,14 @@ class _AgentsNamespaceSync:
     def create_key(self, namespace: str, agent_id: str) -> CreateAgentKeyResult:
         owner, workspace = _parse_namespace(namespace)
         resp = self._client._request("POST", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys")
-        return CreateAgentKeyResult(**resp.get("key", {}))
+        key_data = resp.get("key")
+        if isinstance(key_data, dict):
+            return CreateAgentKeyResult(**key_data)
+        return CreateAgentKeyResult(
+            id=resp.get("keyId") or resp.get("id") or "",
+            key=resp.get("key") if isinstance(resp.get("key"), str) else "",
+            preview=resp.get("keyPrefix") or resp.get("preview") or "",
+        )
 
     def revoke_key(self, namespace: str, agent_id: str, key_id: str) -> None:
         owner, workspace = _parse_namespace(namespace)
@@ -1455,6 +1489,19 @@ class _PromotionsNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
 
+    def request(
+        self,
+        namespace: str,
+        memory_id: str | None = None,
+        to_scope: str = "workspace",
+        reason: str | None = None,
+        **kwargs: Any,
+    ) -> PromoteMemoryResponse:
+        mem_id = memory_id or kwargs.get("memoryId") or ""
+        scope = to_scope or kwargs.get("toScope") or "workspace"
+        rsn = reason or kwargs.get("reason")
+        return self._client.memories.promote(namespace, mem_id, to_scope=scope, reason=rsn)
+
     def list(
         self,
         namespace: str,
@@ -1849,6 +1896,24 @@ class _MemoryRelationsNamespaceAsync:
             outgoing=[_parse_memory_relation_item(r) for r in resp.get("outgoing", [])],
         )
 
+    async def relate(
+        self,
+        namespace: str,
+        source_id: str | None = None,
+        target_id: str | None = None,
+        relation_type: str | None = None,
+        confidence: float = 0.9,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        src = source_id or kwargs.get("sourceId") or ""
+        tgt = target_id or kwargs.get("targetId") or ""
+        rel = relation_type or kwargs.get("type") or "limits"
+        conf = confidence if confidence is not None else kwargs.get("confidence", 0.9)
+        meta = metadata or kwargs.get("metadata")
+        relation = await self.create(namespace, src, tgt, rel, confidence=conf, metadata=meta)
+        return {"ok": True, "relation": relation}
+
     async def create(
         self,
         namespace: str,
@@ -1961,7 +2026,7 @@ class _WorkspacesNamespaceAsync:
     async def get(self, namespace: str) -> WorkspaceItem:
         owner, workspace = _parse_namespace(namespace)
         resp = await self._client._request("GET", f"/api/v1/{owner}/{workspace}")
-        return _parse_workspace_item(resp.get("workspace") or {})
+        return _parse_workspace_item(resp.get("workspace") or resp.get("project") or {})
 
     async def create(
         self,
@@ -2019,7 +2084,15 @@ class _WorkspacesNamespaceAsync:
             f"/api/v1/{owner}/{workspace}",
             json={k: v for k, v in payload.items() if v is not None},
         )
-        return _parse_workspace_item(resp.get("workspace") or {})
+        raw = resp.get("workspace") or resp.get("project")
+        if not raw and resp.get("ok"):
+            target_slug = resp.get("workspaceSlug") or resp.get("projectSlug") or workspace
+            target_owner = resp.get("ownerSlug") or owner
+            try:
+                return await self.get(f"{target_owner}/{target_slug}")
+            except Exception:
+                pass
+        return _parse_workspace_item(raw or {})
 
     async def delete(self, namespace: str) -> None:
         owner, workspace = _parse_namespace(namespace)
@@ -2166,7 +2239,14 @@ class _AgentsNamespaceAsync:
         resp = await self._client._request(
             "POST", f"/api/v1/{owner}/{workspace}/agents/{agent_id}/keys"
         )
-        return CreateAgentKeyResult(**resp.get("key", {}))
+        key_data = resp.get("key")
+        if isinstance(key_data, dict):
+            return CreateAgentKeyResult(**key_data)
+        return CreateAgentKeyResult(
+            id=resp.get("keyId") or resp.get("id") or "",
+            key=resp.get("key") if isinstance(resp.get("key"), str) else "",
+            preview=resp.get("keyPrefix") or resp.get("preview") or "",
+        )
 
     async def revoke_key(self, namespace: str, agent_id: str, key_id: str) -> None:
         owner, workspace = _parse_namespace(namespace)
@@ -2670,6 +2750,19 @@ class _PromotionsNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
 
+    async def request(
+        self,
+        namespace: str,
+        memory_id: str | None = None,
+        to_scope: str = "workspace",
+        reason: str | None = None,
+        **kwargs: Any,
+    ) -> PromoteMemoryResponse:
+        mem_id = memory_id or kwargs.get("memoryId") or ""
+        scope = to_scope or kwargs.get("toScope") or "workspace"
+        rsn = reason or kwargs.get("reason")
+        return await self._client.memories.promote(namespace, mem_id, to_scope=scope, reason=rsn)
+
     async def list(
         self,
         namespace: str,
@@ -2775,6 +2868,7 @@ class MemCell:
         self,
         api_key: str | None = None,
         access_token: str | None = None,
+        token: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
         scope: str | None = None,
@@ -2793,7 +2887,9 @@ class MemCell:
         self.max_retry_delay_ms = max_retry_delay_ms
         self.on_rate_limit_warning = on_rate_limit_warning
 
-        resolved_api_key = api_key or os.environ.get("MEMCELL_API_KEY")
+        resolved_api_key = (
+            api_key or token or os.environ.get("MEMCELL_API_KEY") or os.environ.get("MEMCELL_TOKEN")
+        )
         self.auth_manager = AuthManager(
             base_url=self.base_url,
             api_key=resolved_api_key,
@@ -2808,6 +2904,7 @@ class MemCell:
 
         # Mount resource namespaces
         self.memories = _MemoriesNamespaceSync(self)
+        self.relations = self.memories.relations
         self.workspaces = _WorkspacesNamespaceSync(self)
         self.agents = _AgentsNamespaceSync(self)
         self.collaborators = _CollaboratorsNamespaceSync(self)
@@ -2956,7 +3053,7 @@ class MemCell:
 
     def recall(
         self,
-        query: str,
+        query: str | None = None,
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
@@ -2971,11 +3068,14 @@ class MemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        *,
+        intent: str | None = None,
     ) -> RecallResponse:
+        effective_query = query or intent or ""
         path = _resolve_endpoint(namespace, "recall")
         payload: dict[str, Any] = {
-            "query": query,
-            "intent": query,
+            "query": effective_query,
+            "intent": effective_query,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3083,8 +3183,8 @@ class MemCell:
 
     def report(
         self,
-        action_taken: str,
-        outcome: OutcomeVerdict,
+        action_taken: str = "",
+        outcome: OutcomeVerdict = "worked",
         subject: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -3238,6 +3338,7 @@ class AsyncMemCell:
         self,
         api_key: str | None = None,
         access_token: str | None = None,
+        token: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
         scope: str | None = None,
@@ -3256,7 +3357,9 @@ class AsyncMemCell:
         self.max_retry_delay_ms = max_retry_delay_ms
         self.on_rate_limit_warning = on_rate_limit_warning
 
-        resolved_api_key = api_key or os.environ.get("MEMCELL_API_KEY")
+        resolved_api_key = (
+            api_key or token or os.environ.get("MEMCELL_API_KEY") or os.environ.get("MEMCELL_TOKEN")
+        )
         self.auth_manager = AuthManager(
             base_url=self.base_url,
             api_key=resolved_api_key,
@@ -3271,6 +3374,7 @@ class AsyncMemCell:
 
         # Mount resource namespaces
         self.memories = _MemoriesNamespaceAsync(self)
+        self.relations = self.memories.relations
         self.workspaces = _WorkspacesNamespaceAsync(self)
         self.agents = _AgentsNamespaceAsync(self)
         self.collaborators = _CollaboratorsNamespaceAsync(self)
@@ -3419,7 +3523,7 @@ class AsyncMemCell:
 
     async def recall(
         self,
-        query: str,
+        query: str | None = None,
         namespace: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
@@ -3434,11 +3538,14 @@ class AsyncMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        *,
+        intent: str | None = None,
     ) -> RecallResponse:
+        effective_query = query or intent or ""
         path = _resolve_endpoint(namespace, "recall")
         payload: dict[str, Any] = {
-            "query": query,
-            "intent": query,
+            "query": effective_query,
+            "intent": effective_query,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3550,8 +3657,8 @@ class AsyncMemCell:
 
     async def report(
         self,
-        action_taken: str,
-        outcome: OutcomeVerdict,
+        action_taken: str = "",
+        outcome: OutcomeVerdict = "worked",
         subject: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,

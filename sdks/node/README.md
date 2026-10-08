@@ -217,6 +217,6 @@ const memory = new MemCell({
 
 - **Documentation**: [https://memcell.ai/docs](https://memcell.ai/docs)
 - **Developer CLI**: [`npm install -g memcell`](https://www.npmjs.com/package/memcell)
-- **GitHub Repository**: [https://github.com/memcell-ai/sdk](https://github.com/memcell-ai/sdk)
+- **GitHub Repository**: [https://github.com/memcell-ai/devkit](https://github.com/memcell-ai/devkit)
 
-Apache License 2.0 · © 2026 OpenOri
+Apache License 2.0 · © 2026 Memcell, Inc.

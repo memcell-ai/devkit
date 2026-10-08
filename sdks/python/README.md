@@ -229,6 +229,6 @@ memory = AsyncMemCell(
 
 - **Documentation**: [https://memcell.ai/docs](https://memcell.ai/docs)
 - **Developer CLI**: [`pip install memcell`](https://pypi.org/project/memcell)
-- **GitHub Repository**: [https://github.com/memcell-ai/sdk](https://github.com/memcell-ai/sdk)
+- **GitHub Repository**: [https://github.com/memcell-ai/devkit](https://github.com/memcell-ai/devkit)
 
-Apache License 2.0 · © 2026 OpenOri
+Apache License 2.0 · © 2026 Memcell, Inc.

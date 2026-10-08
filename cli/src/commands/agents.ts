@@ -56,9 +56,17 @@ export async function listAgents(
 
   try {
     const sdk = await getSdkClient(instance);
-    // If a project is explicitly requested, list registered agents in that project
-    if (typeof flags.project === "string") {
-      const namespace = await resolveNamespace(sdk, flags.project);
+    const rawWs =
+      typeof flags.workspace === "string"
+        ? flags.workspace
+        : typeof flags.project === "string"
+          ? flags.project
+          : undefined;
+    const foundWs = !rawWs ? await findWorkspace().catch(() => null) : null;
+    const targetWs = rawWs || foundWs?.project?.project || foundWs?.project?.space;
+
+    if (targetWs) {
+      const namespace = await resolveNamespace(sdk, targetWs);
       const res = await sdk.agents.list(namespace);
       const items = res.items || [];
 
@@ -77,7 +85,7 @@ export async function listAgents(
           [badge("memcell"), label("agent"), place(namespace)],
           [variant(`${items.length} agent${items.length === 1 ? "" : "s"}`)],
         ),
-        ...items.map((a) =>
+        ...items.map((a: any) =>
           row(
             1,
             [a.status === "active" ? good(a.name) : warn(a.name)],
@@ -295,10 +303,14 @@ export async function revokeAgentKey(
   }
 
   try {
+    const sdk = await getSdkClient(instance);
+    const namespace = await resolveNamespace(
+      sdk,
+      (flags.workspace as string) || (flags.project as string),
+    );
+
     if (secondArg) {
       // Called with agentId + keyId: sdk.agents.revokeKey(namespace, agentId, keyId)
-      const sdk = await getSdkClient(instance);
-      const namespace = await resolveNamespace(sdk, flags.project as string);
       await sdk.agents.revokeKey(namespace, keyIdOrAgentId, secondArg);
       say(
         row(0, [badge("memcell"), label("agent key revoke"), place(namespace)]),
@@ -307,12 +319,12 @@ export async function revokeAgentKey(
       return 0;
     }
 
-    // Single arg: revoke via global keys API (backward-compatible)
-    await call(instance, `/api/v1/keys?id=${encodeURIComponent(keyIdOrAgentId)}`, {
+    // Single arg: revoke by keyId directly in workspace
+    await call(instance, `/api/v1/${namespace}/agents/keys/${encodeURIComponent(keyIdOrAgentId)}`, {
       method: "DELETE",
     });
     say(
-      row(0, [badge("memcell"), place(instance)]),
+      row(0, [badge("memcell"), label("agent key revoke"), place(namespace)]),
       row(1, [good("revoked")], [idSeg(keyIdOrAgentId)]),
       row(2, [label("stops at its next call · what it filed stays")]),
     );
