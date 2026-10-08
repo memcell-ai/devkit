@@ -4,20 +4,17 @@
     "sdks/node": {
       "release-type": "node",
       "package-name": "@memcell/sdk",
-      "component": "node",
-      "release-as": "1.4.0"
+      "component": "node"
     },
     "sdks/python": {
       "release-type": "python",
       "package-name": "memcell",
-      "component": "python",
-      "release-as": "1.4.0"
+      "component": "python"
     },
     "cli": {
       "release-type": "node",
       "package-name": "memcell",
-      "component": "cli",
-      "release-as": "1.4.0"
+      "component": "cli"
     }
   }
 }
