@@ -1,6 +1,7 @@
 {
   "name": "memcell-devkit-monorepo",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.18.0",
   "description": "Official MemCell DevKit — TypeScript & Python SDKs and CLI",
   "scripts": {
@@ -10,13 +11,18 @@
     "test:cli": "pnpm --filter \"memcell\" run test",
     "test:py": "cd sdks/python && pytest",
     "test": "pnpm run test:node && pnpm run test:cli && pnpm run test:py",
-    "format": "prettier --write \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"*.{json,md}\"",
+    "test:e2e:cli": "vitest run e2e/cli",
+    "test:e2e:node": "vitest run e2e/sdks/node",
+    "test:e2e:python": "pytest e2e/sdks/python",
+    "test:e2e": "pnpm run test:e2e:cli && pnpm run test:e2e:node && pnpm run test:e2e:python",
+    "format": "prettier --write \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"e2e/**/*.{ts,js,json,md}\" \"guides/**/*.{ts,js,json,md}\" \"examples/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"e2e/**/*.{ts,js,json,md}\" \"guides/**/*.{ts,js,json,md}\" \"examples/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
     "lint:py": "cd sdks/python && ruff check && ruff format --check",
     "lint": "pnpm run typecheck && pnpm run lint:py"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   }
 }

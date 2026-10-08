@@ -229,10 +229,17 @@ export class MemoriesNamespace {
     memoryId: string,
   ): Promise<MemoryHistoryResponse> {
     const { owner, workspace } = parseNamespace(namespace);
-    return await this.client.request<MemoryHistoryResponse>(
+    const json = await this.client.request<any>(
       `/api/v1/${owner}/${workspace}/${this.endpointName}/${encodeURIComponent(memoryId)}/history`,
       { method: "GET" },
     );
+    const list = json.history || json.items || [];
+    return {
+      rootId: json.rootId,
+      totalVersions: json.totalVersions ?? list.length,
+      history: list,
+      items: list,
+    };
   }
 
   /**
@@ -275,6 +282,28 @@ export class MemoriesNamespace {
 
 export class MemoryRelationsNamespace {
   constructor(private readonly client: MemCell) {}
+
+  /**
+   * Relates two memories with a directed epistemic edge.
+   */
+  async relate(
+    namespace: string,
+    params: {
+      sourceId: string;
+      targetId: string;
+      type: import("./types.js").RelationType;
+      confidence?: number;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<{ ok: boolean; relation: MemoryRelationItem }> {
+    const relation = await this.create(namespace, params.sourceId, {
+      targetId: params.targetId,
+      relationType: params.type,
+      confidence: params.confidence,
+      metadata: params.metadata,
+    });
+    return { ok: true, relation };
+  }
 
   /**
    * Lists incoming and outgoing relations for a specific memory.

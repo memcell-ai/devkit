@@ -103,6 +103,7 @@ export class WorkspacesNamespace {
     }>(`/api/v1/${owner}/${workspace}`, { method: "GET" });
     const item =
       json.workspace ??
+      (json as any)?.project ??
       ((json as any)?.id ? (json as any as WorkspaceItem) : undefined);
     if (!item) {
       throw new Error(`Workspace not found: ${namespace}`);
@@ -144,9 +145,22 @@ export class WorkspacesNamespace {
       method: "PATCH",
       body: JSON.stringify(params),
     });
-    const item =
+    let item =
       json.workspace ??
       ((json as any)?.id ? (json as any as WorkspaceItem) : undefined);
+    if (!item && (json as any)?.ok) {
+      const targetSlug =
+        (json as any).projectSlug || (json as any).workspaceSlug || workspace;
+      const targetOwner = (json as any).ownerSlug || owner;
+      item = await this.get(`${targetOwner}/${targetSlug}`).catch(() => ({
+        id: "",
+        slug: targetSlug,
+        name: params.name || workspace,
+        description: params.description,
+        visibility: params.visibility || "private",
+        createdAt: new Date().toISOString(),
+      }));
+    }
     if (!item) {
       throw new Error(`Failed to update workspace: ${namespace}`);
     }

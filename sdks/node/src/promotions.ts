@@ -26,6 +26,19 @@ export class PromotionsNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
+   * Requests promotion of a memory to a broader scope.
+   */
+  async request(
+    namespace: string,
+    params: { memoryId: string; toScope?: string; reason?: string },
+  ): Promise<import("./types.js").PromoteMemoryResponse> {
+    return await this.client.memories.promote(namespace, params.memoryId, {
+      toScope: params.toScope as any,
+      reason: params.reason,
+    });
+  }
+
+  /**
    * Lists pending and reviewed memory promotion requests.
    */
   async list(

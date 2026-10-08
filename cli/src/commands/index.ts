@@ -109,6 +109,14 @@ import { remember } from "./remember.js";
 import { report } from "./report.js";
 import { pause, resume } from "./pause.js";
 import { reset } from "./reset.js";
+import { startServer, stopServer } from "./server.js";
+import {
+  installService,
+  startService,
+  statusService,
+  stopService,
+  uninstallService,
+} from "./service.js";
 import { scope } from "./scope.js";
 import { seed } from "./seed.js";
 import {
@@ -145,6 +153,7 @@ export const RESOURCES: Resource[] = [
   { name: "audit", what: "immutable enterprise audit logs and compliance trails" },
   { name: "account", what: "your profile and personal access tokens" },
   { name: "operator", what: "cluster administration and platform limits" },
+  { name: "service", what: "native OS background system service and auto-start" },
   { name: "config", what: "settings, per workspace or machine" },
   { name: "sweep", what: "background consolidation and cognitive sleep cycles" },
 ];
@@ -201,6 +210,62 @@ const BASE_COMMANDS: Command[] = [
     takes: ["url"],
     landing: true,
     run: ({ instance, from }) => status(instance, from),
+  },
+  {
+    path: ["start"],
+    what: "start local memcell server with embedded PGlite storage",
+    takes: ["url", "daemon", "service", "on-boot", "port", "data-dir", "no-browser", "force"],
+    landing: true,
+    run: ({ instance, flags }) =>
+      startServer(instance, {
+        daemon: flags.daemon === true,
+        service: flags.service === true,
+        onBoot: flags["on-boot"] === true,
+        port: typeof flags.port === "string" ? parseInt(flags.port, 10) : undefined,
+        dataDir: typeof flags["data-dir"] === "string" ? flags["data-dir"] : undefined,
+        noBrowser: flags["no-browser"] === true,
+        force: flags.force === true,
+      }),
+  },
+  {
+    path: ["stop"],
+    what: "stop the running background local memcell server",
+    takes: ["force"],
+    landing: true,
+    run: ({ flags }) =>
+      stopServer({
+        force: flags.force === true,
+      }),
+  },
+  {
+    path: ["service", "install"],
+    what: "install local server as a native OS system service (launchd / systemd / task scheduler)",
+    takes: ["url", "port", "data-dir"],
+    run: ({ instance, flags }) => installService(instance, flags),
+  },
+  {
+    path: ["service", "uninstall"],
+    what: "uninstall and remove the native OS system service",
+    takes: [],
+    run: () => uninstallService(),
+  },
+  {
+    path: ["service", "status"],
+    what: "check native OS system service running state and registration",
+    takes: [],
+    run: () => statusService(),
+  },
+  {
+    path: ["service", "start"],
+    what: "start the installed native OS system service",
+    takes: [],
+    run: () => startService(),
+  },
+  {
+    path: ["service", "stop"],
+    what: "stop the running native OS system service",
+    takes: [],
+    run: () => stopService(),
   },
   {
     path: ["reset"],
@@ -553,8 +618,15 @@ const BASE_COMMANDS: Command[] = [
     path: ["memory", "star"],
     what: "star or unstar a memory",
     args: [{ name: "id", required: true, what: "memory ID" }],
-    takes: ["url", "workspace"],
+    takes: ["url", "workspace", "unstar"],
     run: ({ instance, args, flags }) => starMemory(instance, args.id!, flags),
+  },
+  {
+    path: ["memory", "unstar"],
+    what: "unstar a memory",
+    args: [{ name: "id", required: true, what: "memory ID" }],
+    takes: ["url", "workspace"],
+    run: ({ instance, args, flags }) => starMemory(instance, args.id!, { ...flags, unstar: true }),
   },
   {
     path: ["memory", "history"],

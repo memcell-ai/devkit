@@ -399,7 +399,8 @@ export async function starMemory(
     const target = getTargetWorkspace(flags);
     const namespace = await resolveNamespace(sdk, target);
 
-    const res = await memClient.star(namespace, memoryId);
+    const starred = flags.unstar === true ? false : true;
+    const res = await memClient.star(namespace, memoryId, starred);
 
     say(
       row(0, [badge("memcell"), label("memory star"), place(namespace)]),

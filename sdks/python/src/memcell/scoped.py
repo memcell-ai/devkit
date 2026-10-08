@@ -64,6 +64,9 @@ class _ScopedMemoriesSync:
             kwargs["subject"] = self._default_subject
         return self._client.memories.create(self._namespace, title, **kwargs)
 
+    def remember(self, title: str, **kwargs: Any) -> MemoryItem:
+        return self.create(title, **kwargs)
+
     def update(self, memory_id: str, **kwargs: Any) -> MemoryItem:
         return self._client.memories.update(self._namespace, memory_id, **kwargs)
 
@@ -241,6 +244,9 @@ class _ScopedMemoriesAsync:
         if "subject" not in kwargs or kwargs["subject"] is None:
             kwargs["subject"] = self._default_subject
         return await self._client.memories.create(self._namespace, title, **kwargs)
+
+    async def remember(self, title: str, **kwargs: Any) -> MemoryItem:
+        return await self.create(title, **kwargs)
 
     async def update(self, memory_id: str, **kwargs: Any) -> MemoryItem:
         return await self._client.memories.update(self._namespace, memory_id, **kwargs)
@@ -433,7 +439,7 @@ class ScopedMemCell:
 
     def recall(
         self,
-        query: str,
+        query: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
         scope: str | None = None,
@@ -446,9 +452,12 @@ class ScopedMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        *,
+        intent: str | None = None,
     ) -> RecallResponse:
+        effective_query = query or intent or ""
         return self._client.recall(
-            query=query,
+            query=effective_query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
             type=type,
@@ -507,8 +516,8 @@ class ScopedMemCell:
 
     def report(
         self,
-        action_taken: str,
-        outcome: OutcomeVerdict,
+        action_taken: str = "",
+        outcome: OutcomeVerdict = "worked",
         subject: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,
@@ -652,7 +661,7 @@ class AsyncScopedMemCell:
 
     async def recall(
         self,
-        query: str,
+        query: str | None = None,
         subject: str | None = None,
         type: str | list[str] | None = None,
         scope: str | None = None,
@@ -665,9 +674,12 @@ class AsyncScopedMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        *,
+        intent: str | None = None,
     ) -> RecallResponse:
+        effective_query = query or intent or ""
         return await self._client.recall(
-            query=query,
+            query=effective_query,
             namespace=self.namespace,
             subject=subject or self.default_subject,
             type=type,
@@ -726,8 +738,8 @@ class AsyncScopedMemCell:
 
     async def report(
         self,
-        action_taken: str,
-        outcome: OutcomeVerdict,
+        action_taken: str = "",
+        outcome: OutcomeVerdict = "worked",
         subject: str | None = None,
         reason: str | None = None,
         external_ref: str | None = None,

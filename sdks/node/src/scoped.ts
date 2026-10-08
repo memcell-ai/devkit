@@ -66,6 +66,8 @@ export class ScopedMemCell {
         subject: this.defaultSubject ?? undefined,
         ...params,
       }),
+    remember: (params: CreateMemoryParams): Promise<MemoryItem> =>
+      this.memories.create(params),
     update: (
       memoryId: string,
       params: UpdateMemoryParams,
@@ -218,16 +220,29 @@ export class ScopedMemCell {
    * Pre-flight recall from the scoped memory container.
    */
   async recall(
-    query: string,
+    queryOrParams: string | Omit<RecallParams, "namespace">,
     options?: Omit<RecallParams, "namespace" | "query">,
   ): Promise<RecallResponse> {
+    if (typeof queryOrParams === "string") {
+      return await this.client.recall({
+        namespace: this.namespace,
+        query: queryOrParams,
+        subject:
+          options?.subject !== undefined
+            ? options.subject
+            : this.defaultSubject,
+        format: options?.format ?? this.defaultFormat,
+        ...options,
+      });
+    }
     return await this.client.recall({
       namespace: this.namespace,
-      query,
       subject:
-        options?.subject !== undefined ? options.subject : this.defaultSubject,
-      format: options?.format ?? this.defaultFormat,
-      ...options,
+        queryOrParams.subject !== undefined
+          ? queryOrParams.subject
+          : this.defaultSubject,
+      format: queryOrParams.format ?? this.defaultFormat,
+      ...queryOrParams,
     });
   }
 

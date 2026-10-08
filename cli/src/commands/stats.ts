@@ -121,13 +121,41 @@ export async function stats(instance: string): Promise<number> {
   const here = signedIn ? await findWorkspace() : null;
 
   try {
-    const read = await call<Stats>(
+    const raw = await call<any>(
       instance,
       here ? `/api/v1/stats?space=${encodeURIComponent(here.project.space)}` : "/api/v1/stats",
       signedIn ? {} : { anonymous: true },
     );
 
-    const named = read.scope.space?.slug;
+    const emptyPulse: Pulse = { total: 0, today: 0, series: [] };
+    const savedTotal = typeof raw?.saved === "number" ? raw.saved : (raw?.saved?.total ?? 0);
+    const savedFrom = raw?.saved?.from ?? {
+      stopped: 0,
+      followed: 0,
+      repeated: 0,
+      recalls: raw?.recalls,
+      deadEnds: 0,
+    };
+
+    const windowDays = raw?.window?.days ?? 30;
+    const scopeKind = raw?.scope?.kind ?? (here ? "space" : "instance");
+    const named = raw?.scope?.space?.slug ?? here?.project?.space ?? null;
+
+    const read: Stats = {
+      window: { days: windowDays, buckets: 30, since: "" },
+      scope: { kind: scopeKind, space: named ? { slug: named, name: named } : null },
+      followed: raw?.followed ?? emptyPulse,
+      stopped: raw?.stopped ?? emptyPulse,
+      repeated: raw?.repeated ?? emptyPulse,
+      judged: raw?.judged ?? emptyPulse,
+      saved: {
+        total: savedTotal,
+        today: raw?.saved?.today ?? 0,
+        series: raw?.saved?.series ?? [],
+        from: savedFrom,
+      },
+    };
+
     say(
       row(
         0,

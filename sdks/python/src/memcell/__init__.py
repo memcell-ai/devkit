@@ -106,7 +106,10 @@ from .webhooks import (
     WorkspaceWebhooksNamespace,
 )
 
-__version__ = "0.1.5"
+MemcellClient = MemCell
+AsyncMemcellClient = AsyncMemCell
+
+__version__ = "1.4.0"
 
 __all__ = [
     "MEMORY_SCOPES",
@@ -119,6 +122,7 @@ __all__ = [
     "ApiRequestQuotas",
     "AsyncInvitationsNamespace",
     "AsyncMemCell",
+    "AsyncMemcellClient",
     "AsyncOperatorNamespace",
     "AsyncOrganizationAuditNamespace",
     "AsyncOrganizationFleetNamespace",
@@ -151,6 +155,7 @@ __all__ = [
     "ListCollaboratorsResponse",
     "MemCell",
     "MemCellError",
+    "MemcellClient",
     "MemoryItem",
     "MemoryRelationItem",
     "MemoryRelationsResponse",

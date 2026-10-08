@@ -68,7 +68,20 @@ export async function getUsage(
 
     const data = await sdk.usage.get(owner, { timeframe });
 
-    const memQuotas = (data.quotas as any)?.memories ?? { total: 0, limit: 0, percent: 0 };
+    const rawMem = (data.quotas as any)?.memories;
+    const memTotal = Number(rawMem?.used ?? rawMem?.total ?? 0);
+    const memLimit = typeof rawMem?.limit === "number" ? rawMem.limit : 0;
+    const memTypes = rawMem?.types;
+
+    const apiRequestsRaw = (data.quotas as any)?.apiRequests;
+    const apiRequestsTotal = Number(
+      apiRequestsRaw?.total ??
+        apiRequestsRaw?.used ??
+        (data as any).summary?.totalIngressCalls ??
+        0,
+    );
+    const apiRequestsLimit = apiRequestsRaw?.limit ?? 0;
+
     say(
       row(
         0,
@@ -79,21 +92,17 @@ export async function getUsage(
       row(
         1,
         [label("memories:")],
-        [value(memQuotas.total.toLocaleString())],
-        memQuotas.limit
-          ? [
-              label("/"),
-              value(memQuotas.limit.toLocaleString()),
-              meter(memQuotas.total, memQuotas.limit),
-            ]
+        [value(memTotal.toLocaleString())],
+        memLimit > 0
+          ? [label("/"), value(memLimit.toLocaleString()), meter(memTotal, memLimit)]
           : null,
       ),
-      ...(memQuotas.types
+      ...(memTypes
         ? [
             row(
               2,
               [label("by type:")],
-              ...Object.entries(memQuotas.types).map(([t, count]) => [
+              ...Object.entries(memTypes).map(([t, count]) => [
                 variant(t),
                 label(Number(count).toLocaleString()),
               ]),
@@ -103,12 +112,12 @@ export async function getUsage(
       row(
         1,
         [label("api requests:")],
-        [value(data.quotas.apiRequests.total.toLocaleString())],
-        data.quotas.apiRequests.limit
+        [value(apiRequestsTotal.toLocaleString())],
+        apiRequestsLimit > 0
           ? [
               label("/"),
-              value(data.quotas.apiRequests.limit.toLocaleString()),
-              meter(data.quotas.apiRequests.total, data.quotas.apiRequests.limit),
+              value(apiRequestsLimit.toLocaleString()),
+              meter(apiRequestsTotal, apiRequestsLimit),
             ]
           : null,
       ),
