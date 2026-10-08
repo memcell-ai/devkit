@@ -12,7 +12,8 @@ async function askAgent(userPrompt: string) {
   console.log(`User Query: "${userPrompt}"`);
 
   // 1. Recall dynamic context from MemCell
-  const recallResult = await client.recall.search(namespace, {
+  const recallResult = await client.recall({
+    namespace,
     intent: userPrompt,
     minConfidence: 0.7,
   });
@@ -48,7 +49,8 @@ async function askAgent(userPrompt: string) {
 }
 
 async function main() {
-  await client.memories.remember(namespace, {
+  await client.remember({
+    namespace,
     title:
       "All financial reports must specify amounts in USD and include variance percentages",
     type: "directive",
