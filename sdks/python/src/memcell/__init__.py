@@ -109,7 +109,7 @@ from .webhooks import (
 MemcellClient = MemCell
 AsyncMemcellClient = AsyncMemCell
 
-__version__ = "1.4.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "MEMORY_SCOPES",
