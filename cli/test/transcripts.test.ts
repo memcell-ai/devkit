@@ -8,6 +8,11 @@ const { adapterFor } = await import("../src/adapters/index.js");
 const { cleanUserPrompt, readIntentEnvelope } = await import("../src/adapters/capture.js");
 const { isGuard, asContext } = await import("../src/loop/hook.js");
 
+const parts = process.versions.node.split(".");
+const nodeMajor = Number(parts[0] ?? 0);
+const nodeMinor = Number(parts[1] ?? 0);
+const hasNodeSqlite = nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 5);
+
 const readSession = (program: string, payload: Record<string, unknown>, from: number) => {
   const adapter = adapterFor(program);
   return adapter
@@ -208,7 +213,7 @@ describe("reading a session in each agent's dialect", () => {
     expect(s.touched).toEqual(["src/legacy-retry.ts"]);
   });
 
-  it("opencode — the session database, in its own part shapes", async () => {
+  it.skipIf(!hasNodeSqlite)("opencode — the session database, in its own part shapes", async () => {
     const { DatabaseSync } = await import("node:sqlite");
     const dataHome = join(root, "xdg-data");
     await mkdir(join(dataHome, "opencode"), { recursive: true });
@@ -413,50 +418,57 @@ describe("reading a session in each agent's dialect", () => {
     expect((await devin.verify(proj2)).every((w) => !w.ok)).toBe(true);
   });
 
-  it("openclaw — transcript_events sqlite, seq cursor, toolCall writes", async () => {
-    const { DatabaseSync } = await import("node:sqlite");
-    const state = join(root, "claw-state");
-    const dbDir = join(state, "agents", "main", "agent");
-    await mkdir(dbDir, { recursive: true });
-    const db = new DatabaseSync(join(dbDir, "openclaw-agent.sqlite"));
-    db.exec("CREATE TABLE transcript_events (session_id TEXT, seq INTEGER, event_json TEXT);");
-    const put = db.prepare("INSERT INTO transcript_events VALUES (?, ?, ?)");
-    put.run("cs1", 0, JSON.stringify({ type: "session", id: "cs1" }));
-    put.run("cs1", 1, JSON.stringify({ type: "message", role: "user", content: "wire the cache" }));
-    put.run(
-      "cs1",
-      2,
-      JSON.stringify({
-        type: "message",
-        role: "assistant",
-        content: [
-          { type: "text", text: "Wiring it." },
-          {
-            type: "toolCall",
-            id: "t1",
-            name: "write",
-            arguments: { path: `${proj}/src/cache.ts` },
-          },
-        ],
-      }),
-    );
-    db.close();
+  it.skipIf(!hasNodeSqlite)(
+    "openclaw — transcript_events sqlite, seq cursor, toolCall writes",
+    async () => {
+      const { DatabaseSync } = await import("node:sqlite");
+      const state = join(root, "claw-state");
+      const dbDir = join(state, "agents", "main", "agent");
+      await mkdir(dbDir, { recursive: true });
+      const db = new DatabaseSync(join(dbDir, "openclaw-agent.sqlite"));
+      db.exec("CREATE TABLE transcript_events (session_id TEXT, seq INTEGER, event_json TEXT);");
+      const put = db.prepare("INSERT INTO transcript_events VALUES (?, ?, ?)");
+      put.run("cs1", 0, JSON.stringify({ type: "session", id: "cs1" }));
+      put.run(
+        "cs1",
+        1,
+        JSON.stringify({ type: "message", role: "user", content: "wire the cache" }),
+      );
+      put.run(
+        "cs1",
+        2,
+        JSON.stringify({
+          type: "message",
+          role: "assistant",
+          content: [
+            { type: "text", text: "Wiring it." },
+            {
+              type: "toolCall",
+              id: "t1",
+              name: "write",
+              arguments: { path: `${proj}/src/cache.ts` },
+            },
+          ],
+        }),
+      );
+      db.close();
 
-    const prev = process.env.OPENCLAW_STATE_DIR;
-    process.env.OPENCLAW_STATE_DIR = state;
-    try {
-      const s = await readSession("openclaw", { session_id: "cs1", cwd: proj }, 0);
-      expect(s.text).toContain("user: wire the cache");
-      expect(s.text).toContain("assistant: Wiring it.");
-      expect(s.touched).toEqual(["src/cache.ts"]);
-      // The seq cursor advances past what was read; a re-read is empty.
-      const again = await readSession("openclaw", { session_id: "cs1", cwd: proj }, s.read);
-      expect(again.text).toBe("");
-    } finally {
-      if (prev === undefined) delete process.env.OPENCLAW_STATE_DIR;
-      else process.env.OPENCLAW_STATE_DIR = prev;
-    }
-  });
+      const prev = process.env.OPENCLAW_STATE_DIR;
+      process.env.OPENCLAW_STATE_DIR = state;
+      try {
+        const s = await readSession("openclaw", { session_id: "cs1", cwd: proj }, 0);
+        expect(s.text).toContain("user: wire the cache");
+        expect(s.text).toContain("assistant: Wiring it.");
+        expect(s.touched).toEqual(["src/cache.ts"]);
+        // The seq cursor advances past what was read; a re-read is empty.
+        const again = await readSession("openclaw", { session_id: "cs1", cwd: proj }, s.read);
+        expect(again.text).toBe("");
+      } finally {
+        if (prev === undefined) delete process.env.OPENCLAW_STATE_DIR;
+        else process.env.OPENCLAW_STATE_DIR = prev;
+      }
+    },
+  );
 
   it("kiro — session JSONL: Prompt, AssistantMessage with toolUse write", async () => {
     // The real shape a captured Kiro session writes.
