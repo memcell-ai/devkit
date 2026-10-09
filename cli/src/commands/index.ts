@@ -188,7 +188,7 @@ const BASE_COMMANDS: Command[] = [
         what: "workspace to connect ([owner]/[workspace] or slug)",
       },
     ],
-    takes: ["url", "pair", "workspace", "agent", "no-browser"],
+    takes: ["url", "pair", "workspace", "project", "space", "agent", "no-browser"],
     landing: true,
     run: ({ instance, from, args, flags }) =>
       connect(instance, {
@@ -198,7 +198,12 @@ const BASE_COMMANDS: Command[] = [
             ? args.workspace
             : typeof flags.workspace === "string"
               ? flags.workspace
-              : undefined,
+              : typeof (args as any).project === "string"
+                ? (args as any).project
+                : typeof flags.project === "string"
+                  ? flags.project
+                  : undefined,
+        space: typeof flags.space === "string" ? flags.space : undefined,
         agent: typeof flags.agent === "string" ? flags.agent : undefined,
         noBrowser: flags["no-browser"] === true,
         from,
