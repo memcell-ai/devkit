@@ -20,7 +20,8 @@ async function processSupportTicket(ticket: SupportTicket) {
   console.log(`Customer Message: "${ticket.message}"`);
 
   // Recall workspace policies and guard constraints relevant to this ticket
-  const recall = await client.recall.search(namespace, {
+  const recall = await client.recall({
+    namespace,
     intent: `Handle customer support ticket: ${ticket.message}`,
     minConfidence: 0.7,
   });
@@ -29,17 +30,23 @@ async function processSupportTicket(ticket: SupportTicket) {
   console.log(recall.promptContext || "(No specific directives matched)");
 
   // Simulated agent evaluation against recalled guard directives
-  const hasGuard = recall.memories.some((m) => m.type === "guard" && m.enforce);
+  const hasGuard = recall.memories.some(
+    (m) => (m.type === "guard" || m.type === "directive") && m.enforce,
+  );
   if (hasGuard && ticket.message.toLowerCase().includes("refund")) {
     console.log(
       "\n[Action]: Escalating to Human Tier-2 Lead per workspace guard memory.",
     );
     // Report outcome
-    const guardMem = recall.memories.find((m) => m.type === "guard");
+    const guardMem = recall.memories.find(
+      (m) => (m.type === "guard" || m.type === "directive") && m.enforce,
+    );
     if (guardMem) {
-      await client.report(namespace, {
+      await client.report({
+        actionTaken: "Escalated high-value refund to Human Tier-2 Lead",
+        namespace,
         memoryId: guardMem.id,
-        outcome: "upheld",
+        outcome: "worked",
         reason: `Enforced supervisor escalation on high-value refund for ticket ${ticket.id}`,
       });
     }
@@ -52,7 +59,8 @@ async function setupWorkspacePolicies() {
   console.log("Seeding baseline support workspace memories...");
 
   // Guard policy: Refund authorization
-  await client.memories.remember(namespace, {
+  await client.remember({
+    namespace,
     title:
       "Direct agent refunds over $200 require tier-2 supervisory confirmation",
     type: "guard",
@@ -61,7 +69,8 @@ async function setupWorkspacePolicies() {
   });
 
   // Operational directive: Response SLA
-  await client.memories.remember(namespace, {
+  await client.remember({
+    namespace,
     title:
       "Urgent tickets must be acknowledged within 5 minutes with incident ticket ID",
     type: "directive",

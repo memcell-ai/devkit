@@ -13,15 +13,22 @@ async function main() {
 
   // 1. Ingest a personal preference for the executive
   console.log("1. Saving personal executive preference...");
-  const initialPref = await client.memories.remember(namespace, {
-    title:
-      "Reserve Friday mornings 9:00 AM - 12:00 PM for deep strategic focus; decline non-urgent meetings",
-    type: "preference",
-    scope: "user",
-    context: "Executive calendar preference for Q1 planning cycle.",
+  const initialTitle =
+    "Reserve Friday mornings 9:00 AM - 12:00 PM for deep strategic focus; decline non-urgent meetings";
+  const existing = await client.memories.list(namespace, {
+    q: "strategic focus",
   });
+  let initialPref = existing.items[0];
+  if (!initialPref) {
+    initialPref = await client.memories.remember(namespace, {
+      title: initialTitle,
+      type: "preference",
+      scope: "user",
+      context: "Executive calendar preference for Q1 planning cycle.",
+    });
+  }
   console.log(
-    `✓ Stored preference [v${initialPref.version}]: ${initialPref.title}\n`,
+    `[OK] Stored preference [v${initialPref.version}]: ${initialPref.title}\n`,
   );
 
   // 2. The executive updates their schedule preference later
@@ -31,20 +38,23 @@ async function main() {
       "Reserve Friday mornings 8:30 AM - 12:30 PM for strategic focus; schedule meetings only after 1:00 PM",
   });
   console.log(
-    `✓ Updated preference to [v${updatedPref.version}]: ${updatedPref.title}\n`,
+    `[OK] Updated preference to [v${updatedPref.version}]: ${updatedPref.title}\n`,
   );
 
   // 3. Inspect the cryptographic version history
   console.log("3. Inspecting memory version lineage...");
   const history = await client.memories.history(namespace, initialPref.id);
-  console.log(`✓ Found ${history.items.length} historical versions.`);
+  console.log(`[OK] Found ${history.items.length} historical versions.`);
   for (const item of history.items) {
-    console.log(`  - Version ${item.version}: ${item.action || "revised"}`);
+    console.log(
+      `  - Version ${item.version}: ${item.changeReason || "revised"}`,
+    );
   }
 
   // 4. Recall preference when scheduling an incoming meeting
   console.log("\n4. Recalling preference for Friday meeting request...");
-  const recall = await client.recall.search(namespace, {
+  const recall = await client.recall({
+    namespace,
     intent: "Schedule client strategy sync for Friday at 10:00 AM",
   });
 

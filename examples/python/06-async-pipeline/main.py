@@ -1,5 +1,6 @@
 import asyncio
 import os
+
 from memcell import AsyncMemcellClient
 
 token = os.getenv("MEMCELL_TOKEN", "mc_pat_mock_demo")
@@ -14,15 +15,19 @@ BATCH_CLAIMS = [
     "Data Protection: Personal data retention period is 90 days following account closure",
 ]
 
+
 async def ingest_claim(client: AsyncMemcellClient, claim: str):
-    mem = await client.memories.remember(
-        namespace,
+    res = await client.remember(
+        namespace=namespace,
         title=claim,
         type="directive",
         scope="workspace",
     )
-    print(f"✓ Ingested [{mem.id}]: {claim[:50]}...")
+    mem = res.created[0] if res.created else (res.evolved[0] if res.evolved else None)
+    mem_id = mem.id if mem else ""
+    print(f"[OK] Ingested [{mem_id}]: {claim[:50]}...")
     return mem
+
 
 async def main():
     print("=== High-Throughput Async Ingestion Pipeline ===\n")
@@ -42,12 +47,16 @@ async def main():
         ]
 
         print("\nExecuting concurrent recalls...")
-        recall_tasks = [client.recall.search(namespace, intent=intent) for intent in query_intents]
+        recall_tasks = [
+            client.recall(namespace=namespace, intent=intent)
+            for intent in query_intents
+        ]
         results = await asyncio.gather(*recall_tasks)
 
         for intent, res in zip(query_intents, results):
             print(f"\n--- Intent: '{intent}' ---")
             print(res.prompt_context)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

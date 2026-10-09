@@ -11,28 +11,39 @@ async function main() {
 
   // 1. Provision Researcher Agent
   console.log("1. Registering 'Market Researcher' agent identity...");
-  const researcher = await adminClient.agents.create(namespace, {
-    name: "Market Researcher",
-    description:
-      "Crawls industry publications and ingests provisional observations",
-  });
+  const existingAgents = await adminClient.agents.list(namespace);
+  let researcher = existingAgents.items.find(
+    (a) => a.name === "Market Researcher",
+  );
+  if (!researcher) {
+    researcher = await adminClient.agents.create(namespace, {
+      name: "Market Researcher",
+      description:
+        "Crawls industry publications and ingests provisional observations",
+    });
+  }
   const researcherKey = await adminClient.agents.createKey(
     namespace,
     researcher.id,
   );
   console.log(
-    `✓ Researcher registered. Key preview: ${researcherKey.preview}\n`,
+    `[OK] Researcher registered. Key preview: ${researcherKey.preview}\n`,
   );
 
   // 2. Provision Auditor Agent
   console.log("2. Registering 'Compliance Auditor' agent identity...");
-  const auditor = await adminClient.agents.create(namespace, {
-    name: "Compliance Auditor",
-    description:
-      "Evaluates provisional observations and enforces data policy guards",
-  });
+  let auditor = existingAgents.items.find(
+    (a) => a.name === "Compliance Auditor",
+  );
+  if (!auditor) {
+    auditor = await adminClient.agents.create(namespace, {
+      name: "Compliance Auditor",
+      description:
+        "Evaluates provisional observations and enforces data policy guards",
+    });
+  }
   const auditorKey = await adminClient.agents.createKey(namespace, auditor.id);
-  console.log(`✓ Auditor registered. Key preview: ${auditorKey.preview}\n`);
+  console.log(`[OK] Auditor registered. Key preview: ${auditorKey.preview}\n`);
 
   // 3. Researcher agent runs under its dedicated token
   console.log("3. Researcher operates under its scoped key...");
@@ -41,13 +52,16 @@ async function main() {
     baseUrl: instance,
   });
 
-  const observation = await researcherClient.memories.remember(namespace, {
+  const res = await researcherClient.remember({
+    namespace,
     title:
       "Competitor Gamma reported 15% drop in enterprise subscription churn",
-    type: "observation",
+    type: "fact",
     status: "provisional",
   });
-  console.log(`✓ Filed provisional observation: [${observation.id}]\n`);
+  const observation = res.created[0] || res.evolved[0];
+  const observationId = observation?.id || "";
+  console.log(`[OK] Filed provisional observation: [${observationId}]\n`);
 
   // 4. Auditor agent runs under its key, inspecting provisional observations
   console.log("4. Auditor evaluates and confirms observation...");
@@ -56,13 +70,17 @@ async function main() {
     baseUrl: instance,
   });
 
-  await auditorClient.report(namespace, {
-    memoryId: observation.id,
-    outcome: "upheld",
-    reason: "Cross-referenced with official SEC 10-Q filing.",
-  });
+  if (observationId) {
+    await auditorClient.report({
+      actionTaken: "Cross-referenced observation against SEC 10-Q filing",
+      namespace,
+      memoryId: observationId,
+      outcome: "worked",
+      reason: "Cross-referenced with official SEC 10-Q filing.",
+    });
+  }
   console.log(
-    "✓ Auditor confirmed and reported outcome to reinforce memory confidence.",
+    "[OK] Auditor confirmed and reported outcome to reinforce memory confidence.",
   );
 }
 
