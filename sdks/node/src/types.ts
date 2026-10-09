@@ -85,6 +85,9 @@ export interface MemCellConfig {
   apiKey?: string;
   token?: string;
   accessToken?: string;
+  clientId?: string;
+  clientSecret?: string;
+  scope?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
   maxRetries?: number;

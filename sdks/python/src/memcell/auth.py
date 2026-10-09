@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Any
 
@@ -27,11 +28,18 @@ class AuthManager:
 
         self._cached_token: str | None = None
         self._token_expires_at: float = 0.0
+        self._async_in_flight: Any = None
+
+    @property
+    def is_m2m(self) -> bool:
+        """Returns True if configured for OAuth 2.0 M2M client credentials."""
+        return bool(self.client_id and self.client_secret)
 
     def clear_cache(self) -> None:
         """Clears cached OAuth M2M access token."""
         self._cached_token = None
         self._token_expires_at = 0.0
+        self._async_in_flight = None
 
     def get_authorization_header(self, client: httpx.Client | None = None) -> str | None:
         """Synchronously resolves Authorization header value."""
@@ -97,41 +105,52 @@ class AuthManager:
             if self._cached_token and (now + 60.0) < self._token_expires_at:
                 return f"Bearer {self._cached_token}"
 
-            c = client or httpx.AsyncClient()
-            should_close = client is None
-            try:
-                data = {
-                    "grant_type": "client_credentials",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                }
-                if self.scope:
-                    data["scope"] = self.scope
+            if self._async_in_flight is not None:
+                return await self._async_in_flight
 
-                resp = await c.post(
-                    f"{self.base_url}/oauth2/token",
-                    data=data,
-                    headers={
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Accept": "application/json",
-                    },
-                )
-                if not resp.is_success:
-                    raise MemCellError(
-                        f"OAuth M2M token exchange failed: HTTP {resp.status_code} {resp.text}",
-                        status=resp.status_code,
+            async def _do_fetch() -> str:
+                c = client or httpx.AsyncClient()
+                should_close = client is None
+                try:
+                    data = {
+                        "grant_type": "client_credentials",
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                    }
+                    if self.scope:
+                        data["scope"] = self.scope
+
+                    resp = await c.post(
+                        f"{self.base_url}/oauth2/token",
+                        data=data,
+                        headers={
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "Accept": "application/json",
+                        },
                     )
-                payload: dict[str, Any] = resp.json()
-                token = payload.get("access_token")
-                expires_in = payload.get("expires_in", 3600)
-                if not token:
-                    raise MemCellError("OAuth token endpoint returned empty access_token.")
+                    if not resp.is_success:
+                        raise MemCellError(
+                            f"OAuth M2M token exchange failed: HTTP {resp.status_code} {resp.text}",
+                            status=resp.status_code,
+                        )
+                    payload: dict[str, Any] = resp.json()
+                    token = payload.get("access_token")
+                    expires_in = payload.get("expires_in", 3600)
+                    if not token:
+                        raise MemCellError("OAuth token endpoint returned empty access_token.")
 
-                self._cached_token = str(token)
-                self._token_expires_at = time.time() + float(expires_in)
-                return f"Bearer {self._cached_token}"
+                    self._cached_token = str(token)
+                    self._token_expires_at = time.time() + float(expires_in)
+                    return f"Bearer {self._cached_token}"
+                finally:
+                    if should_close:
+                        await c.aclose()
+
+            task = asyncio.create_task(_do_fetch())
+            self._async_in_flight = task
+            try:
+                return await task
             finally:
-                if should_close:
-                    await c.aclose()
+                self._async_in_flight = None
 
         return None

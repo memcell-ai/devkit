@@ -95,3 +95,44 @@ async def test_auth_manager_async_m2m():
     header2 = await auth.get_authorization_header_async(mock_async_client)
     assert header2 == "Bearer m2m_async_token_001"
     assert call_count == 1
+
+@pytest.mark.asyncio
+async def test_auth_manager_async_m2m_deduplication():
+    import asyncio
+
+    call_count = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        if request.url.path == "/oauth2/token":
+            call_count += 1
+            await asyncio.sleep(0.02)
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "deduped_token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            )
+        return httpx.Response(404)
+
+    mock_async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    auth = AuthManager(
+        base_url="https://api.memcell.io",
+        client_id="cid_dedup",
+        client_secret="csec_dedup",
+    )
+
+    results = await asyncio.gather(
+        auth.get_authorization_header_async(mock_async_client),
+        auth.get_authorization_header_async(mock_async_client),
+        auth.get_authorization_header_async(mock_async_client),
+    )
+    assert results == [
+        "Bearer deduped_token",
+        "Bearer deduped_token",
+        "Bearer deduped_token",
+    ]
+    assert call_count == 1
+

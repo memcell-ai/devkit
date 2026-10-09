@@ -127,6 +127,19 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  examples/node/07-oauth-m2m-agent:
+    dependencies:
+      '@memcell/sdk':
+        specifier: workspace:*
+        version: link:../../../sdks/node
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   sdks/node:
     devDependencies:
       '@types/node':
