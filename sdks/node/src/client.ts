@@ -137,7 +137,10 @@ export class MemCell {
 
     const hasClientId = Boolean(config.clientId);
     const hasClientSecret = Boolean(config.clientSecret);
-    if ((hasClientId && !hasClientSecret) || (!hasClientId && hasClientSecret)) {
+    if (
+      (hasClientId && !hasClientSecret) ||
+      (!hasClientId && hasClientSecret)
+    ) {
       throw new Error(
         "Both 'clientId' and 'clientSecret' are required for OAuth client credentials authentication.",
       );
@@ -186,8 +189,10 @@ export class MemCell {
         };
       } else if (
         typeof process !== "undefined" &&
-        ((process.env?.MEMCELL_CLIENT_ID && !process.env?.MEMCELL_CLIENT_SECRET) ||
-          (!process.env?.MEMCELL_CLIENT_ID && process.env?.MEMCELL_CLIENT_SECRET))
+        ((process.env?.MEMCELL_CLIENT_ID &&
+          !process.env?.MEMCELL_CLIENT_SECRET) ||
+          (!process.env?.MEMCELL_CLIENT_ID &&
+            process.env?.MEMCELL_CLIENT_SECRET))
       ) {
         throw new Error(
           "Both 'MEMCELL_CLIENT_ID' and 'MEMCELL_CLIENT_SECRET' are required for OAuth authentication from environment.",

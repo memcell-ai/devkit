@@ -1,4 +1,5 @@
 import json
+import re
 
 import httpx
 import pytest
@@ -811,59 +812,72 @@ def test_client_oauth_credentials_initialization():
     assert async_client.auth_manager.scope == "read write"
 
 
-
 def test_client_oauth_incomplete_credentials_raises():
     with pytest.raises(
         ValueError,
-        match="Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication.",
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
     ):
         MemCell(client_id="app_123")
 
     with pytest.raises(
         ValueError,
-        match="Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication.",
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
     ):
         MemCell(client_secret="sec_456")
 
     with pytest.raises(
         ValueError,
-        match="Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication.",
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
     ):
         AsyncMemCell(client_id="app_123")
 
     with pytest.raises(
         ValueError,
-        match="Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication.",
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
     ):
         AsyncMemCell(client_secret="sec_456")
-
 
 
 def test_client_oauth_ambiguous_credentials_raises():
     with pytest.raises(
         ValueError,
-        match="Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both.",
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
     ):
         MemCell(api_key="mc_live_key", client_id="app_123", client_secret="sec_456")
 
     with pytest.raises(
         ValueError,
-        match="Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both.",
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
     ):
         MemCell(access_token="tok_static", client_id="app_123", client_secret="sec_456")
 
     with pytest.raises(
         ValueError,
-        match="Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both.",
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
     ):
         AsyncMemCell(api_key="mc_live_key", client_id="app_123", client_secret="sec_456")
 
     with pytest.raises(
         ValueError,
-        match="Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both.",
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
     ):
         AsyncMemCell(access_token="tok_static", client_id="app_123", client_secret="sec_456")
-
 
 
 def test_client_missing_credentials_raises(monkeypatch):
@@ -874,16 +888,19 @@ def test_client_missing_credentials_raises(monkeypatch):
 
     with pytest.raises(
         ValueError,
-        match="MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables.",
+        match=re.escape(
+            "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+        ),
     ):
         MemCell()
 
     with pytest.raises(
         ValueError,
-        match="MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables.",
+        match=re.escape(
+            "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+        ),
     ):
         AsyncMemCell()
-
 
 
 def test_client_oauth_env_fallback(monkeypatch):
@@ -899,13 +916,11 @@ def test_client_oauth_env_fallback(monkeypatch):
     assert client.auth_manager.client_secret == "env_app_secret"
     assert client.auth_manager.scope == "read:all"
 
-
     async_client = AsyncMemCell()
     assert async_client.auth_manager.is_m2m is True
     assert async_client.auth_manager.client_id == "env_app_id"
     assert async_client.auth_manager.client_secret == "env_app_secret"
     assert async_client.auth_manager.scope == "read:all"
-
 
 
 def test_sync_client_oauth_dispatch():
@@ -947,7 +962,6 @@ def test_sync_client_oauth_dispatch():
     assert requests_log[0].url.path == "/oauth2/token"
     assert requests_log[1].url.path == "/api/v1/acme/backend/recall"
     assert requests_log[1].headers["authorization"] == "Bearer oauth_access_jwt_123"
-
 
 
 @pytest.mark.asyncio

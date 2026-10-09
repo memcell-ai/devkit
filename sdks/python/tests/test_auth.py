@@ -96,6 +96,7 @@ async def test_auth_manager_async_m2m():
     assert header2 == "Bearer m2m_async_token_001"
     assert call_count == 1
 
+
 @pytest.mark.asyncio
 async def test_auth_manager_async_m2m_deduplication():
     import asyncio
@@ -135,4 +136,3 @@ async def test_auth_manager_async_m2m_deduplication():
         "Bearer deduped_token",
     ]
     assert call_count == 1
-
