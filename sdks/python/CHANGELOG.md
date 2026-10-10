@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/memcell-ai/devkit/compare/python-v1.4.0...python-v1.5.0) (2026-10-10)
+
+
+### Features
+
+* **auth:** add OAuth 2.0 client credentials support to Node and Python SDKs ([#10](https://github.com/memcell-ai/devkit/issues/10)) ([393498f](https://github.com/memcell-ai/devkit/commit/393498f2d2216848b18f4cbff9a46155a638fd23))
+
 ## [1.4.0](https://github.com/memcell-ai/devkit/compare/python-v1.4.0...python-v1.4.0) (2026-10-08)
 
 
