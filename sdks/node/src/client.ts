@@ -812,3 +812,8 @@ export class MemCell {
     return `/api/v1/${action}`;
   }
 }
+
+export const MemcellClient = MemCell;
+export const Memory = MemCell;
+export type MemcellClient = MemCell;
+export type Memory = MemCell;

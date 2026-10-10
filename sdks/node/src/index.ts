@@ -1,4 +1,8 @@
-export { MemCell, MemCell as MemcellClient } from "./client.js";
+export {
+  MemCell,
+  MemCell as MemcellClient,
+  MemCell as Memory,
+} from "./client.js";
 export { ScopedMemCell } from "./scoped.js";
 export { OrganizationMemCell, OrganizationsNamespace } from "./organization.js";
 export {

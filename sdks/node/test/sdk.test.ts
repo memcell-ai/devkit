@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MemCell,
+  MemcellClient,
+  Memory,
   ScopedMemCell,
   AuthManager,
   MemCellError,
@@ -1590,6 +1592,21 @@ describe("MemCell SDK (cli package export)", () => {
 
         expect(scopes[0]!.name).toBe("common");
         expect(calls.every((c) => c.includes("/acme/backend/"))).toBe(true);
+      });
+    });
+
+    describe("Client Aliases", () => {
+      it("exports MemcellClient and Memory as aliases for MemCell", () => {
+        expect(MemcellClient).toBe(MemCell);
+        expect(Memory).toBe(MemCell);
+
+        const memInstance = new Memory({ apiKey: "mc_test_alias" });
+        expect(memInstance).toBeInstanceOf(MemCell);
+        expect(memInstance).toBeInstanceOf(Memory);
+        expect(memInstance).toBeInstanceOf(MemcellClient);
+
+        const clientInstance = new MemcellClient({ apiKey: "mc_test_alias" });
+        expect(clientInstance).toBeInstanceOf(MemCell);
       });
     });
   });

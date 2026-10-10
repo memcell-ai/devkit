@@ -1004,3 +1004,18 @@ async def test_async_client_oauth_dispatch():
     assert requests_log[0].url.path == "/oauth2/token"
     assert requests_log[1].url.path == "/api/v1/acme/backend/recall"
     assert requests_log[1].headers["authorization"] == "Bearer async_oauth_jwt_456"
+
+
+def test_client_aliases():
+    from memcell import AsyncMemory, Memory
+
+    assert Memory is MemCell
+    assert AsyncMemory is AsyncMemCell
+
+    client = Memory(api_key="mc_alias_test")
+    assert isinstance(client, MemCell)
+    assert isinstance(client, Memory)
+
+    async_client = AsyncMemory(api_key="mc_alias_test")
+    assert isinstance(async_client, AsyncMemCell)
+    assert isinstance(async_client, AsyncMemory)

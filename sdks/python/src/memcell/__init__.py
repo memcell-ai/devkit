@@ -108,6 +108,8 @@ from .webhooks import (
 
 MemcellClient = MemCell
 AsyncMemcellClient = AsyncMemCell
+Memory = MemCell
+AsyncMemory = AsyncMemCell
 
 __version__ = "1.4.0"
 
@@ -123,6 +125,7 @@ __all__ = [
     "AsyncInvitationsNamespace",
     "AsyncMemCell",
     "AsyncMemcellClient",
+    "AsyncMemory",
     "AsyncOperatorNamespace",
     "AsyncOrganizationAuditNamespace",
     "AsyncOrganizationFleetNamespace",
@@ -156,6 +159,7 @@ __all__ = [
     "MemCell",
     "MemCellError",
     "MemcellClient",
+    "Memory",
     "MemoryItem",
     "MemoryRelationItem",
     "MemoryRelationsResponse",
