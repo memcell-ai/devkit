@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MemCell,
+  MemcellClient,
+  Memory,
   ScopedMemCell,
   AuthManager,
   MemCellError,
@@ -101,9 +103,106 @@ describe("MemCell SDK (cli package export)", () => {
       const header2 = await auth.getAuthorizationHeader();
       expect(header2).toBe("Bearer m2m_token_002");
     });
+
+    it("deduplicates concurrent in-flight token requests", async () => {
+      let callCount = 0;
+      const mockFetch = vi.fn(async () => {
+        callCount++;
+        await new Promise((r) => setTimeout(r, 20));
+        return new Response(
+          JSON.stringify({
+            access_token: "deduped_token",
+            token_type: "Bearer",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
+
+      const auth = new AuthManager(
+        { clientId: "cid", clientSecret: "csec" },
+        "https://api.memcell.io",
+        mockFetch as any,
+      );
+
+      const [h1, h2, h3] = await Promise.all([
+        auth.getAuthorizationHeader(),
+        auth.getAuthorizationHeader(),
+        auth.getAuthorizationHeader(),
+      ]);
+
+      expect(h1).toBe("Bearer deduped_token");
+      expect(h2).toBe("Bearer deduped_token");
+      expect(h3).toBe("Bearer deduped_token");
+      expect(callCount).toBe(1);
+    });
   });
 
   describe("MemCell Client", () => {
+    it("initializes with top-level clientId and clientSecret", async () => {
+      const client = new MemCell({
+        baseUrl: "https://api.memcell.io",
+        clientId: "cid_123",
+        clientSecret: "csec_123",
+        scope: "memory:read:*",
+      });
+      expect(client.baseUrl).toBe("https://api.memcell.io");
+    });
+
+    it("throws when only clientId is provided", () => {
+      expect(
+        () =>
+          new MemCell({
+            baseUrl: "https://api.memcell.io",
+            clientId: "cid_123",
+          }),
+      ).toThrow("Both 'clientId' and 'clientSecret' are required");
+    });
+
+    it("throws when only clientSecret is provided", () => {
+      expect(
+        () =>
+          new MemCell({
+            baseUrl: "https://api.memcell.io",
+            clientSecret: "csec_123",
+          }),
+      ).toThrow("Both 'clientId' and 'clientSecret' are required");
+    });
+
+    it("throws when both static token and OAuth credentials are provided", () => {
+      expect(
+        () =>
+          new MemCell({
+            baseUrl: "https://api.memcell.io",
+            token: "mc_pat_123",
+            clientId: "cid_123",
+            clientSecret: "csec_123",
+          }),
+      ).toThrow("Ambiguous authentication");
+    });
+
+    it("initializes from MEMCELL_CLIENT_ID and MEMCELL_CLIENT_SECRET environment variables", () => {
+      const oldId = process.env.MEMCELL_CLIENT_ID;
+      const oldSec = process.env.MEMCELL_CLIENT_SECRET;
+      const oldTok = process.env.MEMCELL_TOKEN;
+      const oldKey = process.env.MEMCELL_API_KEY;
+      delete process.env.MEMCELL_TOKEN;
+      delete process.env.MEMCELL_API_KEY;
+
+      try {
+        process.env.MEMCELL_CLIENT_ID = "env_cid";
+        process.env.MEMCELL_CLIENT_SECRET = "env_csec";
+        const client = new MemCell({ baseUrl: "https://api.memcell.io" });
+        expect(client.baseUrl).toBe("https://api.memcell.io");
+      } finally {
+        if (oldId) process.env.MEMCELL_CLIENT_ID = oldId;
+        else delete process.env.MEMCELL_CLIENT_ID;
+        if (oldSec) process.env.MEMCELL_CLIENT_SECRET = oldSec;
+        else delete process.env.MEMCELL_CLIENT_SECRET;
+        if (oldTok) process.env.MEMCELL_TOKEN = oldTok;
+        if (oldKey) process.env.MEMCELL_API_KEY = oldKey;
+      }
+    });
     it("handles baseUrl and endpoint routing for scoped and unscoped namespaces", async () => {
       const requests: Array<{ url: string; body: any }> = [];
 
@@ -1493,6 +1592,21 @@ describe("MemCell SDK (cli package export)", () => {
 
         expect(scopes[0]!.name).toBe("common");
         expect(calls.every((c) => c.includes("/acme/backend/"))).toBe(true);
+      });
+    });
+
+    describe("Client Aliases", () => {
+      it("exports MemcellClient and Memory as aliases for MemCell", () => {
+        expect(MemcellClient).toBe(MemCell);
+        expect(Memory).toBe(MemCell);
+
+        const memInstance = new Memory({ apiKey: "mc_test_alias" });
+        expect(memInstance).toBeInstanceOf(MemCell);
+        expect(memInstance).toBeInstanceOf(Memory);
+        expect(memInstance).toBeInstanceOf(MemcellClient);
+
+        const clientInstance = new MemcellClient({ apiKey: "mc_test_alias" });
+        expect(clientInstance).toBeInstanceOf(MemCell);
       });
     });
   });

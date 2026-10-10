@@ -2890,13 +2890,36 @@ class MemCell:
         resolved_api_key = (
             api_key or token or os.environ.get("MEMCELL_API_KEY") or os.environ.get("MEMCELL_TOKEN")
         )
+        resolved_client_id = client_id or os.environ.get("MEMCELL_CLIENT_ID")
+        resolved_client_secret = client_secret or os.environ.get("MEMCELL_CLIENT_SECRET")
+        resolved_scope = scope or os.environ.get("MEMCELL_OAUTH_SCOPE")
+
+        has_client_id = bool(resolved_client_id)
+        has_client_secret = bool(resolved_client_secret)
+        if (has_client_id and not has_client_secret) or (not has_client_id and has_client_secret):
+            raise ValueError(
+                "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+            )
+
+        has_static = bool(resolved_api_key or access_token)
+        has_oauth = bool(has_client_id and has_client_secret)
+        if has_static and has_oauth:
+            raise ValueError(
+                "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+            )
+
+        if not has_static and not has_oauth:
+            raise ValueError(
+                "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+            )
+
         self.auth_manager = AuthManager(
             base_url=self.base_url,
             api_key=resolved_api_key,
             access_token=access_token,
-            client_id=client_id,
-            client_secret=client_secret,
-            scope=scope,
+            client_id=resolved_client_id,
+            client_secret=resolved_client_secret,
+            scope=resolved_scope,
         )
 
         self._custom_client = http_client is not None
@@ -3360,13 +3383,36 @@ class AsyncMemCell:
         resolved_api_key = (
             api_key or token or os.environ.get("MEMCELL_API_KEY") or os.environ.get("MEMCELL_TOKEN")
         )
+        resolved_client_id = client_id or os.environ.get("MEMCELL_CLIENT_ID")
+        resolved_client_secret = client_secret or os.environ.get("MEMCELL_CLIENT_SECRET")
+        resolved_scope = scope or os.environ.get("MEMCELL_OAUTH_SCOPE")
+
+        has_client_id = bool(resolved_client_id)
+        has_client_secret = bool(resolved_client_secret)
+        if (has_client_id and not has_client_secret) or (not has_client_id and has_client_secret):
+            raise ValueError(
+                "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+            )
+
+        has_static = bool(resolved_api_key or access_token)
+        has_oauth = bool(has_client_id and has_client_secret)
+        if has_static and has_oauth:
+            raise ValueError(
+                "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+            )
+
+        if not has_static and not has_oauth:
+            raise ValueError(
+                "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+            )
+
         self.auth_manager = AuthManager(
             base_url=self.base_url,
             api_key=resolved_api_key,
             access_token=access_token,
-            client_id=client_id,
-            client_secret=client_secret,
-            scope=scope,
+            client_id=resolved_client_id,
+            client_secret=resolved_client_secret,
+            scope=resolved_scope,
         )
 
         self._custom_client = http_client is not None

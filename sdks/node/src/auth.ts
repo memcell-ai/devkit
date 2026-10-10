@@ -3,6 +3,7 @@ import type { MemCellAuth } from "./types.js";
 export class AuthManager {
   private cachedToken: string | null = null;
   private expiresAt: number | null = null;
+  private inFlightTokenPromise: Promise<string> | null = null;
 
   constructor(
     private readonly auth: MemCellAuth,
@@ -34,7 +35,15 @@ export class AuthManager {
         return `Bearer ${this.cachedToken}`;
       }
 
-      return await this.fetchOAuthToken();
+      if (this.inFlightTokenPromise) {
+        return await this.inFlightTokenPromise;
+      }
+
+      this.inFlightTokenPromise = this.fetchOAuthToken().finally(() => {
+        this.inFlightTokenPromise = null;
+      });
+
+      return await this.inFlightTokenPromise;
     }
 
     throw new Error("Invalid MemCell authentication configuration.");
@@ -102,5 +111,6 @@ export class AuthManager {
   clearCache(): void {
     this.cachedToken = null;
     this.expiresAt = null;
+    this.inFlightTokenPromise = null;
   }
 }

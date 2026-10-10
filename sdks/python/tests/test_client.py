@@ -1,4 +1,5 @@
 import json
+import re
 
 import httpx
 import pytest
@@ -795,3 +796,226 @@ def test_scoped_memcell_bound_namespaces():
 
     assert scopes[0].name == "common"
     assert all("/acme/backend/" in c for c in calls)
+
+
+def test_client_oauth_credentials_initialization():
+    client = MemCell(client_id="app_123", client_secret="sec_456", scope="read write")
+    assert client.auth_manager.is_m2m is True
+    assert client.auth_manager.client_id == "app_123"
+    assert client.auth_manager.client_secret == "sec_456"
+    assert client.auth_manager.scope == "read write"
+
+    async_client = AsyncMemCell(client_id="app_123", client_secret="sec_456", scope="read write")
+    assert async_client.auth_manager.is_m2m is True
+    assert async_client.auth_manager.client_id == "app_123"
+    assert async_client.auth_manager.client_secret == "sec_456"
+    assert async_client.auth_manager.scope == "read write"
+
+
+def test_client_oauth_incomplete_credentials_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
+    ):
+        MemCell(client_id="app_123")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
+    ):
+        MemCell(client_secret="sec_456")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
+    ):
+        AsyncMemCell(client_id="app_123")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Both 'client_id' and 'client_secret' are required for OAuth client credentials authentication."
+        ),
+    ):
+        AsyncMemCell(client_secret="sec_456")
+
+
+def test_client_oauth_ambiguous_credentials_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
+    ):
+        MemCell(api_key="mc_live_key", client_id="app_123", client_secret="sec_456")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
+    ):
+        MemCell(access_token="tok_static", client_id="app_123", client_secret="sec_456")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
+    ):
+        AsyncMemCell(api_key="mc_live_key", client_id="app_123", client_secret="sec_456")
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Ambiguous authentication: provide either a static token/api_key OR OAuth client_id/client_secret, not both."
+        ),
+    ):
+        AsyncMemCell(access_token="tok_static", client_id="app_123", client_secret="sec_456")
+
+
+def test_client_missing_credentials_raises(monkeypatch):
+    monkeypatch.delenv("MEMCELL_API_KEY", raising=False)
+    monkeypatch.delenv("MEMCELL_TOKEN", raising=False)
+    monkeypatch.delenv("MEMCELL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("MEMCELL_CLIENT_SECRET", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+        ),
+    ):
+        MemCell()
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "MemCell authentication required. Provide api_key/token or client_id/client_secret, or set environment variables."
+        ),
+    ):
+        AsyncMemCell()
+
+
+def test_client_oauth_env_fallback(monkeypatch):
+    monkeypatch.delenv("MEMCELL_API_KEY", raising=False)
+    monkeypatch.delenv("MEMCELL_TOKEN", raising=False)
+    monkeypatch.setenv("MEMCELL_CLIENT_ID", "env_app_id")
+    monkeypatch.setenv("MEMCELL_CLIENT_SECRET", "env_app_secret")
+    monkeypatch.setenv("MEMCELL_OAUTH_SCOPE", "read:all")
+
+    client = MemCell()
+    assert client.auth_manager.is_m2m is True
+    assert client.auth_manager.client_id == "env_app_id"
+    assert client.auth_manager.client_secret == "env_app_secret"
+    assert client.auth_manager.scope == "read:all"
+
+    async_client = AsyncMemCell()
+    assert async_client.auth_manager.is_m2m is True
+    assert async_client.auth_manager.client_id == "env_app_id"
+    assert async_client.auth_manager.client_secret == "env_app_secret"
+    assert async_client.auth_manager.scope == "read:all"
+
+
+def test_sync_client_oauth_dispatch():
+    requests_log = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_log.append(request)
+        if request.url.path == "/oauth2/token":
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "oauth_access_jwt_123",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            )
+        if request.url.path == "/api/v1/acme/backend/recall":
+            return httpx.Response(
+                200,
+                json={
+                    "recallId": "rec_oauth_1",
+                    "promptContext": "<oauth>OAuth context</oauth>",
+                    "memories": [],
+                },
+            )
+        return httpx.Response(404)
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client = MemCell(
+        client_id="app_123",
+        client_secret="sec_456",
+        base_url="https://api.memcell.io",
+        http_client=mock_client,
+    )
+
+    recall = client.recall(namespace="acme/backend", query="test oauth query")
+    assert recall.recall_id == "rec_oauth_1"
+    assert len(requests_log) == 2
+    assert requests_log[0].url.path == "/oauth2/token"
+    assert requests_log[1].url.path == "/api/v1/acme/backend/recall"
+    assert requests_log[1].headers["authorization"] == "Bearer oauth_access_jwt_123"
+
+
+@pytest.mark.asyncio
+async def test_async_client_oauth_dispatch():
+    requests_log = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_log.append(request)
+        if request.url.path == "/oauth2/token":
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "async_oauth_jwt_456",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            )
+        if request.url.path == "/api/v1/acme/backend/recall":
+            return httpx.Response(
+                200,
+                json={
+                    "recallId": "rec_async_oauth_1",
+                    "promptContext": "<oauth>Async OAuth context</oauth>",
+                    "memories": [],
+                },
+            )
+        return httpx.Response(404)
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    async with AsyncMemCell(
+        client_id="app_123",
+        client_secret="sec_456",
+        base_url="https://api.memcell.io",
+        http_client=mock_client,
+    ) as client:
+        recall = await client.recall(namespace="acme/backend", query="test oauth query")
+        assert recall.recall_id == "rec_async_oauth_1"
+
+    assert len(requests_log) == 2
+    assert requests_log[0].url.path == "/oauth2/token"
+    assert requests_log[1].url.path == "/api/v1/acme/backend/recall"
+    assert requests_log[1].headers["authorization"] == "Bearer async_oauth_jwt_456"
+
+
+def test_client_aliases():
+    from memcell import AsyncMemory, Memory
+
+    assert Memory is MemCell
+    assert AsyncMemory is AsyncMemCell
+
+    client = Memory(api_key="mc_alias_test")
+    assert isinstance(client, MemCell)
+    assert isinstance(client, Memory)
+
+    async_client = AsyncMemory(api_key="mc_alias_test")
+    assert isinstance(async_client, AsyncMemCell)
+    assert isinstance(async_client, AsyncMemory)

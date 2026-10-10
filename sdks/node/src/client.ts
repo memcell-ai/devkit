@@ -135,9 +135,36 @@ export class MemCell {
     this.config = config;
     this.customFetch = config.fetch;
 
+    const hasClientId = Boolean(config.clientId);
+    const hasClientSecret = Boolean(config.clientSecret);
+    if (
+      (hasClientId && !hasClientSecret) ||
+      (!hasClientId && hasClientSecret)
+    ) {
+      throw new Error(
+        "Both 'clientId' and 'clientSecret' are required for OAuth client credentials authentication.",
+      );
+    }
+
+    const hasStaticToken = Boolean(
+      config.apiKey || config.token || config.accessToken,
+    );
+    const hasOAuthCreds = Boolean(hasClientId && hasClientSecret);
+    if (hasStaticToken && hasOAuthCreds) {
+      throw new Error(
+        "Ambiguous authentication: provide either a static token/apiKey OR OAuth clientId/clientSecret, not both.",
+      );
+    }
+
     let auth: MemCellAuth | undefined = config.auth;
     if (!auth) {
-      if (config.apiKey) {
+      if (hasOAuthCreds) {
+        auth = {
+          clientId: config.clientId!,
+          clientSecret: config.clientSecret!,
+          scope: config.scope,
+        };
+      } else if (config.apiKey) {
         auth = { apiKey: config.apiKey };
       } else if (config.token) {
         auth = { apiKey: config.token };
@@ -150,9 +177,29 @@ export class MemCell {
         auth = {
           apiKey: (process.env.MEMCELL_API_KEY || process.env.MEMCELL_TOKEN)!,
         };
+      } else if (
+        typeof process !== "undefined" &&
+        process.env?.MEMCELL_CLIENT_ID &&
+        process.env?.MEMCELL_CLIENT_SECRET
+      ) {
+        auth = {
+          clientId: process.env.MEMCELL_CLIENT_ID,
+          clientSecret: process.env.MEMCELL_CLIENT_SECRET,
+          scope: process.env.MEMCELL_OAUTH_SCOPE,
+        };
+      } else if (
+        typeof process !== "undefined" &&
+        ((process.env?.MEMCELL_CLIENT_ID &&
+          !process.env?.MEMCELL_CLIENT_SECRET) ||
+          (!process.env?.MEMCELL_CLIENT_ID &&
+            process.env?.MEMCELL_CLIENT_SECRET))
+      ) {
+        throw new Error(
+          "Both 'MEMCELL_CLIENT_ID' and 'MEMCELL_CLIENT_SECRET' are required for OAuth authentication from environment.",
+        );
       } else {
         throw new Error(
-          "MemCell authentication required. Provide apiKey, token, accessToken, or auth configuration.",
+          "MemCell authentication required. Provide apiKey, token, accessToken, or clientId + clientSecret, or set environment variables.",
         );
       }
     }
@@ -765,3 +812,8 @@ export class MemCell {
     return `/api/v1/${action}`;
   }
 }
+
+export const MemcellClient = MemCell;
+export const Memory = MemCell;
+export type MemcellClient = MemCell;
+export type Memory = MemCell;
