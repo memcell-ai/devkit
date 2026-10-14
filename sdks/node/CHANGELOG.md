@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/memcell-ai/devkit/compare/node-v1.4.0...node-v1.5.0) (2026-10-14)
+
+
+### Features
+
+* **auth:** add OAuth 2.0 client credentials support to Node and Python SDKs ([#10](https://github.com/memcell-ai/devkit/issues/10)) ([393498f](https://github.com/memcell-ai/devkit/commit/393498f2d2216848b18f4cbff9a46155a638fd23))
+* **devkit:** add CLI hook verification, hermes/mcp adapters, and unified API keys across Node and Python SDKs ([#12](https://github.com/memcell-ai/devkit/issues/12)) ([7784a34](https://github.com/memcell-ai/devkit/commit/7784a34b87cdc69c88e2b3f623bb911a596714f0))
+
 ## [1.4.0](https://github.com/memcell-ai/devkit/compare/node-v1.4.0...node-v1.4.0) (2026-10-08)
 
 
