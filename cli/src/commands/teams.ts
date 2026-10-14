@@ -354,3 +354,50 @@ export async function removeTeamMember(
     return refused(instance, error as Error);
   }
 }
+
+export async function inviteTeamMember(
+  instance: string,
+  email: string,
+  flags: Record<string, string | true> = {},
+): Promise<number> {
+  if (!(await credentialFor(instance))) {
+    needsSession(instance);
+    return 1;
+  }
+
+  const orgSlug = await resolveOrg(flags);
+  const role = typeof flags.role === "string" ? flags.role : "member";
+
+  try {
+    const sdk = await getSdkClient(instance);
+    if (orgSlug) {
+      const orgRole = role === "admin" || role === "owner" ? role : "member";
+      const inv = await sdk.organizations.inviteMember(orgSlug, {
+        email,
+        role: orgRole as any,
+      });
+      say(
+        row(0, [badge("memcell"), label("team invite"), place(orgSlug)]),
+        row(1, [good("invited")], [value(email)], [label("as"), variant(orgRole)]),
+        inv?.id ? row(2, [idSeg(inv.id)]) : null,
+      );
+      return 0;
+    }
+
+    const { resolveNamespace } = await import("../namespace.js");
+    const namespace = await resolveNamespace(sdk, flags.workspace as string | undefined);
+    const collabRole = role === "admin" ? "admin" : role === "read" ? "read" : "write";
+    const inv = await sdk.collaborators.invite(namespace, {
+      identifier: email,
+      role: collabRole as any,
+    });
+    say(
+      row(0, [badge("memcell"), label("team invite"), place(namespace)]),
+      row(1, [good("invited")], [value(email)], [label("as"), variant(role)]),
+      inv?.id ? row(2, [idSeg(inv.id)]) : null,
+    );
+    return 0;
+  } catch (error) {
+    return refused(instance, error as Error);
+  }
+}

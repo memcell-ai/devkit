@@ -1,23 +1,30 @@
 import type { MemCell } from "./client.js";
 import type {
   AccountProfile,
+  ApiKeyItem,
   PersonalAccessTokenItem,
   UpdateProfileParams,
 } from "./types.js";
 
-export interface CreatePersonalTokenParams {
+export interface CreateApiKeyParams {
   name: string;
   expiresInDays?: number | null;
 }
 
-export interface CreatedPersonalTokenResult {
+export type CreatePersonalTokenParams = CreateApiKeyParams;
+
+export interface CreatedApiKeyResult {
   id: string;
   name: string;
+  key: string;
   token: string;
   preview: string;
+  prefix: string;
   expiresAt: string | null;
   createdAt: string;
 }
+
+export type CreatedPersonalTokenResult = CreatedApiKeyResult;
 
 export class AccountNamespace {
   constructor(private readonly client: MemCell) {}
@@ -48,51 +55,62 @@ export class AccountNamespace {
   }
 
   /**
-   * Personal Access Tokens management.
+   * API Keys management.
    */
-  readonly tokens = {
+  readonly apiKeys = {
     /**
-     * Lists personal access tokens created by the caller.
+     * Lists API keys created by the caller.
      */
-    list: async (): Promise<PersonalAccessTokenItem[]> => {
+    list: async (): Promise<ApiKeyItem[]> => {
       const json = await this.client.request<{
-        tokens: PersonalAccessTokenItem[];
-      }>("/api/v1/account/tokens", { method: "GET" });
-      return json.tokens || [];
+        keys?: ApiKeyItem[];
+        tokens?: ApiKeyItem[];
+      }>("/api/v1/account/api-keys", { method: "GET" });
+      return json.keys || json.tokens || [];
     },
 
     /**
-     * Creates a new personal access token. Returns the raw secret token once.
+     * Creates a new API key. Returns the raw secret key once.
      */
     create: async (
-      params: CreatePersonalTokenParams,
-    ): Promise<CreatedPersonalTokenResult> => {
+      params: CreateApiKeyParams,
+    ): Promise<CreatedApiKeyResult> => {
       const json = await this.client.request<{
         success: boolean;
-        token: any;
-      }>("/api/v1/account/tokens", {
+        key?: any;
+        token?: any;
+      }>("/api/v1/account/api-keys", {
         method: "POST",
         body: JSON.stringify(params),
       });
-      const raw = json.token || {};
+      const raw = json.key || json.token || {};
+      const keyVal = raw.rawKey || raw.rawToken || raw.key || raw.token || "";
+      const prefixVal = raw.prefix || raw.preview || "";
       return {
         id: raw.id,
         name: raw.name,
-        token: raw.rawToken || raw.token || "",
-        preview: raw.prefix || raw.preview || "",
+        key: keyVal,
+        token: keyVal,
+        preview: prefixVal,
+        prefix: prefixVal,
         expiresAt: raw.expiresAt ?? null,
         createdAt: raw.createdAt || new Date().toISOString(),
       };
     },
 
     /**
-     * Revokes a personal access token by ID.
+     * Revokes an API key by ID.
      */
-    revoke: async (tokenId: string): Promise<void> => {
+    revoke: async (keyId: string): Promise<void> => {
       await this.client.request<{ success: boolean }>(
-        `/api/v1/account/tokens/${encodeURIComponent(tokenId)}`,
+        `/api/v1/account/api-keys/${encodeURIComponent(keyId)}`,
         { method: "DELETE" },
       );
     },
   };
+
+  /**
+   * Legacy alias for apiKeys.
+   */
+  readonly tokens = this.apiKeys;
 }

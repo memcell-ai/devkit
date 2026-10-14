@@ -101,6 +101,11 @@ class MemoryItem(BaseModel):
             return s
         return "directive"
 
+    @property
+    def text(self) -> str:
+        """Alias for title."""
+        return self.title
+
 
 class MemoryStarResponse(BaseModel):
     root_id: str
@@ -447,22 +452,31 @@ class AccountProfile(BaseModel):
     created_at: datetime | None = None
 
 
-class PersonalAccessTokenItem(BaseModel):
+class ApiKeyItem(BaseModel):
     id: str
     name: str
     preview: str
+    prefix: str | None = None
     expires_at: datetime | None = None
     last_used_at: datetime | None = None
     created_at: datetime | None = None
 
 
-class CreatedPersonalTokenResult(BaseModel):
+PersonalAccessTokenItem = ApiKeyItem
+
+
+class CreatedApiKeyResult(BaseModel):
     id: str
     name: str
-    token: str
-    preview: str
+    key: str = ""
+    token: str = ""
+    preview: str = ""
+    prefix: str | None = None
     expires_at: datetime | None = None
     created_at: datetime | None = None
+
+
+CreatedPersonalTokenResult = CreatedApiKeyResult
 
 
 # ─── Scope Models ───

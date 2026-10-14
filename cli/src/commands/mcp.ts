@@ -76,21 +76,25 @@ const DEFAULT_TOOLS = [
   {
     name: "remember",
     description:
-      "Form durable memory. Distills durable knowledge, directives, and facts through the zero-trust pipeline. If the change contradicts an existing memory, the memory engine resolves it.",
+      "Record knowledge into MemCell. Accepts raw text, conversational excerpts, or structured hints. MemCell generically distills material into atomic memories and reconciles against existing memory.",
     inputSchema: {
       type: "object",
       properties: {
+        content: {
+          type: "string",
+          description: "Text content, directive, or transcript to remember",
+        },
+        raw: {
+          type: "string",
+          description: "Alias for content (raw material)",
+        },
         learning: {
           type: "string",
           description: "The concrete knowledge, fact, preference, or directive to persist",
         },
-        change: {
-          type: "string",
-          description: "Alternative alias for learning",
-        },
         type: {
           type: "string",
-          description: "Memory type: directive, fact, preference, or observation",
+          description: "Memory type: directive, fact, preference, guard, or observation",
         },
         title: {
           type: "string",
@@ -102,7 +106,7 @@ const DEFAULT_TOOLS = [
         },
         scope: {
           type: "string",
-          description: "Operational boundary scope (defaults to session if active, or 'common')",
+          description: "Operational boundary scope (defaults to workspace)",
         },
       },
     },
@@ -114,21 +118,61 @@ const DEFAULT_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
+        recall_id: {
+          type: "string",
+          description: "The recallId returned by a prior recall call",
+        },
         recallId: {
           type: "string",
-          description: "The recallId returned by the prior recall call",
+          description: "Alias for recall_id",
+        },
+        memory_id: {
+          type: "string",
+          description: "Direct memory ID to attribute this outcome to",
+        },
+        action_taken: {
+          type: "string",
+          description: "Description of the action taken that succeeded or failed",
         },
         outcome: {
           type: "string",
           enum: ["worked", "failed", "avoided"],
           description: "What happened when this memory was applied",
         },
-        details: {
+        reason: {
           type: "string",
           description: "Optional explanation of the outcome or what happened",
         },
       },
       required: ["outcome"],
+    },
+  },
+  {
+    name: "feedback",
+    description:
+      "Evaluate a specific memory after execution: report whether its advice worked or failed in practice. Dynamically updates confidence and appends evidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memory_id: {
+          type: "string",
+          description: "The memory ID being evaluated",
+        },
+        outcome: {
+          type: "string",
+          enum: ["worked", "failed"],
+          description: "Outcome verdict: worked or failed",
+        },
+        reason: {
+          type: "string",
+          description: "Notes or reason describing what happened in practice",
+        },
+        recall_id: {
+          type: "string",
+          description: "Optional recall ID for task-level attribution",
+        },
+      },
+      required: ["memory_id", "outcome"],
     },
   },
 ];

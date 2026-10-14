@@ -128,6 +128,7 @@ export interface MemoryItem {
   rootId?: string;
   version?: number;
   title: string;
+  text?: string;
   context?: string | null;
   observation?: string | null;
   tags?: string[];
@@ -475,9 +476,12 @@ export interface FeedbackResponse {
 }
 
 export interface WrapExecutionOptions {
+  namespace?: string;
+  query?: string;
   action: string;
   subject?: string | null;
   type?: MemoryType | MemoryType[];
+  scope?: MemoryScope;
   minConfidence?: number;
   limit?: number;
   tags?: string[];
@@ -818,25 +822,35 @@ export interface UpdateProfileParams {
   website?: string;
 }
 
-export interface PersonalAccessTokenItem {
+export interface ApiKeyItem {
   id: string;
   name: string;
   preview: string;
+  prefix?: string;
   createdAt: string | Date;
   expiresAt?: string | Date | null;
   lastUsedAt?: string | Date | null;
+  lastRequest?: string | Date | null;
 }
 
-export interface CreateTokenParams {
+export type PersonalAccessTokenItem = ApiKeyItem;
+
+export interface CreateApiKeyParams {
   name: string;
   expiresAt?: string | Date | null;
+  expiresInDays?: number | null;
 }
 
-export interface CreateTokenResponse {
+export type CreateTokenParams = CreateApiKeyParams;
+
+export interface CreateApiKeyResponse {
   ok: boolean;
-  token: PersonalAccessTokenItem;
+  key: ApiKeyItem;
   secret: string;
+  token?: ApiKeyItem;
 }
+
+export type CreateTokenResponse = CreateApiKeyResponse;
 
 // ─── Scopes Domain ───
 

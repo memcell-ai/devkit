@@ -708,25 +708,35 @@ def test_account_resource_sync():
                     }
                 },
             )
-        if u.endswith("/api/v1/account/tokens") and method == "GET":
+        if (
+            u.endswith("/api/v1/account/api-keys") or u.endswith("/api/v1/account/tokens")
+        ) and method == "GET":
             return httpx.Response(
                 200,
-                json={"tokens": [{"id": "tok_1", "name": "CLI Token", "preview": "mc_pat_123..."}]},
+                json={"keys": [{"id": "key_1", "name": "CLI Key", "preview": "mc_key_123..."}]},
             )
-        if u.endswith("/api/v1/account/tokens") and method == "POST":
+        if (
+            u.endswith("/api/v1/account/api-keys") or u.endswith("/api/v1/account/tokens")
+        ) and method == "POST":
             return httpx.Response(
                 201,
                 json={
                     "success": True,
-                    "token": {
-                        "id": "tok_2",
-                        "name": "New Token",
-                        "token": "mc_pat_secret",
-                        "preview": "mc_pat_456...",
+                    "key": {
+                        "id": "key_2",
+                        "name": "New Key",
+                        "rawKey": "mc_key_secret",
+                        "key": "mc_key_secret",
+                        "token": "mc_key_secret",
+                        "preview": "mc_key_456...",
                     },
                 },
             )
-        if u.endswith("/api/v1/account/tokens/tok_1") and method == "DELETE":
+        if (
+            u.endswith("/api/v1/account/api-keys/key_1")
+            or u.endswith("/api/v1/account/tokens/key_1")
+            or u.endswith("/api/v1/account/tokens/tok_1")
+        ) and method == "DELETE":
             return httpx.Response(200, json={"success": True})
         return httpx.Response(404)
 
@@ -736,14 +746,19 @@ def test_account_resource_sync():
     profile = memcell.account.get()
     assert profile.email == "user@test.com"
 
+    keys = memcell.account.api_keys.list()
+    assert len(keys) == 1
+    assert keys[0].name == "CLI Key"
+
+    created_key = memcell.account.api_keys.create(name="New Key")
+    assert created_key.key == "mc_key_secret"
+    assert created_key.token == "mc_key_secret"
+
+    memcell.account.api_keys.revoke("key_1")
+
+    # Legacy tokens alias works identically
     tokens = memcell.account.tokens.list()
     assert len(tokens) == 1
-    assert tokens[0].name == "CLI Token"
-
-    created_tok = memcell.account.tokens.create(name="New Token")
-    assert created_tok.token == "mc_pat_secret"
-
-    memcell.account.tokens.revoke("tok_1")
 
 
 def test_scoped_memcell_bound_namespaces():

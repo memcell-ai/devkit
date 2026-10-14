@@ -45,7 +45,16 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "Agent Reasoning & Memory Loop",
-    commands: ["recall", "remember", "report", "sweep", "import", "export", "hook remove"],
+    commands: [
+      "recall",
+      "remember",
+      "report",
+      "sweep",
+      "import",
+      "export",
+      "hook verify",
+      "hook remove",
+    ],
   },
   {
     title: "Epistemic Memory & Governance",

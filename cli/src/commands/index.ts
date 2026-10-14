@@ -2,11 +2,14 @@ import type { Command, Resource } from "../model.js";
 import { emit } from "../ui.js";
 import {
   acceptInvitation,
+  createApiKey,
   createToken,
   declineInvitation,
   getInvitation,
   getProfile,
+  listApiKeys,
   listTokens,
+  revokeApiKey,
   revokeToken,
   updateProfile,
 } from "./account.js";
@@ -41,7 +44,7 @@ import {
   revokeFleetWorkspace,
   suspendFleetAgent,
 } from "./fleet.js";
-import { hook, hookRemove } from "./hook.js";
+import { hook, hookRemove, hookVerify } from "./hook.js";
 import { importFiles } from "./import.js";
 import { getEnterpriseInsights } from "./insights.js";
 import { login } from "./login.js";
@@ -79,11 +82,13 @@ import {
   createTeam,
   deleteTeam,
   getTeam,
+  inviteTeamMember,
   listTeamMembers,
   listTeams,
   removeTeamMember,
   updateTeam,
 } from "./teams.js";
+import { adapterFor } from "../adapters/index.js";
 import {
   createWebhook,
   deleteWebhook,
@@ -151,12 +156,76 @@ export const RESOURCES: Resource[] = [
   { name: "org", what: "organizations you belong to, and which one is active" },
   { name: "usage", what: "quotas, active metrics, and memory breakdowns" },
   { name: "audit", what: "immutable enterprise audit logs and compliance trails" },
-  { name: "account", what: "your profile and personal access tokens" },
+  { name: "account", what: "your profile and API keys" },
   { name: "operator", what: "cluster administration and platform limits" },
   { name: "service", what: "native OS background system service and auto-start" },
   { name: "config", what: "settings, per workspace or machine" },
   { name: "sweep", what: "background consolidation and cognitive sleep cycles" },
 ];
+
+const CONNECT_TAKES = [
+  "url",
+  "pair",
+  "workspace",
+  "agent",
+  "no-browser",
+  "claude",
+  "cursor",
+  "copilot",
+  "codex",
+  "openai",
+  "opencode",
+  "hermes",
+  "antigravity",
+  "gemini",
+  "goose",
+  "windsurf",
+  "mcp",
+];
+
+function runConnect({
+  instance,
+  from,
+  args,
+  flags,
+}: {
+  instance: string;
+  from: string;
+  args: Record<string, string | undefined>;
+  flags: Record<string, string | true>;
+}) {
+  let explicitAgent =
+    (typeof flags.agent === "string" ? flags.agent : undefined) ||
+    (flags.claude === true ? "claude" : undefined) ||
+    (flags.cursor === true ? "cursor" : undefined) ||
+    (flags.copilot === true ? "copilot" : undefined) ||
+    (flags.codex === true ? "codex" : undefined) ||
+    (flags.openai === true ? "codex" : undefined) ||
+    (flags.opencode === true ? "opencode" : undefined) ||
+    (flags.hermes === true ? "hermes" : undefined) ||
+    (flags.antigravity === true ? "antigravity" : undefined) ||
+    (flags.gemini === true ? "gemini" : undefined) ||
+    (flags.goose === true ? "goose" : undefined) ||
+    (flags.windsurf === true ? "windsurf" : undefined) ||
+    (flags.mcp === true ? "mcp" : undefined);
+
+  let workspaceArg = typeof args.workspace === "string" ? args.workspace : undefined;
+  if (!explicitAgent && workspaceArg && !workspaceArg.includes("/")) {
+    const normalized = workspaceArg.trim().toLowerCase();
+    if (adapterFor(normalized)) {
+      explicitAgent = normalized === "openai" ? "codex" : normalized;
+      workspaceArg = undefined;
+    }
+  }
+
+  return connect(instance, {
+    pair: typeof flags.pair === "string" ? flags.pair : undefined,
+    workspace: workspaceArg ?? (typeof flags.workspace === "string" ? flags.workspace : undefined),
+    agent: explicitAgent,
+    noBrowser: flags["no-browser"] === true,
+    from,
+  });
+}
 
 const BASE_COMMANDS: Command[] = [
   // ── Core Lifecycle & Authentication ────────────────────────────────────
@@ -188,21 +257,23 @@ const BASE_COMMANDS: Command[] = [
         what: "workspace to connect ([owner]/[workspace] or slug)",
       },
     ],
-    takes: ["url", "pair", "workspace", "agent", "no-browser"],
+    takes: CONNECT_TAKES,
     landing: true,
-    run: ({ instance, from, args, flags }) =>
-      connect(instance, {
-        pair: typeof flags.pair === "string" ? flags.pair : undefined,
-        workspace:
-          typeof args.workspace === "string"
-            ? args.workspace
-            : typeof flags.workspace === "string"
-              ? flags.workspace
-              : undefined,
-        agent: typeof flags.agent === "string" ? flags.agent : undefined,
-        noBrowser: flags["no-browser"] === true,
-        from,
-      }),
+    run: runConnect,
+  },
+  {
+    path: ["init"],
+    what: "wire this directory (alias for connect)",
+    args: [
+      {
+        name: "workspace",
+        required: false,
+        what: "workspace to connect ([owner]/[workspace] or slug)",
+      },
+    ],
+    takes: CONNECT_TAKES,
+    hidden: true,
+    run: runConnect,
   },
   {
     path: ["status"],
@@ -331,6 +402,8 @@ const BASE_COMMANDS: Command[] = [
       "at",
       "url",
       "scope",
+      "my-memory",
+      "my",
       "meta",
       "subject",
       "target",
@@ -347,7 +420,11 @@ const BASE_COMMANDS: Command[] = [
         typeof flags.type === "string" ? flags.type : undefined,
         typeof flags.at === "string" ? flags.at : undefined,
         typeof flags.url === "string" ? flags.url : undefined,
-        typeof flags.scope === "string" ? flags.scope : undefined,
+        typeof flags.scope === "string"
+          ? flags.scope
+          : flags["my-memory"] === true || flags.my === true
+            ? "user"
+            : undefined,
         typeof flags.meta === "string" ? flags.meta : undefined,
         typeof flags.subject === "string"
           ? flags.subject
@@ -657,12 +734,12 @@ const BASE_COMMANDS: Command[] = [
   },
   {
     path: ["memory", "relate"],
-    what: "declare a directed epistemic relation edge between memories",
+    what: "declare a directed relation edge between memories",
     args: [
       { name: "source", required: true, what: "source memory ID" },
       { name: "target", required: true, what: "target memory ID" },
     ],
-    takes: ["url", "workspace", "type", "confidence"],
+    takes: ["url", "workspace", "type", "relation", "confidence"],
     run: ({ instance, args, flags }) => relateMemories(instance, args.source!, args.target!, flags),
   },
   {
@@ -1181,40 +1258,79 @@ const BASE_COMMANDS: Command[] = [
     run: ({ instance, flags }) => updateProfile(instance, flags),
   },
   {
+    path: ["account", "key"],
+    what: "list API keys",
+    takes: ["url"],
+    run: ({ instance }) => listApiKeys(instance),
+  },
+  {
+    path: ["account", "key", "list"],
+    what: "list API keys",
+    takes: ["url"],
+    run: ({ instance }) => listApiKeys(instance),
+  },
+  {
+    path: ["account", "key", "ls"],
+    what: "list API keys",
+    takes: ["url"],
+    run: ({ instance }) => listApiKeys(instance),
+  },
+  {
+    path: ["account", "key", "create"],
+    what: "create a new API key",
+    args: [{ name: "name", required: true, what: "key name/label" }],
+    takes: ["url", "expires"],
+    run: ({ instance, args, flags }) => createApiKey(instance, args.name!, flags),
+  },
+  {
+    path: ["account", "key", "new"],
+    what: "create a new API key",
+    args: [{ name: "name", required: true, what: "key name/label" }],
+    takes: ["url", "expires"],
+    run: ({ instance, args, flags }) => createApiKey(instance, args.name!, flags),
+  },
+  {
+    path: ["account", "key", "revoke"],
+    what: "revoke an API key",
+    args: [{ name: "id", required: true, what: "key ID" }],
+    takes: ["url"],
+    run: ({ instance, args }) => revokeApiKey(instance, args.id!),
+  },
+  {
     path: ["account", "token"],
-    what: "list personal access tokens",
+    what: "list API keys",
     takes: ["url"],
     run: ({ instance }) => listTokens(instance),
   },
   {
     path: ["account", "token", "list"],
-    what: "list personal access tokens",
+    what: "list API keys",
     takes: ["url"],
     run: ({ instance }) => listTokens(instance),
   },
   {
     path: ["account", "token", "ls"],
-    what: "list personal access tokens",
+    what: "list API keys",
     takes: ["url"],
     run: ({ instance }) => listTokens(instance),
   },
   {
     path: ["account", "token", "create"],
-    what: "create a new personal access token",
+    what: "create a new API key",
     args: [{ name: "name", required: true, what: "token name/label" }],
     takes: ["url", "expires"],
     run: ({ instance, args, flags }) => createToken(instance, args.name!, flags),
   },
   {
     path: ["account", "token", "new"],
-    what: "create a new personal access token",
+    what: "create a new API key",
     args: [{ name: "name", required: true, what: "token name/label" }],
     takes: ["url", "expires"],
     run: ({ instance, args, flags }) => createToken(instance, args.name!, flags),
   },
   {
     path: ["account", "token", "revoke"],
-    what: "revoke a personal access token",
+    what: "revoke an API key",
     args: [{ name: "id", required: true, what: "token ID" }],
     takes: ["url"],
     run: ({ instance, args }) => revokeToken(instance, args.id!),
@@ -1294,6 +1410,17 @@ const BASE_COMMANDS: Command[] = [
     what: "take memcell's hooks out of this directory",
     landing: true,
     run: () => hookRemove(),
+  },
+  {
+    path: ["hook", "verify"],
+    what: "inspect and verify configured lifecycle hooks for an agent",
+    args: [{ name: "agent", required: false, what: "the agent to verify (claude, cursor, etc.)" }],
+    takes: ["agent"],
+    landing: true,
+    run: ({ args, flags }) => {
+      const agent = args.agent || (flags.agent as string);
+      return hookVerify(agent);
+    },
   },
   {
     path: ["mcp"],
@@ -1579,6 +1706,13 @@ const BASE_COMMANDS: Command[] = [
     ],
     takes: ["url", "org"],
     run: ({ instance, args, flags }) => removeTeamMember(instance, args.id!, args.user!, flags),
+  },
+  {
+    path: ["team", "invite"],
+    what: "invite a colleague to the organization or workspace",
+    args: [{ name: "email", required: true, what: "colleague email to invite" }],
+    takes: ["url", "org", "workspace", "role", "team"],
+    run: ({ instance, args, flags }) => inviteTeamMember(instance, args.email!, flags),
   },
 
   // ── Webhook Resource ───────────────────────────────────────────────────

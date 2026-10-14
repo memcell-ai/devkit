@@ -87,7 +87,7 @@ export async function updateProfile(
   }
 }
 
-export async function listTokens(instance: string): Promise<number> {
+export async function listApiKeys(instance: string): Promise<number> {
   if (!(await credentialFor(instance))) {
     needsSession(instance);
     return 1;
@@ -95,13 +95,13 @@ export async function listTokens(instance: string): Promise<number> {
 
   try {
     const sdk = await getSdkClient(instance);
-    const tokens = await sdk.account.tokens.list();
+    const keys = await sdk.account.apiKeys.list();
 
-    if (tokens.length === 0) {
+    if (keys.length === 0) {
       say(
-        row(0, [badge("memcell"), label("account token"), place(instance)]),
-        row(1, [label("no personal access tokens")]),
-        row(2, [label("create one with"), cmd("memcell account token create <name>")]),
+        row(0, [badge("memcell"), label("account key"), place(instance)]),
+        row(1, [label("no API keys found")]),
+        row(2, [label("create one with"), cmd("memcell account key create <name>")]),
       );
       return 0;
     }
@@ -109,19 +109,19 @@ export async function listTokens(instance: string): Promise<number> {
     say(
       row(
         0,
-        [badge("memcell"), label("account token"), place(instance)],
-        [variant(`${tokens.length}`)],
+        [badge("memcell"), label("account key"), place(instance)],
+        [variant(`${keys.length}`)],
       ),
-      ...tokens.map((t) =>
+      ...keys.map((k) =>
         row(
           1,
-          [good(t.name)],
-          [variant(t.preview)],
-          t.expiresAt ? [label("expires:"), time(String(t.expiresAt))] : null,
-          [idSeg(t.id)],
+          [good(k.name)],
+          [variant(k.preview || k.prefix || "")],
+          k.expiresAt ? [label("expires:"), time(String(k.expiresAt))] : null,
+          [idSeg(k.id)],
         ),
       ),
-      row(2, [label("revoke one with"), cmd("memcell account token revoke <id>")]),
+      row(2, [label("revoke one with"), cmd("memcell account key revoke <id>")]),
     );
     return 0;
   } catch (error) {
@@ -129,7 +129,9 @@ export async function listTokens(instance: string): Promise<number> {
   }
 }
 
-export async function createToken(
+export const listTokens = listApiKeys;
+
+export async function createApiKey(
   instance: string,
   name: string,
   flags: Record<string, string | true> = {},
@@ -143,16 +145,19 @@ export async function createToken(
 
   try {
     const sdk = await getSdkClient(instance);
-    const token = await sdk.account.tokens.create({
+    const key = await sdk.account.apiKeys.create({
       name,
       expiresInDays: Number.isFinite(expiresInDays) ? expiresInDays : undefined,
     });
 
     say(
-      row(0, [badge("memcell"), label("account token create"), place(instance)]),
-      row(1, [good("created token")], [value(token.name)], [idSeg(token.id)]),
-      row(2, [label("token:"), value(token.token || (token as any).rawToken)]),
-      row(2, [label("copy this token now — it will never be displayed again")]),
+      row(0, [badge("memcell"), label("account key create"), place(instance)]),
+      row(1, [good("created API key")], [value(key.name)], [idSeg(key.id)]),
+      row(2, [
+        label("key:"),
+        value(key.key || key.token || (key as any).rawKey || (key as any).rawToken),
+      ]),
+      row(2, [label("copy this key now — it will never be displayed again")]),
     );
     return 0;
   } catch (error) {
@@ -160,7 +165,9 @@ export async function createToken(
   }
 }
 
-export async function revokeToken(instance: string, tokenId: string): Promise<number> {
+export const createToken = createApiKey;
+
+export async function revokeApiKey(instance: string, keyId: string): Promise<number> {
   if (!(await credentialFor(instance))) {
     needsSession(instance);
     return 1;
@@ -168,17 +175,19 @@ export async function revokeToken(instance: string, tokenId: string): Promise<nu
 
   try {
     const sdk = await getSdkClient(instance);
-    await sdk.account.tokens.revoke(tokenId);
+    await sdk.account.apiKeys.revoke(keyId);
 
     say(
-      row(0, [badge("memcell"), label("account token revoke"), place(instance)]),
-      row(1, [good("revoked personal token")], [idSeg(tokenId)]),
+      row(0, [badge("memcell"), label("account key revoke"), place(instance)]),
+      row(1, [good("revoked API key")], [idSeg(keyId)]),
     );
     return 0;
   } catch (error) {
     return refused(instance, error as Error);
   }
 }
+
+export const revokeToken = revokeApiKey;
 
 export async function getInvitation(instance: string, invitationId: string): Promise<number> {
   if (!(await credentialFor(instance))) {

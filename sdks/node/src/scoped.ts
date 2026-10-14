@@ -302,9 +302,10 @@ export class ScopedMemCell {
     const format = options.format ?? this.defaultFormat;
 
     // 1. Pre-Flight Recall
-    const recallResult = await this.recall(options.action, {
+    const recallResult = await this.recall(options.query || options.action, {
       subject: targetSubject,
       type: options.type,
+      scope: options.scope,
       minConfidence: options.minConfidence,
       limit: options.limit,
       tags: options.tags,
