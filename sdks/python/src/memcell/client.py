@@ -22,11 +22,12 @@ from .models import (
     AdoptedTarget,
     AdoptMemoryResponse,
     AgentItem,
+    ApiKeyItem,
     ApiRequestQuotas,
     CollaboratorItem,
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
-    CreatedPersonalTokenResult,
+    CreatedApiKeyResult,
     DeleteMemoryResponse,
     FeedbackResponse,
     JobEvent,
@@ -50,7 +51,6 @@ from .models import (
     PaginatedResult,
     PaginationMetadata,
     PendingInvitationItem,
-    PersonalAccessTokenItem,
     PromoteMemoryResponse,
     RecallResponse,
     RememberResponse,
@@ -1343,47 +1343,57 @@ class _UsageNamespaceSync:
         return _parse_owner_usage(resp)
 
 
-class _TokensNamespaceSync:
+class _ApiKeysNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
 
-    def list(self) -> list[PersonalAccessTokenItem]:
-        resp = self._client._request("GET", "/api/v1/account/tokens")
+    def list(self) -> list[ApiKeyItem]:
+        resp = self._client._request("GET", "/api/v1/account/api-keys")
+        items = resp.get("keys") or resp.get("tokens", [])
         return [
-            PersonalAccessTokenItem(
+            ApiKeyItem(
                 id=t["id"],
                 name=t["name"],
-                preview=t.get("preview", ""),
+                preview=t.get("preview") or t.get("prefix", ""),
+                prefix=t.get("prefix"),
                 expires_at=t.get("expiresAt") or t.get("expires_at"),
-                last_used_at=t.get("lastUsedAt") or t.get("last_used_at"),
+                last_used_at=t.get("lastUsedAt") or t.get("last_used_at") or t.get("lastRequest"),
                 created_at=t.get("createdAt") or t.get("created_at"),
             )
-            for t in resp.get("tokens", [])
+            for t in items
         ]
 
-    def create(self, name: str, expires_in_days: int | None = None) -> CreatedPersonalTokenResult:
+    def create(self, name: str, expires_in_days: int | None = None) -> CreatedApiKeyResult:
         body: dict[str, Any] = {"name": name}
         if expires_in_days is not None:
             body["expiresInDays"] = expires_in_days
-        resp = self._client._request("POST", "/api/v1/account/tokens", json=body)
-        tok = resp.get("token", {})
-        return CreatedPersonalTokenResult(
-            id=tok["id"],
-            name=tok["name"],
-            token=tok.get("token", ""),
-            preview=tok.get("preview", ""),
-            expires_at=tok.get("expiresAt"),
-            created_at=tok.get("createdAt"),
+        resp = self._client._request("POST", "/api/v1/account/api-keys", json=body)
+        raw = resp.get("key") or resp.get("token", {})
+        key_val = raw.get("rawKey") or raw.get("rawToken") or raw.get("key") or raw.get("token", "")
+        prefix_val = raw.get("prefix") or raw.get("preview", "")
+        return CreatedApiKeyResult(
+            id=raw["id"],
+            name=raw["name"],
+            key=key_val,
+            token=key_val,
+            preview=prefix_val,
+            prefix=prefix_val,
+            expires_at=raw.get("expiresAt") or raw.get("expires_at"),
+            created_at=raw.get("createdAt") or raw.get("created_at"),
         )
 
-    def revoke(self, token_id: str) -> None:
-        self._client._request("DELETE", f"/api/v1/account/tokens/{token_id}")
+    def revoke(self, key_id: str) -> None:
+        self._client._request("DELETE", f"/api/v1/account/api-keys/{key_id}")
+
+
+_TokensNamespaceSync = _ApiKeysNamespaceSync
 
 
 class _AccountNamespaceSync:
     def __init__(self, client: MemCell) -> None:
         self._client = client
-        self.tokens = _TokensNamespaceSync(client)
+        self.api_keys = _ApiKeysNamespaceSync(client)
+        self.tokens = self.api_keys
 
     def get(self) -> AccountProfile:
         resp = self._client._request("GET", "/api/v1/account/profile")
@@ -2602,49 +2612,57 @@ class _UsageNamespaceAsync:
         return _parse_owner_usage(resp)
 
 
-class _TokensNamespaceAsync:
+class _ApiKeysNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
 
-    async def list(self) -> list[PersonalAccessTokenItem]:
-        resp = await self._client._request("GET", "/api/v1/account/tokens")
+    async def list(self) -> list[ApiKeyItem]:
+        resp = await self._client._request("GET", "/api/v1/account/api-keys")
+        items = resp.get("keys") or resp.get("tokens", [])
         return [
-            PersonalAccessTokenItem(
+            ApiKeyItem(
                 id=t["id"],
                 name=t["name"],
-                preview=t.get("preview", ""),
+                preview=t.get("preview") or t.get("prefix", ""),
+                prefix=t.get("prefix"),
                 expires_at=t.get("expiresAt") or t.get("expires_at"),
-                last_used_at=t.get("lastUsedAt") or t.get("last_used_at"),
+                last_used_at=t.get("lastUsedAt") or t.get("last_used_at") or t.get("lastRequest"),
                 created_at=t.get("createdAt") or t.get("created_at"),
             )
-            for t in resp.get("tokens", [])
+            for t in items
         ]
 
-    async def create(
-        self, name: str, expires_in_days: int | None = None
-    ) -> CreatedPersonalTokenResult:
+    async def create(self, name: str, expires_in_days: int | None = None) -> CreatedApiKeyResult:
         body: dict[str, Any] = {"name": name}
         if expires_in_days is not None:
             body["expiresInDays"] = expires_in_days
-        resp = await self._client._request("POST", "/api/v1/account/tokens", json=body)
-        tok = resp.get("token", {})
-        return CreatedPersonalTokenResult(
-            id=tok["id"],
-            name=tok["name"],
-            token=tok.get("token", ""),
-            preview=tok.get("preview", ""),
-            expires_at=tok.get("expiresAt"),
-            created_at=tok.get("createdAt"),
+        resp = await self._client._request("POST", "/api/v1/account/api-keys", json=body)
+        raw = resp.get("key") or resp.get("token", {})
+        key_val = raw.get("rawKey") or raw.get("rawToken") or raw.get("key") or raw.get("token", "")
+        prefix_val = raw.get("prefix") or raw.get("preview", "")
+        return CreatedApiKeyResult(
+            id=raw["id"],
+            name=raw["name"],
+            key=key_val,
+            token=key_val,
+            preview=prefix_val,
+            prefix=prefix_val,
+            expires_at=raw.get("expiresAt") or raw.get("expires_at"),
+            created_at=raw.get("createdAt") or raw.get("created_at"),
         )
 
-    async def revoke(self, token_id: str) -> None:
-        await self._client._request("DELETE", f"/api/v1/account/tokens/{token_id}")
+    async def revoke(self, key_id: str) -> None:
+        await self._client._request("DELETE", f"/api/v1/account/api-keys/{key_id}")
+
+
+_TokensNamespaceAsync = _ApiKeysNamespaceAsync
 
 
 class _AccountNamespaceAsync:
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
-        self.tokens = _TokensNamespaceAsync(client)
+        self.api_keys = _ApiKeysNamespaceAsync(client)
+        self.tokens = self.api_keys
 
     async def get(self) -> AccountProfile:
         resp = await self._client._request("GET", "/api/v1/account/profile")
@@ -3353,6 +3371,28 @@ class MemCell:
 
         raise MemCellError(f"Job {job_id} timed out after {timeout_ms}ms.")
 
+    def wrap_execution(
+        self,
+        action: str = "",
+        fn: Callable[[Any], Any] | None = None,
+        *,
+        namespace: str | None = None,
+        query: str | None = None,
+        subject: str | None = None,
+        external_ref: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
+        if fn is None:
+            raise ValueError("fn callback is required for wrap_execution")
+        return self.scope(namespace or "", subject=subject).wrap_execution(
+            action=action or query or "execute",
+            fn=fn,
+            subject=subject,
+            external_ref=external_ref,
+            payload=payload,
+            query=query or action,
+        )
+
 
 class AsyncMemCell:
     """Asynchronous MemCell client."""
@@ -3849,3 +3889,25 @@ class AsyncMemCell:
             await asyncio.sleep(poll_sec)
 
         raise MemCellError(f"Job {job_id} timed out after {timeout_ms}ms.")
+
+    async def wrap_execution(
+        self,
+        action: str = "",
+        fn: Callable[[Any], Any] | None = None,
+        *,
+        namespace: str | None = None,
+        query: str | None = None,
+        subject: str | None = None,
+        external_ref: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
+        if fn is None:
+            raise ValueError("fn callback is required for wrap_execution")
+        return await self.scope(namespace or "", subject=subject).wrap_execution(
+            action=action or query or "execute",
+            fn=fn,
+            subject=subject,
+            external_ref=external_ref,
+            payload=payload,
+            query=query or action,
+        )

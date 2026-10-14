@@ -485,7 +485,12 @@ export async function relateMemories(
     const target = getTargetWorkspace(flags);
     const namespace = await resolveNamespace(sdk, target);
 
-    const relationType = typeof flags.type === "string" ? flags.type : "limits";
+    const relationType =
+      typeof flags.relation === "string"
+        ? flags.relation
+        : typeof flags.type === "string"
+          ? flags.type
+          : "limits";
     const confidence = typeof flags.confidence === "string" ? parseFloat(flags.confidence) : 0.9;
 
     const relNamespace = (memClient as any).relations;

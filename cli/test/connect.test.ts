@@ -162,4 +162,24 @@ describe("connect idempotency & self-healing", () => {
     expect(content).toContain('owner = "acme"');
     expect(content).toContain('slug = "analytics"');
   });
+
+  it("installs hooks for explicitly specified agent harness", async () => {
+    const cursorDir = await mkdtemp(join(tmpdir(), "memcell-cursor-test-"));
+    process.cwd = () => cursorDir;
+
+    answer = () => ({
+      instance,
+      project: { id: "p-cursor", slug: "cursor-proj", name: "Cursor Project" },
+      space: { id: "p-cursor", slug: "cursor-proj", name: "Cursor Project" },
+      key: "mc_ag_cursor_key",
+      keyId: "key-cursor",
+      agentId: "ag-cursor",
+    });
+
+    const code = await connect(instance, { project: "cursor-proj", agent: "cursor", from: "test" });
+    expect(code).toBe(0);
+
+    const hooks = await readFile(join(cursorDir, ".cursor", "hooks.json"), "utf8");
+    expect(hooks).toContain("beforeSubmitPrompt");
+  });
 });

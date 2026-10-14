@@ -1,12 +1,14 @@
-import { dirname } from "node:path";
+import { access } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
-import { adapterFor, removeHooks } from "../adapters/index.js";
+import { adapterFor, allAdapters, removeHooks } from "../adapters/index.js";
+import type { Adapter, Wiring } from "../adapters/shared.js";
 import { agentKeyForProject, forgetAgentKey } from "../keyring.js";
 import { runMoment } from "../loop/hook.js";
 import { isMoment, MOMENTS } from "../loop/moments.js";
 import { log } from "../loop/session.js";
 import { findWorkspace, removeWorkspace } from "../workspace.js";
-import { badge, cmd, good, label, list, place, row, say, value } from "../ui.js";
+import { bad, badge, cmd, good, label, list, place, row, say, value, warn } from "../ui.js";
 
 // `memcell hook <moment> <program> --agent <id>` — what an installed hook runs.
 //
@@ -119,4 +121,111 @@ export async function hookRemove(): Promise<number> {
     held ? row(2, [label("key still lives")], [cmd(`memcell agent revoke ${held.keyId}`)]) : null,
   );
   return 0;
+}
+
+// `memcell hook verify [agent]` — inspect configured lifecycle moments in this workspace.
+export async function hookVerify(program?: string): Promise<number> {
+  const root = process.cwd();
+  const workspace = await findWorkspace(root).catch(() => null);
+  const targetDir = workspace?.root ?? root;
+
+  let targetAdapters: Adapter[] = [];
+
+  if (program) {
+    const adapter = adapterFor(program.toLowerCase().trim());
+    if (!adapter) {
+      say(
+        row(0, [badge("memcell"), label("hook verify"), warn(`unknown agent "${program}"`)]),
+        row(1, [label("supported:"), list(allAdapters().map((a) => a.name))]),
+      );
+      return 1;
+    }
+    targetAdapters = [adapter];
+  } else {
+    // Scan all adapters to find which ones have wiring in this workspace
+    for (const adapter of allAdapters()) {
+      try {
+        const wirings = await adapter.verify(targetDir);
+        if (wirings.some((w) => w.ok)) {
+          // If adapter uses global homedir config like codex, only include when targetDir specifically uses it
+          if (adapter.name === "codex") {
+            const hasLocal =
+              (await access(join(targetDir, ".codex")).then(
+                () => true,
+                () => false,
+              )) ||
+              (await access(join(targetDir, "AGENTS.md")).then(
+                () => true,
+                () => false,
+              ));
+            if (hasLocal) targetAdapters.push(adapter);
+          } else {
+            targetAdapters.push(adapter);
+          }
+        }
+      } catch {
+        // Skip unconfigured adapters
+      }
+    }
+
+    if (targetAdapters.length === 0) {
+      say(
+        row(0, [badge("memcell"), label("hook verify"), place(targetDir)]),
+        row(1, [warn("no agent hooks found in this workspace")]),
+        row(2, [label("run"), cmd("memcell connect"), label("to wire this workspace")]),
+      );
+      return 1;
+    }
+  }
+
+  let allHealthy = true;
+
+  for (const adapter of targetAdapters) {
+    let wirings: Wiring[] = [];
+    try {
+      wirings = await adapter.verify(targetDir);
+    } catch (err) {
+      say(
+        row(0, [badge("memcell"), label(adapter.name), warn("unreadable configuration")]),
+        row(1, [label((err as Error)?.message ?? String(err))]),
+      );
+      allHealthy = false;
+      continue;
+    }
+
+    if (wirings.length === 0) {
+      say(
+        row(0, [badge("memcell"), label(adapter.name), warn("no hooks configured")]),
+        row(1, [label("run"), cmd(`memcell connect --${adapter.name}`)]),
+      );
+      allHealthy = false;
+      continue;
+    }
+
+    // Group by moment so multi-event moments (e.g. SessionStart,SubagentStart) render on one line
+    const byMoment = new Map<string, { events: string[]; ok: boolean }>();
+    for (const w of wirings) {
+      const existing = byMoment.get(w.moment);
+      if (existing) {
+        if (!existing.events.includes(w.event)) existing.events.push(w.event);
+        if (!w.ok) existing.ok = false;
+      } else {
+        byMoment.set(w.moment, { events: [w.event], ok: w.ok });
+      }
+    }
+
+    say(row(0, [badge("memcell"), label("hooks"), place(adapter.name)]));
+
+    for (const [moment, info] of byMoment.entries()) {
+      const eventsStr = info.events.join(",");
+      if (info.ok) {
+        say(row(1, [good(moment.padEnd(20, " "))], [label(eventsStr)]));
+      } else {
+        allHealthy = false;
+        say(row(1, [bad(moment.padEnd(20, " "))], [label(eventsStr)], [warn("unconfigured")]));
+      }
+    }
+  }
+
+  return allHealthy ? 0 : 1;
 }

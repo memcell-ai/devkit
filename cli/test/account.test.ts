@@ -28,8 +28,16 @@ vi.stubGlobal(
   },
 );
 
-const { getProfile, updateProfile, listTokens, createToken, revokeToken } =
-  await import("../src/commands/account.js");
+const {
+  getProfile,
+  updateProfile,
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  listTokens,
+  createToken,
+  revokeToken,
+} = await import("../src/commands/account.js");
 const { saveCredential } = await import("../src/instance.js");
 
 const instance = "http://memcell.test";
@@ -109,14 +117,14 @@ describe("account update", () => {
   });
 });
 
-describe("account token list", () => {
-  it("lists personal access tokens", async () => {
+describe("account key list", () => {
+  it("lists API keys", async () => {
     answer = () => ({
-      tokens: [
+      keys: [
         {
-          id: "pat_1",
+          id: "key_1",
           name: "CLI Automation",
-          preview: "mc_pat_1234...",
+          preview: "mc_key_1234...",
           createdAt: new Date().toISOString(),
         },
       ],
@@ -126,27 +134,27 @@ describe("account token list", () => {
     const log = console.log;
     console.log = (line: string) => printed.push(line);
     try {
-      expect(await listTokens(instance)).toBe(0);
+      expect(await listApiKeys(instance)).toBe(0);
     } finally {
       console.log = log;
     }
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/tokens");
+    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/api-keys");
     const out = printed.join("\n");
     expect(out).toContain("CLI Automation");
-    expect(out).toContain("mc_pat_1234...");
-    expect(out).toContain("pat_1");
+    expect(out).toContain("mc_key_1234...");
+    expect(out).toContain("key_1");
   });
 });
 
-describe("account token create", () => {
-  it("creates a new personal access token", async () => {
+describe("account key create", () => {
+  it("creates a new API key", async () => {
     answer = () => ({
-      token: {
-        id: "pat_2",
+      key: {
+        id: "key_2",
         name: "CI Pipeline",
-        token: "mc_pat_secret_token_value_abc",
+        key: "mc_key_secret_token_value_abc",
         createdAt: new Date().toISOString(),
       },
     });
@@ -155,40 +163,73 @@ describe("account token create", () => {
     const log = console.log;
     console.log = (line: string) => printed.push(line);
     try {
-      expect(await createToken(instance, "CI Pipeline", { expires: "30" })).toBe(0);
+      expect(await createApiKey(instance, "CI Pipeline", { expires: "30" })).toBe(0);
     } finally {
       console.log = log;
     }
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.method).toBe("POST");
-    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/tokens");
+    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/api-keys");
     expect(calls[0]!.body).toEqual({ name: "CI Pipeline", expiresInDays: 30 });
     const out = printed.join("\n");
-    expect(out).toContain("created token");
+    expect(out).toContain("created API key");
     expect(out).toContain("CI Pipeline");
-    expect(out).toContain("mc_pat_secret_token_value_abc");
+    expect(out).toContain("mc_key_secret_token_value_abc");
   });
 });
 
-describe("account token revoke", () => {
-  it("revokes a personal access token by ID", async () => {
+describe("account key revoke", () => {
+  it("revokes an API key by ID", async () => {
     answer = () => ({ ok: true });
 
     const printed: string[] = [];
     const log = console.log;
     console.log = (line: string) => printed.push(line);
     try {
-      expect(await revokeToken(instance, "pat_2")).toBe(0);
+      expect(await revokeApiKey(instance, "key_2")).toBe(0);
     } finally {
       console.log = log;
     }
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.method).toBe("DELETE");
-    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/tokens/pat_2");
+    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/api-keys/key_2");
     const out = printed.join("\n");
-    expect(out).toContain("revoked personal token");
-    expect(out).toContain("pat_2");
+    expect(out).toContain("revoked API key");
+    expect(out).toContain("key_2");
+  });
+});
+
+describe("account token aliases", () => {
+  it("supports legacy token command aliases", async () => {
+    answer = () => ({
+      tokens: [
+        {
+          id: "key_legacy",
+          name: "Legacy CLI",
+          preview: "mc_key_leg...",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    expect(await listTokens(instance)).toBe(0);
+    expect(calls[0]!.url).toBe("http://memcell.test/api/v1/account/api-keys");
+
+    answer = () => ({
+      token: {
+        id: "key_new",
+        name: "Legacy New",
+        token: "mc_key_leg_secret",
+        createdAt: new Date().toISOString(),
+      },
+    });
+    expect(await createToken(instance, "Legacy New")).toBe(0);
+    expect(calls[1]!.url).toBe("http://memcell.test/api/v1/account/api-keys");
+
+    answer = () => ({ ok: true });
+    expect(await revokeToken(instance, "key_new")).toBe(0);
+    expect(calls[2]!.url).toBe("http://memcell.test/api/v1/account/api-keys/key_new");
   });
 });

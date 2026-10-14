@@ -58,10 +58,54 @@ export const KNOWN_DIRS: { dir: string; ext: string }[] = [
   { dir: ".cursor/rules", ext: ".mdc" },
   { dir: ".cursor/rules", ext: ".md" },
   { dir: ".claude/rules", ext: ".md" },
+  { dir: ".claude/skills", ext: ".md" },
+  { dir: ".agents/skills", ext: ".md" },
+  { dir: ".cursor/skills", ext: ".md" },
   { dir: ".windsurf/rules", ext: ".md" },
   { dir: ".clinerules", ext: ".md" },
   { dir: ".agents", ext: ".md" },
 ];
+
+async function collectFilesFromDir(dirPath: string, exts: string[]): Promise<string[]> {
+  const results: string[] = [];
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        const nested = await collectFilesFromDir(fullPath, exts);
+        for (const f of nested) {
+          if (!results.includes(f)) results.push(f);
+        }
+      } else if (entry.isFile() && exts.some((ext) => entry.name.endsWith(ext))) {
+        if (!results.includes(fullPath)) results.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory absent or unreadable
+  }
+  return results;
+}
+
+async function expandInputFiles(inputs: string[]): Promise<string[]> {
+  const expanded: string[] = [];
+  for (const input of inputs) {
+    try {
+      const stats = await stat(input);
+      if (stats.isDirectory()) {
+        const nested = await collectFilesFromDir(input, [".md", ".mdc", ".json", ".txt"]);
+        for (const f of nested) {
+          if (!expanded.includes(f)) expanded.push(f);
+        }
+        continue;
+      }
+    } catch {
+      // Keep original input path so unreadable file status is reported downstream
+    }
+    if (!expanded.includes(input)) expanded.push(input);
+  }
+  return expanded;
+}
 
 export interface ImportOptions {
   files?: string[];
@@ -156,23 +200,11 @@ export async function discover(root: string): Promise<string[]> {
     }
   }
   for (const { dir, ext } of KNOWN_DIRS) {
-    try {
-      const names = await readdir(join(root, dir));
-      for (const name of names.sort()) {
-        if (name.endsWith(ext)) {
-          const fullPath = join(root, dir, name);
-          try {
-            const stats = await stat(fullPath);
-            if (stats.isFile() && !found.includes(fullPath)) {
-              found.push(fullPath);
-            }
-          } catch {
-            // Inaccessible
-          }
-        }
+    const nested = await collectFilesFromDir(join(root, dir), [ext]);
+    for (const fullPath of nested) {
+      if (!found.includes(fullPath)) {
+        found.push(fullPath);
       }
-    } catch {
-      // No such directory
     }
   }
   return found;
@@ -207,7 +239,10 @@ export async function importFiles(
     return 1;
   }
 
-  const chosen = options.files && options.files.length > 0 ? options.files : await discover(root);
+  const chosen =
+    options.files && options.files.length > 0
+      ? await expandInputFiles(options.files)
+      : await discover(root);
   if (chosen.length === 0) {
     if (options.json) {
       emit(

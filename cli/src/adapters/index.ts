@@ -16,6 +16,8 @@ import { qwen } from "./qwen.js";
 import { windsurf } from "./windsurf.js";
 import { goose } from "./goose.js";
 import { cline } from "./cline.js";
+import { hermes } from "./hermes.js";
+import { mcpAdapter } from "./mcp.js";
 import type { Adapter } from "./shared.js";
 
 /** Every agent whose hooks memcell can write. An agent in the catalogue
@@ -26,9 +28,11 @@ const BY_NAME: Record<string, Adapter> = {
   antigravity: antigravity,
   gemini: gemini,
   codex: codex,
+  openai: codex,
   copilot: copilot,
   cursor: cursor,
   opencode: opencode,
+  hermes: hermes,
   kilo: kilo,
   droid: droid,
   muse: muse,
@@ -42,7 +46,8 @@ const BY_NAME: Record<string, Adapter> = {
   cline: cline,
 };
 
-export const adapterFor = (name: string): Adapter | undefined => BY_NAME[name];
+export const adapterFor = (name: string): Adapter | undefined =>
+  name === "mcp" ? mcpAdapter : BY_NAME[name];
 
 export const allAdapters = (): Adapter[] => Object.values(BY_NAME);
 
@@ -55,6 +60,7 @@ export async function removeHooks(dir: string): Promise<string[]> {
   for (const adapter of allAdapters()) {
     if (await adapter.remove(dir)) removed.push(adapter.name);
   }
+  if (await mcpAdapter.remove(dir)) removed.push("mcp");
   // The shared skill rides the same undo: one command wired this project,
   // one command leaves it clean.
   if (await removeSkill(dir)) removed.push("skill");

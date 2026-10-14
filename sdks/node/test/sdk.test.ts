@@ -1469,14 +1469,18 @@ describe("MemCell SDK (cli package export)", () => {
                 },
               );
             }
-            if (u.endsWith("/api/v1/account/tokens") && method === "GET") {
+            if (
+              (u.endsWith("/api/v1/account/api-keys") ||
+                u.endsWith("/api/v1/account/tokens")) &&
+              method === "GET"
+            ) {
               return new Response(
                 JSON.stringify({
-                  tokens: [
+                  keys: [
                     {
-                      id: "tok_1",
-                      name: "CLI Token",
-                      preview: "mc_pat_123...",
+                      id: "key_1",
+                      name: "CLI Key",
+                      preview: "mc_key_123...",
                     },
                   ],
                 }),
@@ -1486,15 +1490,20 @@ describe("MemCell SDK (cli package export)", () => {
                 },
               );
             }
-            if (u.endsWith("/api/v1/account/tokens") && method === "POST") {
+            if (
+              (u.endsWith("/api/v1/account/api-keys") ||
+                u.endsWith("/api/v1/account/tokens")) &&
+              method === "POST"
+            ) {
               return new Response(
                 JSON.stringify({
                   success: true,
-                  token: {
-                    id: "tok_2",
-                    name: "New Token",
-                    token: "mc_pat_secret",
-                    preview: "mc_pat_456...",
+                  key: {
+                    id: "key_2",
+                    name: "New Key",
+                    key: "mc_key_secret",
+                    rawKey: "mc_key_secret",
+                    preview: "mc_key_456...",
                   },
                 }),
                 {
@@ -1504,7 +1513,9 @@ describe("MemCell SDK (cli package export)", () => {
               );
             }
             if (
-              u.endsWith("/api/v1/account/tokens/tok_1") &&
+              (u.endsWith("/api/v1/account/api-keys/key_1") ||
+                u.endsWith("/api/v1/account/tokens/key_1") ||
+                u.endsWith("/api/v1/account/tokens/tok_1")) &&
               method === "DELETE"
             ) {
               return new Response(JSON.stringify({ success: true }), {
@@ -1523,15 +1534,20 @@ describe("MemCell SDK (cli package export)", () => {
         const profile = await memcell.account.get();
         expect(profile.email).toBe("user@test.com");
 
-        const tokens = await memcell.account.tokens.list();
-        expect(tokens).toHaveLength(1);
+        const keys = await memcell.account.apiKeys.list();
+        expect(keys).toHaveLength(1);
 
-        const created = await memcell.account.tokens.create({
-          name: "New Token",
+        const created = await memcell.account.apiKeys.create({
+          name: "New Key",
         });
-        expect(created.token).toBe("mc_pat_secret");
+        expect(created.key).toBe("mc_key_secret");
+        expect(created.token).toBe("mc_key_secret");
 
-        await memcell.account.tokens.revoke("tok_1");
+        await memcell.account.apiKeys.revoke("key_1");
+
+        // Legacy tokens alias works identically
+        const legacyTokens = await memcell.account.tokens.list();
+        expect(legacyTokens).toHaveLength(1);
       });
     });
 

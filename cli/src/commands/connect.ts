@@ -308,6 +308,12 @@ export async function connect(
 
   const here = basename(process.cwd());
   const present = [...(await detected())];
+  if (options.agent?.trim()) {
+    const specified = options.agent.trim().toLowerCase();
+    if (!present.includes(specified) && adapterFor(specified)) {
+      present.push(specified);
+    }
+  }
   const activeAgent = options.agent?.trim() || currentAgent() || present[0] || here;
 
   const models: Record<string, string> = {};

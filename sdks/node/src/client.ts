@@ -30,8 +30,11 @@ import {
   type ReportParams,
   type ReportResponse,
   type ScopeOptions,
+  type ScopedExecutionContext,
+  type ScopedExecutionResult,
   type MemoryItem,
   type WaitForJobOptions,
+  type WrapExecutionOptions,
 } from "./types.js";
 
 export class MemCell {
@@ -274,6 +277,23 @@ export class MemCell {
   }
 
   /**
+   * Automated execution wrapper on the root client:
+   * 1. Pre-Flight Recall
+   * 2. In-Flight Execution
+   * 3. Post-Flight Outcome Report ('worked' or 'failed')
+   */
+  async wrapExecution<T>(
+    options: WrapExecutionOptions,
+    actionFn: (context: ScopedExecutionContext) => Promise<T>,
+  ): Promise<ScopedExecutionResult<T>> {
+    return await this.scope(options.namespace || "", {
+      subject: options.subject,
+      format: options.format,
+      minConfidence: options.minConfidence,
+    }).wrapExecution(options, actionFn);
+  }
+
+  /**
    * Pre-flight recall from MemCell memory.
    */
   async recall(params: RecallParams): Promise<RecallResponse> {
@@ -316,7 +336,8 @@ export class MemCell {
     const memories: MemoryItem[] = rawMemories.map((s) => ({
       id: s.id || s.memoryId,
       rootId: s.rootId,
-      title: s.title,
+      title: s.title || s.text || "",
+      text: s.text || s.title || "",
       context: s.context ?? null,
       observation: s.observation ?? null,
       tags: s.tags ?? [],
