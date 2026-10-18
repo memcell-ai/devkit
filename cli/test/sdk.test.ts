@@ -127,7 +127,7 @@ describe("MemCell SDK (cli package export)", () => {
       const res1 = await memcell.recall({
         namespace: "org/repo",
         query: "deploy procedure",
-        type: ["preference", "directive"],
+        type: ["preference", "instruction"],
         minConfidence: 0.8,
       });
 

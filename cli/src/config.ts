@@ -231,7 +231,15 @@ export async function set(key: string, value: unknown, scope: WritableScope): Pr
  *  string as typed. A person setting a flag should not have to know JSON,
  *  and a person setting a path must not have it mangled. */
 export function read(raw: string): unknown {
-  if (/^(true|false|null|-?\d+(\.\d+)?)$/.test(raw)) return JSON.parse(raw);
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (raw === "null") return null;
+  if (raw.length > 0 && raw.trim() === raw) {
+    const num = Number(raw);
+    if (Number.isFinite(num) && String(num) === raw) {
+      return num;
+    }
+  }
   return raw;
 }
 

@@ -118,12 +118,12 @@ describe("stageMemoriesFromRecall", () => {
     });
   });
 
-  it("stages memories with type === 'directive' as soft advisories (refuses: false) even in strict mode", () => {
+  it("stages memories with type === 'instruction' as soft advisories (refuses: false) even in strict mode", () => {
     const memories = [
       {
-        id: "s-directive",
+        id: "s-instruction",
         title: "Always verify output before executing",
-        type: "directive",
+        type: "instruction",
         confidence: 0.9,
       },
     ];
@@ -131,7 +131,7 @@ describe("stageMemoriesFromRecall", () => {
     const staged = stageMemoriesFromRecall(memories, "strict");
     expect(staged).toHaveLength(1);
     expect(staged[0]!).toMatchObject({
-      memoryId: "s-directive",
+      memoryId: "s-instruction",
       title: "Always verify output before executing",
       refuses: false,
       appliesAt: ["change", "record"],
@@ -164,6 +164,7 @@ describe("evaluatePreAct", () => {
     memoryId: "g-1",
     title: "Never push directly to production branch",
     text: "Never push directly to production branch: git push must go through PR.",
+    resources: ["git push", "main"],
     tags: ["git", "guard"],
     appliesAt: ["send" as const],
     refuses: true,
@@ -224,8 +225,8 @@ describe("evaluatePreAct", () => {
     }
   });
 
-  it("provides soft guidance and never refuses when executing tools with an advisory directive", () => {
-    const directiveMemory = {
+  it("provides soft guidance and never refuses when executing tools with an advisory instruction", () => {
+    const instructionMemory = {
       memoryId: "d-1",
       title: "Always verify output before executing",
       text: "Always verify output before executing: systematically validate before triggering.",
@@ -238,7 +239,7 @@ describe("evaluatePreAct", () => {
       tool: "Edit",
       input: { file_path: "src/index.ts" },
       guard,
-      activeMemories: [directiveMemory],
+      activeMemories: [instructionMemory],
     });
 
     expect(result.verdict).toBe("advise");
@@ -308,5 +309,67 @@ describe("evaluatePreAct", () => {
     const avgMs = elapsed / 1000;
     // Average evaluation time must be well under 1.0ms (typically ~0.005ms)
     expect(avgMs).toBeLessThan(0.1);
+  });
+
+  it("advises instead of blocking all file edits when a generic 3-act guard has no specific file resource", () => {
+    const genericGuard = {
+      memoryId: "g-generic",
+      title: "Never push directly to main",
+      text: "Never push directly to main",
+      content: "Create a topic branch and open a pull request instead.",
+      tags: ["git", "guard"],
+      appliesAt: ["change" as const, "record" as const, "send" as const],
+      refuses: true,
+    };
+
+    const editResult = evaluatePreAct({
+      tool: "Edit",
+      input: { file_path: "src/app.ts" },
+      guard,
+      activeMemories: [genericGuard],
+    });
+    expect(editResult.verdict).toBe("advise");
+    if (editResult.verdict === "advise") {
+      expect(editResult.guidance).toContain("Specification: Create a topic branch");
+    }
+
+    const pushResult = evaluatePreAct({
+      tool: "Bash",
+      input: { command: "git push origin main" },
+      guard,
+      activeMemories: [{ ...genericGuard, resources: ["git push", "main"] }],
+    });
+    expect(pushResult.verdict).toBe("refuse");
+  });
+
+  it("filters resource-scoped memories so they only fire when touching matching files", () => {
+    const schemaMemory = {
+      memoryId: "m-schema",
+      title: "Use bigserial for audit tables",
+      text: "Use bigserial for audit tables",
+      resources: ["src/db/schema.ts"],
+      tags: ["database"],
+      appliesAt: ["change" as const],
+      refuses: false,
+    };
+
+    const unrelatedEdit = evaluatePreAct({
+      tool: "Edit",
+      input: { file_path: "src/components/Button.tsx" },
+      guard,
+      activeMemories: [schemaMemory],
+    });
+    expect(unrelatedEdit.verdict).toBe("pass");
+
+    const matchingEdit = evaluatePreAct({
+      tool: "Edit",
+      input: { file_path: "src/db/schema.ts" },
+      guard,
+      activeMemories: [schemaMemory],
+    });
+    expect(matchingEdit.verdict).toBe("advise");
+    if (matchingEdit.verdict === "advise") {
+      expect(matchingEdit.guidance).toContain("Applies to: src/db/schema.ts");
+    }
   });
 });

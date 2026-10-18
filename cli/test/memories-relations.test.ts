@@ -109,7 +109,7 @@ describe("memories relations CLI", () => {
           targetMemory: {
             id: "mem_g1",
             title: "Max retry limit is 3 attempts",
-            type: "directive",
+            type: "instruction",
           },
         },
       ],
@@ -161,8 +161,8 @@ describe("memories relations CLI", () => {
     answer = () => ({
       memory: {
         id: "mem_d1",
-        title: "Timeout Directive",
-        type: "directive",
+        title: "Timeout Instruction",
+        type: "instruction",
         scope: "workspace",
         status: "active",
         confidence: 0.92,

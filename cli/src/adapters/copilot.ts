@@ -5,14 +5,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -103,7 +102,7 @@ export const copilot: Adapter = {
         ]),
       ),
     });
-    await installMcp(resolve(projectDir));
+    await removeMcp(resolve(projectDir)).catch(() => undefined);
     return at;
   },
 
@@ -132,32 +131,35 @@ export const copilot: Adapter = {
   // Copilot's usable prompt event REPLACES the prompt, so the original must
   // be echoed back or the hook deletes what the person typed. Nothing to
   // echo means say nothing — a prompt-deleting reply is worse than a
-  // dropped injection.
+  // dropped injection. On sessionStart / preToolUse, hookSpecificOutput.additionalContext
+  // delivers context without replacing the prompt.
   speak(
-    _moment: Moment,
+    moment: Moment,
     context: string | null,
     heard: { prompt?: string; transformedPrompt?: string },
   ): string | null {
     if (!context) return null;
-    const original = heard.transformedPrompt ?? heard.prompt ?? "";
-    if (!original) return null;
-    return JSON.stringify({ modifiedTransformedPrompt: `${context}\n\n${original}` });
+    if (moment === "prompt-submit") {
+      const original = heard.transformedPrompt ?? heard.prompt ?? "";
+      if (!original) return null;
+      return JSON.stringify({ modifiedTransformedPrompt: `${context}\n\n${original}` });
+    }
+    if (moment === "session-start" || moment === "before-act") {
+      return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
+    }
+    return null;
   },
 
   // ── read — the per-session event log copilot itself writes ───────────────
-  // `$COPILOT_HOME/session-state/<session-id>/events.jsonl`, one event per
-  // line. Text is `user.message` / `assistant.message` (data.content); a
-  // write is a `tool.execution_start` for one of the file tools — the path
-  // in `data.arguments.path`, or the marker lines of an apply_patch
-  // envelope. Ephemeral events are not persisted, so what is on disk is the
-  // real record.
   async read(payload: Incoming, from: number): Promise<Session> {
+    const directPath = payload.transcript_path ?? payload.transcriptPath;
     const sid = payload.session_id ?? payload.sessionId;
-    if (!sid) return emptySession(from);
+    if (!directPath && !sid) return emptySession(from);
     const home = process.env.COPILOT_HOME ?? join(homedir(), ".copilot");
-    const path = join(home, "session-state", sid, "events.jsonl");
+    const path = directPath ?? join(home, "session-state", sid!, "events.jsonl");
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { type?: string; data?: Record<string, unknown> };
       const data = entry.data ?? {};
@@ -167,20 +169,16 @@ export const copilot: Adapter = {
         if (text.trim()) said.push(`${role}: ${text.trim()}`);
       } else if (entry.type === "tool.execution_start") {
         const tool = String(data.toolName ?? "");
-        if (!WRITE_TOOLS.has(tool)) return;
         const args = data.arguments as Record<string, unknown> | string | undefined;
-        if (tool === "apply_patch") {
-          for (const file of patchPaths(typeof args === "string" ? args : ""))
-            addTouched(touched, file, payload.cwd);
-          return;
-        }
-        if (typeof args !== "object") return;
-        if (tool === "str_replace_editor" && (args as { command?: string }).command === "view")
-          return;
-        addTouched(touched, pathOf(args as Record<string, unknown>), payload.cwd);
+        recordToolAction(tool, args, {
+          cwd: payload.cwd,
+          writeTools: WRITE_TOOLS,
+          touched,
+          actions,
+        });
       }
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

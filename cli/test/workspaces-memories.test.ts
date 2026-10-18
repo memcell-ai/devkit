@@ -29,13 +29,10 @@ vi.stubGlobal(
   },
 );
 
-const { COMMANDS, RESOURCES } = await import("../src/commands/index.js");
-const { detail, overview } = await import("../src/help.js");
-const { listWorkspaces, newWorkspace, useWorkspace, getWorkspace } =
+const { runYargsCli, YARGS_COMMANDS } = await import("../src/cli.js");
+const { listWorkspaces, newWorkspace, useWorkspace } =
   await import("../src/commands/workspaces.js");
-const { listMemories, createMemory, getMemory, deleteMemory } =
-  await import("../src/commands/memories.js");
-const { parse } = await import("../src/parse.js");
+const { listMemories, createMemory, deleteMemory } = await import("../src/commands/memories.js");
 const { saveCredential } = await import("../src/instance.js");
 const { saveProject, findWorkspace } = await import("../src/workspace.js");
 const { resolveContext } = await import("../src/context.js");
@@ -62,155 +59,62 @@ beforeEach(async () => {
 });
 
 describe("workspaces & memories CLI dispatch", () => {
-  it("standardizes RESOURCES on singular nouns", () => {
-    const resourceNames = RESOURCES.map((r) => r.name);
-    expect(resourceNames).toContain("workspace");
-    expect(resourceNames).toContain("memory");
-    expect(resourceNames).toContain("promotion");
-    expect(resourceNames).toContain("collaborator");
-    expect(resourceNames).toContain("team");
-    expect(resourceNames).toContain("webhook");
-    expect(resourceNames).toContain("agent");
-    expect(resourceNames).toContain("org");
-    expect(resourceNames).toContain("scope");
+  it("standardizes YARGS_COMMANDS on singular resource nouns", () => {
+    const cmdNames = YARGS_COMMANDS.map(
+      (c) => (Array.isArray(c.command) ? c.command[0] : String(c.command)).split(" ")[0],
+    );
+    expect(cmdNames).toContain("workspace");
+    expect(cmdNames).toContain("memory");
+    expect(cmdNames).toContain("thread");
+    expect(cmdNames).toContain("document");
+    expect(cmdNames).toContain("team");
+    expect(cmdNames).toContain("webhook");
+    expect(cmdNames).toContain("agent");
+    expect(cmdNames).toContain("org");
 
     // Must NOT contain plural nouns
-    expect(resourceNames).not.toContain("workspaces");
-    expect(resourceNames).not.toContain("memories");
-    expect(resourceNames).not.toContain("promotions");
-    expect(resourceNames).not.toContain("collaborators");
-    expect(resourceNames).not.toContain("teams");
-    expect(resourceNames).not.toContain("webhooks");
-    expect(resourceNames).not.toContain("agents");
-    expect(resourceNames).not.toContain("orgs");
-    expect(resourceNames).not.toContain("scopes");
+    expect(cmdNames).not.toContain("workspaces");
+    expect(cmdNames).not.toContain("memories");
+    expect(cmdNames).not.toContain("threads");
+    expect(cmdNames).not.toContain("documents");
+    expect(cmdNames).not.toContain("teams");
+    expect(cmdNames).not.toContain("webhooks");
+    expect(cmdNames).not.toContain("agents");
+    expect(cmdNames).not.toContain("orgs");
   });
 
-  it("registers strictly singular primary commands without plural aliases", () => {
-    const wsSingular = COMMANDS.find((c) => c.path.join(" ") === "workspace list");
-    const wsPlural = COMMANDS.find((c) => c.path.join(" ") === "workspaces list");
-    expect(wsSingular).toBeDefined();
-    expect(wsSingular?.hidden).toBeFalsy();
-    expect(wsPlural).toBeUndefined();
-
-    const memSingular = COMMANDS.find((c) => c.path.join(" ") === "memory create");
-    const memPlural = COMMANDS.find((c) => c.path.join(" ") === "memories create");
-    expect(memSingular).toBeDefined();
-    expect(memSingular?.hidden).toBeFalsy();
-    expect(memPlural).toBeUndefined();
-
-    const teamSingular = COMMANDS.find((c) => c.path.join(" ") === "team list");
-    const teamPlural = COMMANDS.find((c) => c.path.join(" ") === "teams list");
-    expect(teamSingular).toBeDefined();
-    expect(teamSingular?.hidden).toBeFalsy();
-    expect(teamPlural).toBeUndefined();
-
-    const scopeSingular = COMMANDS.find((c) => c.path.join(" ") === "scope");
-    const scopesPlural = COMMANDS.find((c) => c.path.join(" ") === "scopes");
-    expect(scopeSingular).toBeDefined();
-    expect(scopeSingular?.hidden).toBeFalsy();
-    expect(scopesPlural).toBeUndefined();
-  });
-
-  it("resolves singular topics to detail help and unknown plural topics to overview", () => {
-    const wsHelp = detail("workspace");
-    expect(wsHelp).toContain("memcell workspace list");
-
-    const memHelp = detail("memory");
-    expect(memHelp).toContain("memcell memory create");
-
-    const teamHelp = detail("team");
-    expect(teamHelp).toContain("memcell team list");
-
-    const scopeHelp = detail("scope");
-    expect(scopeHelp).toContain("memcell scope");
-
-    // Plural topics are not canonical resources and fall back to overview
-    const wssHelp = detail("workspaces");
-    expect(wssHelp).toBe(overview());
-    const memsHelp = detail("memories");
-    expect(memsHelp).toBe(overview());
-    const scopesHelp = detail("scopes");
-    expect(scopesHelp).toBe(overview());
-  });
-
-  it("parses singular scope commands cleanly and rejects plural forms", () => {
-    const res1 = parse(["scopes"], COMMANDS);
-    expect(res1.kind).toBe("error");
-
-    const res2 = parse(["scope"], COMMANDS);
-    expect(res2.kind).toBe("run");
-    if (res2.kind === "run") {
-      expect(res2.command.path).toEqual(["scope"]);
+  it("renders native yargs help for singular resource commands", async () => {
+    for (const resource of ["workspace", "memory", "team", "org"]) {
+      const logs: string[] = [];
+      const spy = vi.spyOn(console, "log").mockImplementation((...args) => {
+        logs.push(args.join(" "));
+      });
+      try {
+        const code = await runYargsCli([resource, "--help"], "1.5.0");
+        expect(code).toBe(0);
+        expect(logs.join("\n")).toContain(`memcell ${resource}`);
+      } finally {
+        spy.mockRestore();
+      }
     }
   });
 
-  it("parses singular workspace commands cleanly and rejects plural forms", () => {
-    const res1 = parse(["workspaces", "list"], COMMANDS);
-    expect(res1.kind).toBe("error");
-
-    const res2 = parse(["workspace", "new", "frontend"], COMMANDS);
-    expect(res2.kind).toBe("run");
-    if (res2.kind === "run") {
-      expect(res2.command.path).toEqual(["workspace", "new"]);
-      expect(res2.args.name).toBe("frontend");
-    }
-
-    const res3 = parse(["workspace", "list"], COMMANDS);
-    expect(res3.kind).toBe("run");
-    if (res3.kind === "run") {
-      expect(res3.command.path).toEqual(["workspace", "list"]);
-    }
-  });
-
-  it("parses singular memory commands cleanly and rejects plural forms", () => {
-    const res1 = parse(["memories", "list"], COMMANDS);
-    expect(res1.kind).toBe("error");
-
-    const res2 = parse(["memory", "create", "Always sanitize input"], COMMANDS);
-    expect(res2.kind).toBe("run");
-    if (res2.kind === "run") {
-      expect(res2.command.path).toEqual(["memory", "create"]);
-      expect(res2.args.text).toBe("Always sanitize input");
-    }
-
-    const res3 = parse(["memories", "create", "Always sanitize input"], COMMANDS);
-    expect(res3.kind).toBe("error");
-  });
-
-  it("parses all resource families strictly as singular commands and rejects plural forms", () => {
-    const pairs: [string[], string[]][] = [
-      [
-        ["team", "list"],
-        ["teams", "list"],
-      ],
-      [
-        ["webhook", "list"],
-        ["webhooks", "list"],
-      ],
-      [
-        ["agent", "list"],
-        ["agents", "list"],
-      ],
-      [
-        ["promotion", "list"],
-        ["promotions", "list"],
-      ],
-      [
-        ["collaborator", "list"],
-        ["collaborators", "list"],
-      ],
-      [
-        ["org", "list"],
-        ["orgs", "list"],
-      ],
-    ];
-
-    for (const [singular, plural] of pairs) {
-      const sRes = parse(singular, COMMANDS);
-      const pRes = parse(plural, COMMANDS);
-      expect(sRes.kind, `singular ${singular.join(" ")} should parse`).toBe("run");
-      expect(pRes.kind, `plural ${plural.join(" ")} should error`).toBe("error");
+  it("rejects plural resource commands in strict mode", async () => {
+    for (const plural of [
+      ["workspaces", "list"],
+      ["memories", "list"],
+      ["teams", "list"],
+      ["webhooks", "list"],
+      ["agents", "list"],
+      ["orgs", "list"],
+    ]) {
+      const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        const code = await runYargsCli(plural, "1.5.0");
+        expect(code, `plural ${plural.join(" ")} should fail`).toBe(1);
+      } finally {
+        spy.mockRestore();
+      }
     }
   });
 
@@ -263,6 +167,18 @@ describe("workspaces commands execution", () => {
     const found = await findWorkspace(projectDir);
     expect(found?.workspace.workspace).toBe("ml-pipeline");
   });
+
+  it("purges workspace data via purgeWorkspace", async () => {
+    const { purgeWorkspace } = await import("../src/commands/workspaces.js");
+    answer = () => ({ ok: true });
+
+    const code = await purgeWorkspace(instance, "acme/core");
+    expect(code).toBe(0);
+    const deleteCall = calls.find(
+      (c) => c.method === "DELETE" && c.url.endsWith("/api/v1/acme/core/memories"),
+    );
+    expect(deleteCall).toBeDefined();
+  });
 });
 
 describe("memories commands execution", () => {
@@ -289,13 +205,13 @@ describe("memories commands execution", () => {
       memory: {
         id: "mem-2",
         title: "Keep functions pure when possible",
-        type: "directive",
+        type: "instruction",
         scope: "workspace",
       },
     });
 
     const code = await createMemory(instance, "Keep functions pure when possible", {
-      type: "directive",
+      type: "instruction",
     });
     expect(code).toBe(0);
   });

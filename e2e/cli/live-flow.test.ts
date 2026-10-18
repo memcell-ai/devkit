@@ -181,7 +181,9 @@ describe("CLI Live E2E Flow", () => {
       if (!env) return;
 
       const listResult = env.runCli(["memory", "list"]);
-      expect(listResult.stdout).toMatch(/Verify customer identity|directive/i);
+      expect(listResult.stdout).toMatch(
+        /Verify customer identity|instruction/i,
+      );
     });
   });
 

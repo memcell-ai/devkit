@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { memcellOnPath } from "../adapters/shared.js";
 import { UnreadableConfig } from "../adapters/shared.js";
 import { installSkill } from "../adapters/skill.js";
-import { adapterFor } from "../adapters/index.js";
+import { adapterFor, healWiringCollisions } from "../adapters/index.js";
 import { currentAgent, detected } from "../agents.js";
 import { call, MemcellError, whoami } from "../client.js";
 import { deviceGrant } from "../grant.js";
@@ -48,8 +48,9 @@ interface Exchanged {
   key: string;
   keyId: string;
   agentId: string;
+  workspace?: { id: string; slug: string; name: string; ownerSlug?: string };
   project?: { id: string; slug: string; name: string; ownerSlug?: string };
-  space: { id: string; slug: string; name: string; ownerSlug?: string };
+  space?: { id: string; slug: string; name: string; ownerSlug?: string };
   instance: string;
   agents?: Record<string, { key: string; keyId: string; agentId: string; agentName: string }>;
 }
@@ -68,7 +69,7 @@ export async function connect(
 ): Promise<number> {
   const pair = options.pair?.trim();
   const existing = await findWorkspace(process.cwd()).catch(() => null);
-  let targetProject = (options.workspace || options.project || options.space)?.trim();
+  let targetWorkspace = (options.workspace || options.project || options.space)?.trim();
 
   const isInteractive =
     !pair && !options.workspace && !options.project && !options.space && CAN_ASK();
@@ -76,9 +77,11 @@ export async function connect(
   if (isInteractive) {
     let action: string | null = null;
     if (existing) {
-      const currentSlug = existing.project.owner
-        ? `${existing.project.owner}/${existing.project.project || existing.project.space}`
-        : existing.project.project || existing.project.space;
+      const wsSlug =
+        existing.workspace.workspace || existing.workspace.project || existing.workspace.space;
+      const currentSlug = existing.workspace.owner
+        ? `${existing.workspace.owner}/${wsSlug}`
+        : wsSlug;
 
       say(
         row(0, [badge("memcell"), label("workspace connection detected")]),
@@ -86,7 +89,7 @@ export async function connect(
           1,
           [label("connected to")],
           [good(currentSlug)],
-          [label("on"), place(existing.project.instance)],
+          [label("on"), place(existing.workspace.instance)],
         ),
         row(2, [label("file:")], [label(existing.at)]),
       );
@@ -98,13 +101,13 @@ export async function connect(
           note: currentSlug,
         },
         {
-          name: "switch_project",
+          name: "switch_workspace",
           label: "Switch workspace or organization",
         },
         {
           name: "switch_instance",
           label: "Switch target instance (Cloud / Local / Custom)",
-          note: existing.project.instance,
+          note: existing.workspace.instance,
         },
         {
           name: "cancel",
@@ -115,10 +118,10 @@ export async function connect(
       if (!action || action === "cancel") return 0;
 
       if (action === "keep") {
-        targetProject = currentSlug;
-        instance = existing.project.instance;
-      } else if (action === "switch_project") {
-        instance = existing.project.instance;
+        targetWorkspace = currentSlug;
+        instance = existing.workspace.instance;
+      } else if (action === "switch_workspace") {
+        instance = existing.workspace.instance;
       }
     }
 
@@ -162,8 +165,8 @@ export async function connect(
       }
     }
 
-    // Owner & Project selection
-    if (!targetProject) {
+    // Owner & Workspace selection
+    if (!targetWorkspace) {
       let held = (await credentialFor(instance)) ? await whoami(instance).catch(() => null) : null;
       if (!held) {
         say(
@@ -207,23 +210,26 @@ export async function connect(
         selectedOwner = pickedOwner === "__personal__" ? null : pickedOwner;
       }
 
-      // Query projects for that owner
-      const projectsPath = selectedOwner ? `/api/v1/${selectedOwner}/projects` : "/api/v1/projects";
-      const projectsRes = await call<{
+      // Query workspaces for that owner
+      const workspacesPath = selectedOwner
+        ? `/api/v1/${selectedOwner}/workspaces`
+        : "/api/v1/workspaces";
+      const workspacesRes = await call<{
+        workspaces?: { id: string; name: string; slug: string; ownerSlug?: string }[];
         projects?: { id: string; name: string; slug: string; ownerSlug?: string }[];
-      }>(instance, projectsPath).catch(() => null);
-      const candidateProjects = projectsRes?.projects ?? [];
+      }>(instance, workspacesPath).catch(() => null);
+      const candidateWorkspaces = workspacesRes?.workspaces ?? workspacesRes?.projects ?? [];
 
-      const projectChoices: Choice[] = [
-        ...candidateProjects.map((p) => {
+      const workspaceChoices: Choice[] = [
+        ...candidateWorkspaces.map((w) => {
           const fullSlug =
-            p.ownerSlug && selectedOwner && p.ownerSlug !== selectedOwner
-              ? `${p.ownerSlug}/${p.slug}`
-              : p.slug;
+            w.ownerSlug && selectedOwner && w.ownerSlug !== selectedOwner
+              ? `${w.ownerSlug}/${w.slug}`
+              : w.slug;
           return {
             name: fullSlug,
             label: fullSlug,
-            note: p.name !== p.slug ? p.name : undefined,
+            note: w.name !== w.slug ? w.name : undefined,
           };
         }),
         {
@@ -232,10 +238,10 @@ export async function connect(
         },
       ];
 
-      const pickedProj = await choose("Select workspace to connect:", projectChoices);
-      if (!pickedProj) return 0;
+      const pickedWs = await choose("Select workspace to connect:", workspaceChoices);
+      if (!pickedWs) return 0;
 
-      if (pickedProj === "__new__") {
+      if (pickedWs === "__new__") {
         const defaultName = basename(process.cwd());
         const newName = await ask("Workspace name", defaultName);
         if (!newName) return 0;
@@ -246,47 +252,54 @@ export async function connect(
         try {
           const res = await call<{
             ok?: boolean;
+            workspace?: { id?: string; slug: string; name: string; ownerSlug?: string };
             project?: { id?: string; slug: string; name: string; ownerSlug?: string };
             slug?: string;
             name?: string;
             ownerSlug?: string;
-          }>(instance, selectedOwner ? `/api/v1/${selectedOwner}/projects` : "/api/v1/projects", {
-            method: "POST",
-            body,
-          });
-          const proj = res.project ?? res;
-          const slug = proj.slug;
+          }>(
+            instance,
+            selectedOwner ? `/api/v1/${selectedOwner}/workspaces` : "/api/v1/workspaces",
+            {
+              method: "POST",
+              body,
+            },
+          );
+          const ws = res.workspace ?? res.project ?? res;
+          const slug = ws.slug;
           if (!slug) {
             say(
-              row(0, [badge("memcell"), warn("could not resolve project slug")]),
-              row(1, [label("Server responded without a project slug. Please try again.")]),
+              row(0, [badge("memcell"), warn("could not resolve workspace slug")]),
+              row(1, [label("Server responded without a workspace slug. Please try again.")]),
             );
             return 1;
           }
-          const finalOwner = proj.ownerSlug || selectedOwner;
-          targetProject = finalOwner ? `${finalOwner}/${slug}` : slug;
+          const finalOwner = ws.ownerSlug || selectedOwner;
+          targetWorkspace = finalOwner ? `${finalOwner}/${slug}` : slug;
         } catch (error) {
           const failure = error as MemcellError;
           say(
-            row(0, [badge("memcell"), warn("could not create project")]),
-            row(1, [label(failure.message || "Failed to create project.")]),
+            row(0, [badge("memcell"), warn("could not create workspace")]),
+            row(1, [label(failure.message || "Failed to create workspace.")]),
           );
           return 1;
         }
       } else {
-        targetProject =
-          selectedOwner && !pickedProj.includes("/")
-            ? `${selectedOwner}/${pickedProj}`
-            : pickedProj;
+        targetWorkspace =
+          selectedOwner && !pickedWs.includes("/") ? `${selectedOwner}/${pickedWs}` : pickedWs;
       }
     }
   } else {
     // Non-interactive / Headless fallback
-    if (!targetProject) {
-      if (existing?.project?.owner && existing?.project?.project) {
-        targetProject = `${existing.project.owner}/${existing.project.project}`;
-      } else if (existing?.project?.project || existing?.project?.space) {
-        targetProject = existing.project.project || existing.project.space;
+    if (!targetWorkspace) {
+      const wsSlug =
+        existing?.workspace?.workspace ||
+        existing?.workspace?.project ||
+        existing?.workspace?.space;
+      if (existing?.workspace?.owner && wsSlug) {
+        targetWorkspace = `${existing.workspace.owner}/${wsSlug}`;
+      } else if (wsSlug) {
+        targetWorkspace = wsSlug;
       }
     }
   }
@@ -336,17 +349,15 @@ export async function connect(
     if (pair) {
       exchanged = await call<Exchanged>(instance, "/api/v1/pair/claim", {
         method: "POST",
-        // names which project/space of the caller's to reach, by slug
         body: {
           pair,
           ...identity,
-          project: targetProject || undefined,
-          space: targetProject || undefined,
+          workspace: targetWorkspace || undefined,
+          project: targetWorkspace || undefined,
+          space: targetWorkspace || undefined,
         },
       });
     } else {
-      // Terminal-first: a session, then the key. A held credential that
-      // still answers is a session; otherwise the device grant runs here.
       const held = (await credentialFor(instance))
         ? await whoami(instance).catch(() => null)
         : null;
@@ -361,9 +372,11 @@ export async function connect(
         method: "POST",
         body: {
           ...identity,
-          project: targetProject || undefined,
+          workspace: targetWorkspace || undefined,
+          preferredWorkspace: here,
+          project: targetWorkspace || undefined,
           preferredProject: here,
-          space: targetProject || undefined,
+          space: targetWorkspace || undefined,
           preferredSpace: here,
         },
       });
@@ -373,20 +386,22 @@ export async function connect(
     const body = failure.body as {
       error?: string;
       message?: string;
+      workspaces?: { id: string; slug: string; name: string; ownerSlug?: string }[];
       projects?: { id: string; slug: string; name: string; ownerSlug?: string }[];
     } | null;
 
+    const candidates = body?.workspaces ?? body?.projects;
     if (
       failure.status === 409 &&
-      body?.error === "multiple_projects" &&
-      Array.isArray(body.projects)
+      (body?.error === "multiple_workspaces" || body?.error === "multiple_projects") &&
+      Array.isArray(candidates)
     ) {
       say(
         row(0, [badge("memcell"), place(instance)]),
-        row(1, [warn("multiple projects found")], [label("choose which one to connect:")]),
-        ...body.projects.map((p) => {
-          const display = p.ownerSlug ? `${p.ownerSlug}/${p.slug}` : p.slug;
-          return row(2, [good(display)], [label(p.name)]);
+        row(1, [warn("multiple workspaces found")], [label("choose which one to connect:")]),
+        ...candidates.map((w) => {
+          const display = w.ownerSlug ? `${w.ownerSlug}/${w.slug}` : w.slug;
+          return row(2, [good(display)], [label(w.name)]);
         }),
         row(2, [label("run"), cmd("memcell connect [owner]/<slug>")]),
       );
@@ -400,13 +415,6 @@ export async function connect(
     return 1;
   }
 
-  // The project file carries project truth only — safe to commit, identical
-  // for every teammate. Identity (the agent, the key) is personal and goes to
-  // the machine keyring, so a re-connect never rewrites a committed file.
-  // Pinned to the host that was ASKED, not the one named in the answer. A
-  // response that renames its own instance would otherwise redirect every
-  // later call — and the credential with it — to somewhere the person never
-  // typed.
   if (exchanged.instance && new URL(exchanged.instance).origin !== new URL(instance).origin) {
     say(
       row(0, [badge("memcell"), place(instance)]),
@@ -414,31 +422,34 @@ export async function connect(
     );
     return 1;
   }
-  const linked = exchanged.project || exchanged.space;
-  const ownerSlug = exchanged.project?.ownerSlug || exchanged.space?.ownerSlug;
+  const linked = (exchanged.workspace || exchanged.project || exchanged.space)!;
+  const ownerSlug =
+    exchanged.workspace?.ownerSlug || exchanged.project?.ownerSlug || exchanged.space?.ownerSlug;
   const gitRoot = !existing ? await findGitRoot(process.cwd()) : null;
-  const projectRoot = existing?.root ?? gitRoot ?? process.cwd();
+  const workspaceDirRoot = existing?.root ?? gitRoot ?? process.cwd();
   const at = await saveWorkspace(
     {
       instance,
       owner: ownerSlug,
+      workspace: linked.slug,
+      workspaceId: linked.id,
       project: linked.slug,
       projectId: linked.id,
       space: linked.slug,
       spaceId: linked.id,
     },
-    projectRoot,
+    workspaceDirRoot,
   );
-  await pruneProjectKeys(instance, projectRoot, undefined, linked.id);
+  await pruneProjectKeys(instance, workspaceDirRoot, undefined, linked.id);
   await saveAgentKey({
     instance,
     keyId: exchanged.keyId,
     key: exchanged.key,
-    project: projectRoot,
+    project: workspaceDirRoot,
     projectId: linked.id,
     projectSlug: linked.slug,
     ownerSlug,
-    projectPath: projectRoot,
+    projectPath: workspaceDirRoot,
     space: linked.slug,
     agentId: exchanged.agentId,
     agent: activeAgent,
@@ -451,11 +462,11 @@ export async function connect(
         instance,
         keyId: sub.keyId,
         key: sub.key,
-        project: projectRoot,
+        project: workspaceDirRoot,
         projectId: linked.id,
         projectSlug: linked.slug,
         ownerSlug,
-        projectPath: projectRoot,
+        projectPath: workspaceDirRoot,
         space: linked.slug,
         agentId: sub.agentId,
         agent: name,
@@ -463,20 +474,15 @@ export async function connect(
     }
   }
 
-  // The hooks: the loop fires because the harness runs them. Installed for
-  // whatever agents this machine actually uses.
   const wired: string[] = [];
   const refused: string[] = [];
   for (const name of present) {
     const adapter = adapterFor(name);
     if (!adapter) continue;
     try {
-      await adapter.install(process.cwd());
+      await adapter.install(workspaceDirRoot);
       wired.push(name);
     } catch (trouble) {
-      // One agent's config being unreadable is not a reason to abandon the
-      // others, and it is never a reason to rewrite it. Named here so the
-      // person knows which file to look at.
       if (trouble instanceof UnreadableConfig) {
         refused.push(name);
         continue;
@@ -484,16 +490,23 @@ export async function connect(
       throw trouble;
     }
   }
-  // The wiring names `memcell` and nothing else, so it travels. That only
-  // works if a hook's shell can find it — and a hook that cannot is a hook
-  // that silently does nothing, which is the failure this whole loop is
-  // least able to notice. Asked once, here, where somebody is reading.
   const onPath = await memcellOnPath();
 
-  // The shared skill — one file at the cross-agent reach point, teaching
-  // the loop's four doors. Reinforcement for every agent here and any that
-  // arrives later; the hooks above stay the enforcement.
-  installSkill(process.cwd());
+  const hasNativeHooks = wired.some((w) => w !== "mcp");
+  let healedCollisions: string[] = [];
+  let skillInstalled = false;
+  if (hasNativeHooks && options.agent !== "mcp") {
+    healedCollisions = await healWiringCollisions(workspaceDirRoot);
+  } else {
+    if (!wired.includes("mcp")) {
+      const mcp = adapterFor("mcp");
+      if (mcp) {
+        await mcp.install(workspaceDirRoot).catch(() => undefined);
+      }
+    }
+    installSkill(workspaceDirRoot);
+    skillInstalled = true;
+  }
 
   const workspaceUrl = ownerSlug
     ? `${instance}/${ownerSlug}/${linked.slug}`
@@ -506,12 +519,29 @@ export async function connect(
     row(1, [label("Directory".padEnd(11, " ")), place(dirname(at))]),
     wired.length > 0
       ? row(1, [label("Agents".padEnd(11, " ")), value(wired.join(", "))])
-      : row(1, [label("Agents".padEnd(11, " ")), warn("none detected in this directory")]),
-    wired.length > 0
+      : row(1, [
+          label("Agents".padEnd(11, " ")),
+          warn("none detected in this directory (wired MCP + Skill fallback)"),
+        ]),
+    hasNativeHooks
       ? row(
           1,
           [label("Hooks".padEnd(11, " ")), good("Installed")],
-          [label("(automatic memory recall before answers)")],
+          [label("(primary automatic memory lifecycle)")],
+        )
+      : row(
+          1,
+          [label("MCP".padEnd(11, " ")), good("Installed")],
+          [label("(.mcp.json fallback for hookless clients)")],
+        ),
+    healedCollisions.length > 0
+      ? row(
+          1,
+          [
+            label("Healed".padEnd(11, " ")),
+            good(`Removed colliding ${healedCollisions.join(", ")}`),
+          ],
+          [label("(hooks are primary)")],
         )
       : null,
     refused.length > 0
@@ -521,11 +551,13 @@ export async function connect(
           [label("(invalid JSON config)")],
         )
       : null,
-    row(
-      1,
-      [label("Skill".padEnd(11, " ")), place(".agents/skills/memcell")],
-      [label("(agent memory tools)")],
-    ),
+    skillInstalled
+      ? row(
+          1,
+          [label("Skill".padEnd(11, " ")), place(".agents/skills/memcell")],
+          [label("(hookless agent fallback)")],
+        )
+      : null,
     row(1, [label("Dashboard".padEnd(11, " ")), place(workspaceUrl)]),
     !onPath &&
       row(
@@ -537,8 +569,8 @@ export async function connect(
     blank(),
     row(0, [label("Next:")]),
     row(1, [cmd("memcell status".padEnd(21, " ")), label("Verify agent connections and quotas")]),
-    row(1, [cmd("memcell hook remove".padEnd(21, " ")), label("Disconnect local agent hooks")]),
-    !targetProject &&
+    row(1, [cmd("memcell disconnect".padEnd(21, " ")), label("Disconnect local agent hooks")]),
+    !targetWorkspace &&
       row(1, [
         cmd("memcell connect --workspace <slug>".padEnd(21, " ")),
         label("Switch connected workspace"),

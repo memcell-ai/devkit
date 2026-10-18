@@ -16,7 +16,7 @@ interface Written {
   note: string;
 }
 
-/** The five moments a directive can bear on — the record's own words, so a person
+/** The five moments an instruction can bear on — the record's own words, so a person
  *  filing one by hand can say WHEN it applies and have it served then. */
 const APPLIES_AT = ["read", "change", "record", "send", "answer"] as const;
 
@@ -34,7 +34,7 @@ export async function remember(
   enforce?: boolean,
   flags?: Record<string, any>,
 ): Promise<number> {
-  // Refused by name rather than dropped: a directive filed as applying at a
+  // Refused by name rather than dropped: an instruction filed as applying at a
   // moment nothing fires would sit here looking wired and never be served.
   const appliesAt = (at ?? "")
     .split(",")

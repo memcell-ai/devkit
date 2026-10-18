@@ -26,15 +26,15 @@ describe("CLI Memory Operations E2E", () => {
     }
   });
 
-  it("creates a primary operational directive memory via memory create", () => {
+  it("creates a primary operational instruction memory via memory create", () => {
     if (!env) return;
 
     const res = env.runCli([
       "memory",
       "create",
-      "Compliance directive: Financial transactions require explicit multi-party verification",
+      "Compliance instruction: Financial transactions require explicit multi-party verification",
       "--type",
-      "directive",
+      "instruction",
       "--scope",
       "workspace",
     ]);
@@ -51,7 +51,7 @@ describe("CLI Memory Operations E2E", () => {
   it("lists memories in workspace and filters by type", () => {
     if (!env || !memoryId1) return;
 
-    const res = env.runCli(["memory", "list", "--type", "directive"]);
+    const res = env.runCli(["memory", "list", "--type", "instruction"]);
     expect(res.stdout).toContain(memoryId1);
   });
 
@@ -60,7 +60,7 @@ describe("CLI Memory Operations E2E", () => {
 
     const res = env.runCli(["memory", "get", memoryId1]);
     expect(res.stdout).toContain(memoryId1);
-    expect(res.stdout).toMatch(/directive/i);
+    expect(res.stdout).toMatch(/instruction/i);
   });
 
   it("stars and unstars the memory", () => {

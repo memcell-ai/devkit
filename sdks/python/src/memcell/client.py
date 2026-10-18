@@ -114,11 +114,13 @@ def _parse_pagination(data: dict[str, Any]) -> PaginationMetadata:
 
 def _normalize_memory_type(val: Any) -> MemoryType:
     if not val:
-        return "directive"
+        return "instruction"
     s = str(val).lower()
-    if s in ("directive", "fact", "preference", "guard", "observation"):
+    if s in ("instruction", "decision", "fact", "preference"):
         return s  # type: ignore
-    return "directive"
+    if s == "observation":
+        return "fact"
+    return "instruction"
 
 
 def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
@@ -129,7 +131,7 @@ def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
         workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
         source_id=str(data.get("sourceId") or data.get("source_id") or ""),
         target_id=str(data.get("targetId") or data.get("target_id") or ""),
-        relation_type=data.get("relationType") or data.get("relation_type") or "limits",
+        relation_type=data.get("relationType") or data.get("relation_type") or "relates_to",
         confidence=float(data.get("confidence", 0.9)),
         metadata=data.get("metadata") or {},
         created_at=data.get("createdAt") or data.get("created_at"),
@@ -141,7 +143,10 @@ def _parse_memory_relation_item(data: dict[str, Any]) -> MemoryRelationItem:
 
 def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
     tags = data.get("tags") or []
-    raw_type = data.get("type") or "directive"
+    entities = data.get("entities") or []
+    resources = data.get("resources") or []
+    applies_at = data.get("appliesAt") or data.get("applies_at") or []
+    raw_type = data.get("type") or "instruction"
     mem_type = _normalize_memory_type(raw_type)
     status = data.get("status", "active")
     enforce = bool(data.get("enforce", False))
@@ -154,9 +159,13 @@ def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
         root_id=data.get("rootId") or data.get("root_id"),
         version=int(data.get("version", 1)) if data.get("version") is not None else 1,
         title=data.get("title", ""),
+        content=data.get("content"),
         context=data.get("context"),
         observation=data.get("observation"),
         tags=tags,
+        entities=entities,
+        resources=resources,
+        applies_at=applies_at,
         subject=data.get("subject"),
         type=mem_type,
         enforce=enforce,
@@ -174,6 +183,8 @@ def _parse_memory_item(data: dict[str, Any]) -> MemoryItem:
         required_roles=data.get("requiredRoles") or data.get("required_roles") or [],
         scope_promoted_at=data.get("scopePromotedAt") or data.get("scope_promoted_at"),
         scope_promoted_by=data.get("scopePromotedBy") or data.get("scope_promoted_by"),
+        source_thread_id=data.get("sourceThreadId") or data.get("source_thread_id"),
+        source_document_id=data.get("sourceDocumentId") or data.get("source_document_id"),
         metadata=data.get("metadata") or {},
         author=data.get("author"),
         source=data.get("source"),
@@ -324,7 +335,8 @@ def _parse_owner_usage(data: dict[str, Any]) -> OwnerUsage:
         guard=int(types_data["guard"])
         if "guard" in types_data and types_data["guard"] is not None
         else None,
-        directive=int(types_data.get("directive", 0)),
+        instruction=int(types_data.get("instruction", 0)),
+        decision=int(types_data.get("decision", 0)),
         fact=int(types_data.get("fact", 0)),
         preference=int(types_data.get("preference", 0)),
         observation=int(types_data.get("observation", 0)),
@@ -410,10 +422,14 @@ class _MemoriesNamespaceSync:
         self,
         namespace: str,
         title: str,
+        content: str | None = None,
         context: str | None = None,
         observation: str | None = None,
         source: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         confidence: float | None = None,
         subject: str | None = None,
         type: str | None = None,
@@ -432,10 +448,14 @@ class _MemoriesNamespaceSync:
         )
         payload: dict[str, Any] = {
             "title": title,
+            "content": content,
             "context": context,
             "observation": observation,
             "source": source,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "confidence": confidence,
             "subject": subject,
             "type": type,
@@ -458,9 +478,13 @@ class _MemoriesNamespaceSync:
         namespace: str,
         memory_id: str,
         title: str | None = None,
+        content: str | None = None,
         context: str | None = None,
         observation: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         confidence: float | None = None,
         status: str | None = None,
         type: str | None = None,
@@ -474,9 +498,13 @@ class _MemoriesNamespaceSync:
         owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "title": title,
+            "content": content,
             "context": context,
             "observation": observation,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "confidence": confidence,
             "status": status,
             "type": type,
@@ -527,12 +555,16 @@ class _MemoriesNamespaceSync:
                 root_id=h.get("rootId", ""),
                 version=h.get("version", 1),
                 title=h.get("title", ""),
+                content=h.get("content"),
                 context=h.get("context"),
                 observation=h.get("observation"),
                 tags=h.get("tags") or [],
+                entities=h.get("entities") or [],
+                resources=h.get("resources") or [],
+                applies_at=h.get("appliesAt") or h.get("applies_at") or [],
                 confidence=float(h.get("confidence", 0.5)),
                 status=h.get("status", "active"),
-                type=h.get("type", "directive"),
+                type=h.get("type", "instruction"),
                 enforce=bool(h.get("enforce", False)),
                 subject=h.get("subject"),
                 scope=h.get("scope", "workspace"),
@@ -1669,10 +1701,14 @@ class _MemoriesNamespaceAsync:
         self,
         namespace: str,
         title: str,
+        content: str | None = None,
         context: str | None = None,
         observation: str | None = None,
         source: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         confidence: float | None = None,
         subject: str | None = None,
         type: str | None = None,
@@ -1691,10 +1727,14 @@ class _MemoriesNamespaceAsync:
         )
         payload: dict[str, Any] = {
             "title": title,
+            "content": content,
             "context": context,
             "observation": observation,
             "source": source,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "confidence": confidence,
             "subject": subject,
             "type": type,
@@ -1717,9 +1757,13 @@ class _MemoriesNamespaceAsync:
         namespace: str,
         memory_id: str,
         title: str | None = None,
+        content: str | None = None,
         context: str | None = None,
         observation: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         confidence: float | None = None,
         status: str | None = None,
         type: str | None = None,
@@ -1733,9 +1777,13 @@ class _MemoriesNamespaceAsync:
         owner, workspace = _parse_namespace(namespace)
         payload: dict[str, Any] = {
             "title": title,
+            "content": content,
             "context": context,
             "observation": observation,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "confidence": confidence,
             "status": status,
             "type": type,
@@ -1788,12 +1836,16 @@ class _MemoriesNamespaceAsync:
                 root_id=h.get("rootId", ""),
                 version=h.get("version", 1),
                 title=h.get("title", ""),
+                content=h.get("content"),
                 context=h.get("context"),
                 observation=h.get("observation"),
                 tags=h.get("tags") or [],
+                entities=h.get("entities") or [],
+                resources=h.get("resources") or [],
+                applies_at=h.get("appliesAt") or h.get("applies_at") or [],
                 confidence=float(h.get("confidence", 0.5)),
                 status=h.get("status", "active"),
-                type=h.get("type", "directive"),
+                type=h.get("type", "instruction"),
                 enforce=bool(h.get("enforce", False)),
                 subject=h.get("subject"),
                 scope=h.get("scope", "workspace"),
@@ -3153,6 +3205,9 @@ class MemCell:
         context: str | None = None,
         observation: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
         enforce: bool = False,
@@ -3164,6 +3219,8 @@ class MemCell:
         expires_at: Any | None = None,
         raw: str | None = None,
         content: str | None = None,
+        touched: list[str] | None = None,
+        actions: list[dict[str, Any]] | None = None,
         session_id: str | None = None,
         active_memory_ids: list[str] | None = None,
         namespace: str | None = None,
@@ -3177,9 +3234,13 @@ class MemCell:
         )
         payload: dict[str, Any] = {
             "title": title,
+            "content": content if title else None,
             "context": context,
             "observation": observation,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3189,7 +3250,9 @@ class MemCell:
             "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
-            "raw": raw or content,
+            "raw": raw or (content if not title else None),
+            "touched": touched,
+            "actions": actions,
             "sessionId": session_id,
             "activeMemoryIds": active_memory_ids,
             "async": async_,
@@ -3670,6 +3733,9 @@ class AsyncMemCell:
         context: str | None = None,
         observation: str | None = None,
         tags: list[str] | None = None,
+        entities: list[str] | None = None,
+        resources: list[str] | None = None,
+        applies_at: list[str] | None = None,
         subject: str | None = None,
         type: str | None = None,
         enforce: bool = False,
@@ -3681,6 +3747,8 @@ class AsyncMemCell:
         expires_at: Any | None = None,
         raw: str | None = None,
         content: str | None = None,
+        touched: list[str] | None = None,
+        actions: list[dict[str, Any]] | None = None,
         session_id: str | None = None,
         active_memory_ids: list[str] | None = None,
         namespace: str | None = None,
@@ -3694,9 +3762,13 @@ class AsyncMemCell:
         )
         payload: dict[str, Any] = {
             "title": title,
+            "content": content if title else None,
             "context": context,
             "observation": observation,
             "tags": tags,
+            "entities": entities,
+            "resources": resources,
+            "appliesAt": applies_at,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3706,7 +3778,9 @@ class AsyncMemCell:
             "required_roles": required_roles,
             "metadata": metadata,
             "expires_at": exp_str,
-            "raw": raw or content,
+            "raw": raw or (content if not title else None),
+            "touched": touched,
+            "actions": actions,
             "sessionId": session_id,
             "activeMemoryIds": active_memory_ids,
             "async": async_,

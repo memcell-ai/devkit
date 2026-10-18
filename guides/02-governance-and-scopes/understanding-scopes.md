@@ -69,7 +69,7 @@ await client.memories.remember("acme/operations", {
   scope: "user",
 });
 
-// 2. Storing a shared operational directive (workspace-scoped)
+// 2. Storing a shared operational instruction (workspace-scoped)
 await client.memories.remember("acme/operations", {
   title:
     "Require supervisor authorization for international transactions over $5,000",
@@ -86,11 +86,11 @@ from memcell import MemcellClient
 
 client = MemcellClient(token="mc_pat_...")
 
-# Storing a workspace-scoped operational directive
+# Storing a workspace-scoped operational instruction
 client.memories.remember(
     "acme/operations",
     title="Customer support response time SLA is 15 minutes during market hours",
-    type="directive",
+    type="instruction",
     scope="workspace",
 )
 ```

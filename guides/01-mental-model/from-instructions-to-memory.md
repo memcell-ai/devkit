@@ -5,7 +5,7 @@ When building with AI agents, developers are accustomed to static concepts like 
 While this approach works for toy demos, it rapidly degrades in real-world systems:
 
 1. **Context Window Exhaustion**: Static instructions consume valuable token budget before the agent has even read the user's request.
-2. **Instruction Drift & Neglect**: Large language models suffer from the "lost in the middle" phenomenon. When handed dozens of paragraphs of static guidelines, models routinely overlook critical directives.
+2. **Instruction Drift & Neglect**: Large language models suffer from the "lost in the middle" phenomenon. When handed dozens of paragraphs of static guidelines, models routinely overlook critical instructions.
 3. **Stale Knowledge**: Static files cannot easily update themselves based on agent outcomes or feedback from real interactions.
 
 MemCell introduces a mental bridge: **transitioning static instructions and skills into dynamic, queryable epistemic memory**.
@@ -17,7 +17,7 @@ MemCell introduces a mental bridge: **transitioning static instructions and skil
 Instead of dumping static instructions that risk being ignored or wasting tokens:
 
 - **In the static world**: You maintain sprawling markdown files or hardcoded prompt templates. Every agent run loads every single instruction, regardless of whether it is relevant to the task.
-- **In the MemCell world**: Every instruction, operational directive, boundary, or learned preference is saved as a discrete, typed **Memory**.
+- **In the MemCell world**: Every instruction, operational instruction, boundary, or learned preference is saved as a discrete, typed **Memory**.
 
 When an agent prepares to act, MemCell dynamically queries the workspace memory pool based on the agent's immediate intent. The agent receives only the exact, high-confidence memories relevant to the task at hand—formatted succinctly as `promptContext`.
 
@@ -33,7 +33,7 @@ MemCell Dynamic Memory Paradigm:
 ┌────────────────────────┐
 │ Workspace Memory Pool  │
 │ [ thousands of facts,  │
-│   directives, guards ] │
+│   instructions, guards ] │
 └───────────┬────────────┘
             │  Intent: "Review outbound wire transfer"
             ▼
@@ -49,12 +49,12 @@ MemCell Dynamic Memory Paradigm:
 
 ## How to Bridge Familiar Concepts to MemCell
 
-| What You Used To Call It             | How It Translates in MemCell                          | Why It Is Better                                                      |
-| :----------------------------------- | :---------------------------------------------------- | :-------------------------------------------------------------------- |
-| **System Instruction / Prompt File** | **Directive Memory** (`type: "directive"`)            | Retrieved only when the agent's task is relevant to that directive.   |
-| **Operational Skill / Procedure**    | **Workflow Memory** (`type: "fact"` or `"directive"`) | Evolves as the workflow is refined, without redeploying code.         |
-| **Safety Guideline / Policy**        | **Guard Memory** (`type: "guard"`, `enforce: true`)   | Enforced strictly across all agents connected to the workspace.       |
-| **User Preference / Custom Persona** | **Personal Memory** (`scope: "user"`)                 | Follows the user across any agent without leaking to team workspaces. |
+| What You Used To Call It             | How It Translates in MemCell                            | Why It Is Better                                                      |
+| :----------------------------------- | :------------------------------------------------------ | :-------------------------------------------------------------------- |
+| **System Instruction / Prompt File** | **Instruction Memory** (`type: "instruction"`)          | Retrieved only when the agent's task is relevant to that instruction. |
+| **Operational Skill / Procedure**    | **Workflow Memory** (`type: "fact"` or `"instruction"`) | Evolves as the workflow is refined, without redeploying code.         |
+| **Safety Guideline / Policy**        | **Guard Memory** (`type: "guard"`, `enforce: true`)     | Enforced strictly across all agents connected to the workspace.       |
+| **User Preference / Custom Persona** | **Personal Memory** (`scope: "user"`)                   | Follows the user across any agent without leaking to team workspaces. |
 
 ---
 

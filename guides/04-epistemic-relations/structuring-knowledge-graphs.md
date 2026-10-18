@@ -1,6 +1,6 @@
 # Structuring Knowledge Graphs with Epistemic Relations
 
-Real-world operational knowledge is rarely a set of isolated bullet points. Guidelines constrain procedures, procedures depend on prerequisite facts, and newly established practices refine or conflict with older directives.
+Real-world operational knowledge is rarely a set of isolated bullet points. Guidelines constrain procedures, procedures depend on prerequisite facts, and newly established practices refine or conflict with older instructions.
 
 MemCell allows declaring **directed epistemic relation edges** between memories, transforming a flat memory list into a structured epistemic knowledge graph.
 
@@ -36,14 +36,14 @@ MemCell allows declaring **directed epistemic relation edges** between memories,
 | **`refines`**   | The source memory provides specific nuance or an exceptional condition to the general target memory.   |
 | **`requires`**  | The target memory is a mandatory prerequisite that must be satisfied before the source memory applies. |
 | **`derives`**   | The source memory was deduced or inferred directly from evidence in the target memory.                 |
-| **`conflicts`** | Flags two memories asserting incompatible directives, queuing them for epistemic resolution.           |
+| **`conflicts`** | Flags two memories asserting incompatible instructions, queuing them for epistemic resolution.         |
 
 ---
 
 ## Declaring Relations via CLI
 
 ```bash
-# Declare that a risk guard limits an automated disbursement directive
+# Declare that a risk guard limits an automated disbursement instruction
 memcell memory relate \
   "c1f8872e-3333-4444-5555-666677778888" \
   "a0b1c2d3-1111-2222-3333-444455556666" \

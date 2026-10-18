@@ -120,10 +120,14 @@ export class MemoriesNamespace {
     const { owner, workspace } = parseNamespace(namespace);
     const payload: Record<string, unknown> = {
       title: params.title,
+      content: params.content,
       context: params.context,
       observation: params.observation,
       source: params.source,
       tags: params.tags,
+      entities: params.entities,
+      resources: params.resources,
+      appliesAt: params.appliesAt,
       confidence: params.confidence,
       subject: params.subject,
       type: params.type,

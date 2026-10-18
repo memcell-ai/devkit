@@ -162,7 +162,7 @@ async function hookKey(
     }
     return row(
       1,
-      [label("Agent Key".padEnd(11, " ")), warn(said.standing.replace(/_/g, " "))],
+      [label("Agent Key".padEnd(11, " ")), warn(said.standing.replaceAll("_", " "))],
       [label(said.says ?? "")],
     );
   } catch (error) {

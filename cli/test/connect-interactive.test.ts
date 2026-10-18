@@ -51,35 +51,35 @@ describe("instance selection & validation in interactive connect", () => {
   });
 });
 
-describe("project response unwrapping for interactive connect", () => {
-  it("extracts slug and owner correctly from nested project response", () => {
+describe("workspace response unwrapping for interactive connect", () => {
+  it("extracts slug and owner correctly from nested workspace response", () => {
     const res: {
       ok?: boolean;
-      project?: { id?: string; slug: string; name: string; ownerSlug?: string };
+      workspace?: { id?: string; slug: string; name: string; ownerSlug?: string };
       slug?: string;
       ownerSlug?: string;
     } = {
       ok: true,
-      project: {
-        id: "proj_123",
+      workspace: {
+        id: "ws_123",
         name: "sample",
         slug: "sample",
         ownerSlug: "memcell",
       },
     };
-    const proj = res.project ?? res;
-    const slug = proj.slug;
-    const finalOwner = proj.ownerSlug || "memcell";
-    const targetProject = finalOwner ? `${finalOwner}/${slug}` : slug;
+    const ws = res.workspace ?? res;
+    const slug = ws.slug;
+    const finalOwner = ws.ownerSlug || "memcell";
+    const targetWorkspace = finalOwner ? `${finalOwner}/${slug}` : slug;
 
     expect(slug).toBe("sample");
-    expect(targetProject).toBe("memcell/sample");
+    expect(targetWorkspace).toBe("memcell/sample");
   });
 
-  it("extracts slug and owner correctly from flat project response", () => {
+  it("extracts slug and owner correctly from flat workspace response", () => {
     const res: {
       ok?: boolean;
-      project?: { id?: string; slug: string; name: string; ownerSlug?: string };
+      workspace?: { id?: string; slug: string; name: string; ownerSlug?: string };
       slug?: string;
       ownerSlug?: string;
     } = {
@@ -87,12 +87,39 @@ describe("project response unwrapping for interactive connect", () => {
       slug: "sample",
       ownerSlug: "memcell",
     };
-    const proj = res.project ?? res;
-    const slug = proj.slug;
-    const finalOwner = proj.ownerSlug || "memcell";
-    const targetProject = finalOwner ? `${finalOwner}/${slug}` : slug;
+    const ws = res.workspace ?? res;
+    const slug = ws.slug;
+    const finalOwner = ws.ownerSlug || "memcell";
+    const targetWorkspace = finalOwner ? `${finalOwner}/${slug}` : slug;
 
     expect(slug).toBe("sample");
-    expect(targetProject).toBe("memcell/sample");
+    expect(targetWorkspace).toBe("memcell/sample");
+  });
+
+  it("registers all modular yargs command families in YARGS_COMMANDS", async () => {
+    const { YARGS_COMMANDS } = await import("../src/cli.js");
+    const cmdNames = YARGS_COMMANDS.map((c) =>
+      Array.isArray(c.command) ? c.command[0] : String(c.command),
+    );
+    expect(cmdNames).toContain("login");
+    expect(cmdNames).toContain("logout");
+    expect(cmdNames).toContain("connect [target]");
+    expect(cmdNames).toContain("disconnect");
+    expect(cmdNames).toContain("status");
+    expect(cmdNames).toContain("recall <intent>");
+    expect(cmdNames).toContain("remember <text>");
+    expect(cmdNames).toContain("report [memory] [outcome]");
+    expect(cmdNames).toContain("workspace");
+    expect(cmdNames).toContain("memory");
+    expect(cmdNames).toContain("thread");
+    expect(cmdNames).toContain("document");
+    expect(cmdNames).toContain("agent");
+    expect(cmdNames).toContain("hook [moment] [program]");
+    expect(cmdNames).toContain("org");
+    expect(cmdNames).toContain("team");
+    expect(cmdNames).toContain("account");
+    expect(cmdNames).toContain("webhook");
+    expect(cmdNames).toContain("config");
+    expect(cmdNames).toContain("server");
   });
 });

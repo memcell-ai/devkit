@@ -3,13 +3,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -96,8 +96,10 @@ export const gemini: Adapter = {
       }
       settings.hooks[EVENT[moment]] = prunedEntries;
     }
-    settings.mcpServers ??= {};
-    settings.mcpServers.memcell = { command: MCP_COMMAND, args: MCP_ARGS };
+    if (settings.mcpServers && oursMcp(settings.mcpServers.memcell)) {
+      delete settings.mcpServers.memcell;
+      if (Object.keys(settings.mcpServers).length === 0) delete settings.mcpServers;
+    }
     await writeJson(at, settings);
     return at;
   },
@@ -139,8 +141,8 @@ export const gemini: Adapter = {
   },
 
   // ── speak — additionalContext, no event name required ────────────────────
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
   },
 
@@ -154,22 +156,49 @@ export const gemini: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const rec = raw as {
         type?: string;
+        role?: string;
         content?: unknown;
         toolCalls?: { name?: string; args?: Record<string, unknown> }[];
       };
       // Metadata and control lines ($set / $rewindTo) carry no role.
-      const role = rec.type === "user" ? "user" : rec.type === "gemini" ? "assistant" : null;
+      const rawRole = rec.type ?? rec.role;
+      const role =
+        rawRole === "user"
+          ? "user"
+          : rawRole === "gemini" || rawRole === "assistant" || rawRole === "model"
+            ? "assistant"
+            : null;
       if (!role) return;
       for (const call of rec.toolCalls ?? []) {
-        if (WRITE_TOOLS.has(call.name ?? "")) addTouched(touched, pathOf(call.args), payload.cwd);
+        recordToolAction(call.name, call.args, {
+          cwd: payload.cwd,
+          writeTools: WRITE_TOOLS,
+          touched,
+          actions,
+        });
+      }
+      if ((rec.toolCalls?.length ?? 0) === 0 && Array.isArray(rec.content)) {
+        for (const p of rec.content as {
+          functionCall?: { name?: string; args?: Record<string, unknown> };
+        }[]) {
+          if (p?.functionCall?.args) {
+            recordToolAction(p.functionCall.name, p.functionCall.args, {
+              cwd: payload.cwd,
+              writeTools: WRITE_TOOLS,
+              touched,
+              actions,
+            });
+          }
+        }
       }
       const text = partText(rec.content);
       if (text.trim()) said.push(`${role}: ${text.trim()}`);
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

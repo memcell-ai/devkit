@@ -184,7 +184,10 @@ export async function sweepConsolidate(
     }
     if ((result.fusionsCount ?? 0) > 0) {
       say(
-        row(2, [label("inspect canonical memories with"), cmd("memcell memory --type directive")]),
+        row(2, [
+          label("inspect canonical memories with"),
+          cmd("memcell memory --type instruction"),
+        ]),
       );
     }
 

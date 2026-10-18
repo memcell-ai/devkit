@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { Session } from "../src/adapters/capture.js";
 const { adapterFor } = await import("../src/adapters/index.js");
 const { cleanUserPrompt, readIntentEnvelope } = await import("../src/adapters/capture.js");
 const { isGuard, asContext } = await import("../src/loop/hook.js");
@@ -13,7 +14,11 @@ const nodeMajor = Number(parts[0] ?? 0);
 const nodeMinor = Number(parts[1] ?? 0);
 const hasNodeSqlite = nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 5);
 
-const readSession = (program: string, payload: Record<string, unknown>, from: number) => {
+const readSession = (
+  program: string,
+  payload: Record<string, unknown>,
+  from: number,
+): Promise<Session> => {
   const adapter = adapterFor(program);
   return adapter
     ? adapter.read(payload, from)
@@ -550,7 +555,7 @@ describe("reading a session in each agent's dialect", () => {
     expect((await kiro.verify(proj2)).every((w) => !w.ok)).toBe(true);
   });
 
-  it("antigravity — .agents/hooks.json, injectSteps ephemeralMessage, transcript JSONL with write_to_file", async () => {
+  it("antigravity — .agents/hooks.json, injectSteps systemMessage, transcript JSONL with write_to_file", async () => {
     const projAg = join(root, "antigravity-proj");
     await mkdir(projAg, { recursive: true });
     const ag = adapterFor("antigravity")!;
@@ -561,13 +566,15 @@ describe("reading a session in each agent's dialect", () => {
       ).readFile(join(projAg, ".agents", "hooks.json"), "utf8"),
     );
     expect(hooks.memcell).toBeTruthy();
+    expect(hooks.memcell.SessionStart[0].command).toContain("hook session-start antigravity");
     expect(hooks.memcell.PreInvocation[0].command).toContain("hook prompt-submit antigravity");
     expect(hooks.memcell.PreToolUse[0].hooks[0].command).toContain("hook before-act antigravity");
-    expect(hooks.memcell.PostInvocation[0].command).toContain("hook turn-end antigravity");
-    expect(hooks.memcell.Stop[0].command).toContain("hook session-end antigravity");
+    expect(hooks.memcell.Stop[0].command).toContain("hook turn-end antigravity");
+    expect(hooks.memcell.PostInvocation).toBeUndefined();
 
     const wiring = await ag.verify(projAg);
-    expect(wiring.every((w) => w.ok)).toBe(true);
+    expect(wiring.filter((w) => w.ok).length).toBe(4);
+    expect(wiring.find((w) => w.moment === "session-end")!.ok).toBe(false);
 
     const transcriptPath = join(projAg, "transcript.jsonl");
     await writeFile(
@@ -611,7 +618,7 @@ describe("reading a session in each agent's dialect", () => {
     expect(wrappedPrompt).toBe("fix the database pool");
 
     expect(JSON.parse(ag.speak("prompt-submit", "ctx", {})!)).toEqual({
-      injectSteps: [{ ephemeralMessage: "ctx" }],
+      injectSteps: [{ systemMessage: { systemMessage: "ctx" } }],
     });
     expect(JSON.parse(ag.refuse!("safety refusal")!)).toEqual({
       decision: "deny",
@@ -724,6 +731,92 @@ describe("reading a session in each agent's dialect", () => {
     expect((await cl.verify(projCline)).every((w) => !w.ok)).toBe(true);
   });
 
+  it("hermes, cline, windsurf, goose, and devin — content-block arrays extract text and tool_use writes without [object Object]", async () => {
+    const blockTranscript = join(root, "content-blocks.jsonl");
+    await writeFile(
+      blockTranscript,
+      [
+        JSON.stringify({
+          role: "user",
+          content: [{ type: "text", text: "refactor the auth middleware" }],
+        }),
+        JSON.stringify({
+          role: "assistant",
+          content: [
+            { type: "text", text: "Updating middleware." },
+            {
+              type: "tool_use",
+              name: "Write",
+              input: { file_path: `${proj}/src/middleware.ts` },
+            },
+          ],
+        }),
+      ].join("\n"),
+    );
+
+    for (const agent of ["hermes", "cline", "windsurf", "goose", "devin"]) {
+      const s = await readSession(agent, { transcript_path: blockTranscript, cwd: proj }, 0);
+      expect(s.text, `${agent} prose`).toContain("user: refactor the auth middleware");
+      expect(s.text, `${agent} assistant prose`).toContain("assistant: Updating middleware.");
+      expect(s.text, `${agent} no object serialization`).not.toContain("[object Object]");
+      expect(s.touched, `${agent} touched files`).toEqual(["src/middleware.ts"]);
+    }
+  });
+
+  it("grok — coalesces streaming agent_message_chunk tokens into a single assistant message", async () => {
+    const streamPath = join(root, "grok-stream.jsonl");
+    await writeFile(
+      streamPath,
+      [
+        JSON.stringify({
+          params: {
+            update: { sessionUpdate: "user_message_chunk", content: { text: "fix " } },
+          },
+        }),
+        JSON.stringify({
+          params: {
+            update: { sessionUpdate: "user_message_chunk", content: { text: "the retry loop" } },
+          },
+        }),
+        JSON.stringify({
+          params: {
+            update: { sessionUpdate: "agent_message_chunk", content: { text: "Fixed " } },
+          },
+        }),
+        JSON.stringify({
+          params: {
+            update: { sessionUpdate: "agent_message_chunk", content: { text: "in retry.ts." } },
+          },
+        }),
+      ].join("\n"),
+    );
+    const s = await readSession("grok", { transcriptPath: streamPath, cwd: proj }, 0);
+    expect(s.text).toBe("user: fix the retry loop\n\nassistant: Fixed in retry.ts.");
+  });
+
+  it("codex — function_call Edit/Write records modified files into touched", async () => {
+    const codexFnPath = join(root, "codex-fn.jsonl");
+    await writeFile(
+      codexFnPath,
+      [
+        JSON.stringify({
+          type: "response_item",
+          payload: { type: "message", role: "user", content: "update config.ts" },
+        }),
+        JSON.stringify({
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "Edit",
+            arguments: JSON.stringify({ file_path: `${proj}/src/config.ts` }),
+          },
+        }),
+      ].join("\n"),
+    );
+    const s = await readSession("codex", { transcript_path: codexFnPath, cwd: proj }, 0);
+    expect(s.touched).toEqual(["src/config.ts"]);
+  });
+
   it("an unknown agent reads as empty — silence, never a wrong parse", async () => {
     const s = await readSession("someagent", { transcript_path: join(root, "claude.jsonl") }, 0);
     expect(s).toEqual({ text: "", touched: [], read: 0 });
@@ -734,18 +827,29 @@ describe("reading a session in each agent's dialect", () => {
     expect(JSON.parse(adapterFor("claude")!.speak("turn-end", "ctx", {})!)).toEqual({
       hookSpecificOutput: { hookEventName: "Stop", additionalContext: "ctx" },
     });
+    expect(adapterFor("claude")!.speak("session-end", "ctx", {})).toBeNull();
     expect(JSON.parse(adapterFor("gemini")!.speak("session-start", "ctx", {})!)).toEqual({
       hookSpecificOutput: { additionalContext: "ctx" },
     });
+    expect(adapterFor("gemini")!.speak("session-end", "ctx", {})).toBeNull();
     expect(JSON.parse(adapterFor("codex")!.speak("prompt-submit", "ctx", {})!)).toEqual({
       hookSpecificOutput: { additionalContext: "ctx" },
     });
+    expect(adapterFor("codex")!.speak("session-end", "ctx", {})).toBeNull();
     // Copilot's prompt event REPLACES the prompt: the original is echoed
     // back, and with nothing to echo the adapter says nothing at all.
+    // On session-start and before-act, Copilot injects via hookSpecificOutput.additionalContext.
     expect(
       JSON.parse(adapterFor("copilot")!.speak("prompt-submit", "ctx", { prompt: "orig" })!),
     ).toEqual({ modifiedTransformedPrompt: "ctx\n\norig" });
     expect(adapterFor("copilot")!.speak("prompt-submit", "ctx", {})).toBeNull();
+    expect(JSON.parse(adapterFor("copilot")!.speak("session-start", "ctx", {})!)).toEqual({
+      hookSpecificOutput: { additionalContext: "ctx" },
+    });
+    expect(JSON.parse(adapterFor("copilot")!.speak("before-act", "ctx", {})!)).toEqual({
+      hookSpecificOutput: { additionalContext: "ctx" },
+    });
+    expect(adapterFor("copilot")!.speak("session-end", "ctx", {})).toBeNull();
     // Cursor speaks its own snake_case field; the opencode family speaks
     // the envelope its bridge plugin parses.
     expect(JSON.parse(adapterFor("cursor")!.speak("session-start", "ctx", {})!)).toEqual({
@@ -760,11 +864,11 @@ describe("reading a session in each agent's dialect", () => {
     expect(adapterFor("cursor")!.speak("after-act", null, {})).toBeNull();
     expect(adapterFor("cursor")!.speak("prompt-submit", "ctx", {})).toBeNull();
     expect(
-      JSON.parse(adapterFor("cursor")!.refuse!("Action blocked by standing directive")!),
+      JSON.parse(adapterFor("cursor")!.refuse!("Action blocked by standing instruction")!),
     ).toEqual({
       permission: "deny",
-      user_message: "Action blocked by standing directive",
-      agent_message: "Action blocked by standing directive",
+      user_message: "Action blocked by standing instruction",
+      agent_message: "Action blocked by standing instruction",
     });
     expect(JSON.parse(adapterFor("opencode")!.speak("prompt-submit", "ctx", {})!)).toEqual({
       hookSpecificOutput: { additionalContext: "ctx" },
@@ -784,7 +888,7 @@ describe("reading a session in each agent's dialect", () => {
       additional_context: "ctx",
     });
     expect(JSON.parse(adapterFor("antigravity")!.speak("prompt-submit", "ctx", {})!)).toEqual({
-      injectSteps: [{ ephemeralMessage: "ctx" }],
+      injectSteps: [{ systemMessage: { systemMessage: "ctx" } }],
     });
     // Antigravity's PreToolUse proto returns { decision: "allow" } on pass
     expect(JSON.parse(adapterFor("antigravity")!.speak("before-act", "ctx", {})!)).toEqual({
@@ -875,7 +979,7 @@ describe("intent envelope rollup & prompt cleaning", () => {
     expect(intent).toBe(longPrompt);
   });
 
-  it("isGuard classifies standing directives, action constraints, and pinned memories as guards", () => {
+  it("isGuard classifies standing instructions, action constraints, and pinned memories as guards", () => {
     expect(
       isGuard({
         memoryId: "s1",
@@ -952,5 +1056,80 @@ describe("intent envelope rollup & prompt cleaning", () => {
     expect(ctx.indexOf("OPERATIONAL GUARDS & INVARIANTS")).toBeLessThan(
       ctx.indexOf("From this workspace's memory"),
     );
+  });
+
+  it("asContext renders multi-line Operational Specification, Applies to resources, and Thread milestones", () => {
+    const results = [
+      {
+        memoryId: "s-spec-1",
+        text: "Return RFC 7807 Problem Details for all API errors",
+        content:
+          "All 4xx and 5xx responses must use application/problem+json with type, title, status, and detail fields.",
+        resources: ["src/api/problem.ts", "src/api/routes.ts"],
+        confidence: 0.92,
+        layer: "workspace",
+      },
+    ];
+    const matchedThread = {
+      id: "th-1",
+      title: "API Error Standardization",
+      status: "active",
+      summary: "Standardizing error responses across REST routes.",
+      currentObjective: "Migrate remaining route handlers to problemDetails()",
+      decisions: ["Use RFC 7807 Problem Details envelope"],
+      milestones: [
+        {
+          title: "Problem Details helper created",
+          summary: "Implemented problemDetails() in src/api/problem.ts",
+        },
+      ],
+      resources: ["src/api/problem.ts"],
+      nextSteps: ["Update user routes"],
+    };
+
+    const ctx = asContext(results, "test-space", "update routes", { matchedThread });
+    expect(ctx).toContain(
+      "Specification: All 4xx and 5xx responses must use application/problem+json",
+    );
+    expect(ctx).toContain("Applies to: src/api/problem.ts, src/api/routes.ts");
+    expect(ctx).toContain(
+      "Completed Milestones: Problem Details helper created (Implemented problemDetails() in src/api/problem.ts)",
+    );
+    expect(ctx).toContain("Touched Resources: src/api/problem.ts");
+  });
+
+  it("captures structured tool actions and preserves code blocks across agent adapters", async () => {
+    const agTranscript = join(root, "ag-actions.jsonl");
+    await writeFile(
+      agTranscript,
+      [
+        JSON.stringify({ type: "USER_INPUT", content: "create problem.ts" }),
+        JSON.stringify({
+          type: "PLANNER_RESPONSE",
+          content: "Here is the implementation:\n```ts\nexport const problem = true;\n```",
+          tool_calls: [
+            {
+              name: "write_to_file",
+              args: { TargetFile: `${proj}/src/problem.ts` },
+            },
+            {
+              name: "run_command",
+              args: { CommandLine: "npm test" },
+            },
+          ],
+        }),
+      ].join("\n"),
+    );
+
+    const s = await readSession("antigravity", { transcript_path: agTranscript, cwd: proj }, 0);
+    expect(s.text).toContain("export const problem = true;");
+    expect(s.text).not.toContain("[code snippet omitted]");
+    expect(s.touched).toEqual(["src/problem.ts"]);
+    expect(s.actions).toBeDefined();
+    expect(s.actions!.length).toBeGreaterThanOrEqual(2);
+    expect(s.actions!.some((a) => a.type === "file_touch" && a.target === "src/problem.ts")).toBe(
+      true,
+    );
+    expect(s.actions!.some((a) => a.type === "command" && a.target === "npm test")).toBe(true);
   });
 });

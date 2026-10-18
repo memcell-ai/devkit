@@ -3,14 +3,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
+  parseStandardTranscriptEntry,
   readJsonlSlice,
-  TOUCHED_CAP,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -127,7 +126,7 @@ export const hermes: Adapter = {
     }
 
     await writeJson(at, doc);
-    await installMcp(resolve(projectDir)).catch(() => undefined);
+    await removeMcp(resolve(projectDir)).catch(() => undefined);
     return at;
   },
 
@@ -163,8 +162,8 @@ export const hermes: Adapter = {
     }));
   },
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({
       hookSpecificOutput: { additionalContext: context },
     });
@@ -182,27 +181,19 @@ export const hermes: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
 
     const read = await readJsonlSlice(path, from, (raw) => {
-      const rec = raw as {
-        role?: string;
-        content?: unknown;
-        toolCalls?: { name?: string; args?: Record<string, unknown> }[];
-      };
-      if (rec.role && rec.content) {
-        const text = String(rec.content);
-        if (text.trim()) said.push(`${rec.role}: ${text.trim()}`);
-      }
-      for (const call of rec.toolCalls ?? []) {
-        if (WRITE_TOOLS.has(call.name ?? "")) {
-          addTouched(touched, pathOf(call.args), payload.cwd);
-          const patch = typeof call.args?.patch === "string" ? call.args.patch : "";
-          if (patch) for (const p of patchPaths(patch)) addTouched(touched, p, payload.cwd);
-        }
-      }
+      parseStandardTranscriptEntry(raw, {
+        cwd: payload.cwd,
+        writeTools: WRITE_TOOLS,
+        said,
+        touched,
+        actions,
+      });
     });
 
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

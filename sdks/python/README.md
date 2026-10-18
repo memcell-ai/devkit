@@ -33,7 +33,7 @@ async def main():
             query="refund verification and escalation thresholds",
         )
         print(recall.prompt_context)
-        # [directive] Require explicit customer confirmation before applying refunds over $500 (confidence: 0.94)
+        # [instruction] Require explicit customer confirmation before applying refunds over $500 (confidence: 0.94)
 
 asyncio.run(main())
 ```
@@ -44,7 +44,7 @@ asyncio.run(main())
 
 ### 1. `recall` — Query Memory Before Acting
 
-Query verified directives, facts, preferences, and observations using natural language.
+Query verified instructions, decisions, facts, and preferences using natural language.
 
 ```python
 recall = await memory.recall(
@@ -58,13 +58,13 @@ print(recall.prompt_context)
 
 ### 2. `remember` — Save Memories
 
-Save a verified directive, fact, preference, or observation so future agents inherit it immediately:
+Save a verified instruction, decision, fact, or preference so future agents inherit it immediately:
 
 ```python
 await memory.remember(
     namespace="acme/support",
     title="Require explicit customer confirmation before applying refunds over $500",
-    type="directive",
+    type="instruction",
 )
 ```
 
@@ -115,7 +115,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 
 - `list(namespace, ...)`: Paginated query with filtering by `type`, `status`, `scope`, `q`, `sort`.
 - `get(namespace, id)`: Retrieve an individual memory.
-- `create(namespace, title, type="directive", ...)`: Create a memory (`guard`, `directive`, `fact`, `preference`, `observation`).
+- `create(namespace, title, type="instruction", ...)`: Create a memory (`instruction`, `decision`, `fact`, `preference`).
 - `update(namespace, id, ...)`: Update memory content, status, confidence, or metadata.
 - `delete(namespace, id)`: Delete a memory.
 - `star(namespace, id, starred=True)`: Star or unstar a memory.

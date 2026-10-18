@@ -8,6 +8,7 @@ import { getSdkClient } from "../sdk-client.js";
 import {
   badge,
   bad,
+  blank,
   cmd,
   emit,
   good,
@@ -94,7 +95,8 @@ export async function listWorkspaces(
           isLinked && [variant("linked here")],
         );
       }),
-      row(2, [label("work on one with"), cmd("memcell workspace use <slug>")]),
+      blank(),
+      row(1, [label("work on one with"), cmd("memcell workspace use <slug>")]),
     );
     return 0;
   } catch (error) {
@@ -389,6 +391,34 @@ export async function getWorkspaceActivity(
           ev.timestamp ? [variant(new Date(ev.timestamp).toLocaleTimeString())] : null,
         ),
       ),
+    );
+    return 0;
+  } catch (error) {
+    return refused(instance, error as Error);
+  }
+}
+
+export async function purgeWorkspace(
+  instance: string,
+  targetSlug?: string,
+  flags: Record<string, string | true> = {},
+): Promise<number> {
+  if (!(await credentialFor(instance))) {
+    needsSession(instance);
+    return 1;
+  }
+
+  try {
+    const sdk = await getSdkClient(instance);
+    const namespace = await resolveNamespace(
+      sdk,
+      targetSlug || (flags.workspace as string) || (flags.project as string),
+    );
+    await call(instance, `/api/v1/${namespace}/memories`, { method: "DELETE" });
+
+    say(
+      row(0, [badge("memcell"), label("workspace purge"), place(namespace)]),
+      row(1, [good("purged all memories and threads in")], [value(namespace)]),
     );
     return 0;
   } catch (error) {

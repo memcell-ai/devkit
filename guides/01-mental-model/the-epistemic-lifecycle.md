@@ -30,7 +30,7 @@ Every memory exists in one of five distinct states:
 
 ### 1. `provisional`
 
-- **What it is**: A tentative hypothesis, observation, or unconfirmed directive.
+- **What it is**: A tentative hypothesis, observation, or unconfirmed instruction.
 - **When to use it**: When an agent detects a pattern in data or conversations that has not yet been verified by a human operator or repeated execution.
 - **Recall behavior**: Filtered out by default during recall unless `allowProvisional: true` is explicitly passed.
 
@@ -73,7 +73,7 @@ await client.report("acme/research", {
 ### Supported Outcomes
 
 - `upheld`: The memory was tested in real execution and was valid, increasing its confidence score.
-- `violated`: The agent or external environment violated the memory directive, signaling potential misalignment.
+- `violated`: The agent or external environment violated the memory instruction, signaling potential misalignment.
 - `refuted`: The memory claim was proven incorrect or obsolete, initiating retirement of the claim.
 
 ---

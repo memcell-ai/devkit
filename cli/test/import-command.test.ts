@@ -55,7 +55,7 @@ describe("memcell import command", () => {
     const res = await importFiles({
       dryRun: true,
       scope: "common",
-      type: "directive",
+      type: "instruction",
     });
 
     expect(res).toBe(0);

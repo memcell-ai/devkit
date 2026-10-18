@@ -2,7 +2,15 @@ import type { Surface } from "./surface.js";
 import { join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
-import { emptySession, type Incoming, type Session } from "./capture.js";
+import {
+  emptySession,
+  finalizeSession,
+  parseStandardTranscriptEntry,
+  readJsonlSlice,
+  type Incoming,
+  type Session,
+  type ThreadAction,
+} from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
   MCP_ARGS,
@@ -18,14 +26,6 @@ import {
 // Claude-shaped hooks whose file IS the events map — <project>/
 // .devin/hooks.v1.json — with hookSpecificOutput.additionalContext for
 // injection, and the MCP registration in <project>/.devin/mcp_config.json.
-//
-// CAPTURE IS HONESTLY ABSENT for now: Devin Local's on-disk conversation
-// store is unverified (the Rust rewrite documents no format, and hooks-era
-// transcript delivery is not yet pinned), so `read` returns an empty
-// session rather than a guess. The moment its record is verified, the
-// reader lands here and nothing else moves. Notably: Devin Local dropped
-// its predecessor's persistent memories outright — recall injection is the
-// whole point of wiring it.
 
 const EVENT: Record<Moment, string> = {
   "session-start": "SessionStart",
@@ -58,26 +58,42 @@ async function removeMcp(dir: string): Promise<boolean> {
   return true;
 }
 
+const WRITE_TOOLS = new Set(["write", "edit", "apply_patch", "notebook_edit", "Write", "Edit"]);
+
 export const devin: Adapter = {
   name: "devin",
   get surface() {
     return SURFACE;
   },
   ...ccHookOps("devin", file, EVENT, {
-    afterInstall: installMcp,
+    afterInstall: async (dir) => {
+      await removeMcp(dir).catch(() => undefined);
+    },
     alsoRemove: removeMcp,
     shape: "bare",
   }),
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
   },
 
-  async read(_payload: Incoming, from: number): Promise<Session> {
-    // No verified record to read — an empty session is the honest answer,
-    // and the recall leg still serves on every hook. See the note above.
-    return emptySession(from);
+  async read(payload: Incoming, from: number): Promise<Session> {
+    const path = payload.transcript_path ?? payload.transcriptPath;
+    if (!path) return emptySession(from);
+    const said: string[] = [];
+    const touched: string[] = [];
+    const actions: ThreadAction[] = [];
+    const read = await readJsonlSlice(path, from, (raw) => {
+      parseStandardTranscriptEntry(raw, {
+        cwd: payload.cwd,
+        writeTools: WRITE_TOOLS,
+        said,
+        touched,
+        actions,
+      });
+    });
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
@@ -115,7 +131,7 @@ export const SURFACE: Surface = {
     },
     "session-end": {
       event: "SessionEnd",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { unsupported: "the session is over — there is nobody left to tell" },
     },
   },
   guard: {

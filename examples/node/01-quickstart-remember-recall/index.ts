@@ -11,14 +11,14 @@ async function main() {
   console.log("=== MemCell Node Quickstart ===");
   console.log(`Connecting to: ${instance} [Workspace: ${namespace}]\n`);
 
-  // 1. File an operational directive memory
-  console.log("1. Ingesting operational directive...");
+  // 1. File an operational instruction memory
+  console.log("1. Ingesting operational instruction...");
   const title =
     "Always verify recipient IBAN against authorized vendor roster before processing wire transfers";
   const res = await client.remember({
     namespace,
     title,
-    type: "directive",
+    type: "instruction",
     scope: "workspace",
     context: "Applies to finance, accounts payable, and procurement agents.",
   });

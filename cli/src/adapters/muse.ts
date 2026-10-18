@@ -4,14 +4,13 @@ import { join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
@@ -80,27 +79,26 @@ export const muse: Adapter = {
     return SURFACE;
   },
   ...ccHookOps("muse", file, EVENT, {
-    afterInstall: () => installMcp(),
+    afterInstall: async () => {
+      await removeMcp().catch(() => undefined);
+    },
     alsoRemove: () => removeMcp(),
   }),
 
   speak(moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({
       hookSpecificOutput: { hookEventName: EVENT[moment], additionalContext: context },
     });
   },
 
   // ── read — the run-event JSONL its hooks name ────────────────────────────
-  // Each line wraps a run event: `payload.event.kind` is `started` (the
-  // user's prompt), `assistant_message_committed` (the reply), or
-  // `assistant_tool_calls_committed` (the tools, with their args). Verified
-  // against the live binary's own session log shape.
   async read(payload: Incoming, from: number): Promise<Session> {
     const path = payload.transcript_path ?? payload.transcriptPath;
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as {
         payload?: { kind?: string; event?: Record<string, unknown> };
@@ -119,19 +117,17 @@ export const muse: Adapter = {
       } else if (kind === "assistant_tool_calls_committed") {
         for (const call of (event.tool_calls as { name?: string; args?: unknown }[] | undefined) ??
           []) {
-          if (!WRITE_TOOLS.has(call.name ?? "")) continue;
           const args = call.args as Record<string, unknown> | string | undefined;
-          if (call.name === "apply_patch") {
-            const patch =
-              typeof args === "string" ? args : String((args as { input?: unknown })?.input ?? "");
-            for (const f of patchPaths(patch)) addTouched(touched, f, payload.cwd);
-          } else if (typeof args === "object") {
-            addTouched(touched, pathOf(args), payload.cwd);
-          }
+          recordToolAction(call.name, args, {
+            cwd: payload.cwd,
+            writeTools: WRITE_TOOLS,
+            touched,
+            actions,
+          });
         }
       }
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
@@ -169,7 +165,7 @@ export const SURFACE: Surface = {
     },
     "session-end": {
       event: "SessionEnd",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { unsupported: "the session is over — there is nobody left to tell" },
     },
   },
   guard: {

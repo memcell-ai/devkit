@@ -1,12 +1,10 @@
-export type MemoryType =
-  "directive" | "fact" | "preference" | "guard" | "observation";
+export type MemoryType = "instruction" | "decision" | "fact" | "preference";
 
 export const MEMORY_TYPES: readonly MemoryType[] = [
-  "directive",
+  "instruction",
+  "decision",
   "fact",
   "preference",
-  "guard",
-  "observation",
 ];
 
 export const MEMORY_SCOPES = [
@@ -129,9 +127,13 @@ export interface MemoryItem {
   version?: number;
   title: string;
   text?: string;
+  content?: string | null;
   context?: string | null;
   observation?: string | null;
   tags?: string[];
+  entities?: string[];
+  resources?: string[];
+  appliesAt?: string[];
   subject?: string | null;
   type?: MemoryType;
   enforce?: boolean;
@@ -149,6 +151,8 @@ export interface MemoryItem {
   requiredRoles?: string[];
   scopePromotedAt?: string | Date | null;
   scopePromotedBy?: string | null;
+  sourceThreadId?: string | null;
+  sourceDocumentId?: string | null;
   metadata?: Record<string, unknown>;
   author?: MemoryAuthor;
   source?: string | null;
@@ -175,10 +179,14 @@ export interface ListMemoriesParams extends PaginationParams {
 
 export interface CreateMemoryParams {
   title: string;
+  content?: string | null;
   context?: string | null;
   observation?: string | null;
   source?: string | null;
   tags?: string[];
+  entities?: string[];
+  resources?: string[];
+  appliesAt?: string[];
   confidence?: number;
   subject?: string | null;
   type?: MemoryType;
@@ -193,9 +201,13 @@ export interface CreateMemoryParams {
 
 export interface UpdateMemoryParams {
   title?: string;
+  content?: string | null;
   context?: string | null;
   observation?: string | null;
   tags?: string[];
+  entities?: string[];
+  resources?: string[];
+  appliesAt?: string[];
   confidence?: number;
   status?: MemoryStatus;
   type?: MemoryType;
@@ -213,9 +225,13 @@ export interface MemoryHistoryItem {
   rootId: string;
   version: number;
   title: string;
+  content?: string | null;
   context?: string | null;
   observation?: string | null;
   tags?: string[];
+  entities?: string[];
+  resources?: string[];
+  appliesAt?: string[];
   confidence: number;
   status: MemoryStatus;
   type?: MemoryType;
@@ -308,7 +324,15 @@ export interface ListPromotionsParams extends PaginationParams {
 // ─── Memory Relations Domain ───
 
 export type RelationType =
-  "limits" | "justifies" | "refines" | "depends_on" | "tensions_with";
+  | "relates_to"
+  | "part_of"
+  | "depends_on"
+  | "justifies"
+  | "refines"
+  | "limits"
+  | "supersedes"
+  | "caused_by"
+  | "tensions_with";
 
 export interface MemoryRelationItem {
   id: string;
@@ -342,12 +366,145 @@ export interface ListWorkspaceRelationsParams extends PaginationParams {
   relationType?: RelationType;
 }
 
+// ─── Threads Domain (Session Continuity & Parallel Workstreams) ───
+
+export type ThreadStatus = "active" | "paused" | "completed";
+
+export interface ThreadMilestoneItem {
+  phase?: string;
+  title?: string;
+  summary: string;
+  timestamp?: string;
+}
+
+export interface ThreadActionItem {
+  type?: "tool_call" | "file_touch" | "command" | "milestone";
+  category?: string;
+  name?: string;
+  tool?: string;
+  target?: string;
+  summary?: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  outcome?: string;
+  status?: string;
+}
+
+export interface ThreadItem {
+  id: string;
+  workspaceId: string;
+  userId?: string | null;
+  agentId?: string | null;
+  externalSessionId?: string | null;
+  title: string;
+  status: ThreadStatus;
+  summary: string;
+  currentObjective?: string | null;
+  decisions: string[];
+  nextSteps: string[];
+  entities: string[];
+  milestones?: ThreadMilestoneItem[];
+  resources?: string[];
+  turns?: ThreadTurnItem[];
+  turnCount: number;
+  lastActiveAt: string | Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface ThreadTurnItem {
+  id: string;
+  threadId: string;
+  workspaceId: string;
+  turnIndex: number;
+  summary?: string;
+  userIntent?: string | null;
+  agentOutcome?: string | null;
+  actions?: ThreadActionItem[];
+  decisions?: string[];
+  resources?: string[];
+  extractedMemoryIds: string[];
+  createdAt: string | Date;
+}
+
+export interface ListThreadsParams extends PaginationParams {
+  status?: ThreadStatus;
+  entity?: string;
+  q?: string;
+}
+
+export interface UpdateThreadParams {
+  title?: string;
+  status?: ThreadStatus;
+  summary?: string;
+  currentObjective?: string | null;
+  decisions?: string[];
+  nextSteps?: string[];
+  entities?: string[];
+  milestones?: ThreadMilestoneItem[];
+  resources?: string[];
+}
+
+export interface ThreadDetailResponse {
+  thread: ThreadItem;
+  turns: ThreadTurnItem[];
+  memories: MemoryItem[];
+}
+
+// ─── Documents Domain (Workspace Bootstrap & Grounded RAG) ───
+
+export interface DocumentItem {
+  id: string;
+  workspaceId: string;
+  title: string;
+  sourcePath?: string | null;
+  contentType: string;
+  contentHash: string;
+  chunkCount: number;
+  sizeBytes: number;
+  metadata?: Record<string, unknown>;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface DocumentChunkSearchResult {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourcePath?: string | null;
+  chunkIndex: number;
+  heading?: string | null;
+  content: string;
+  score: number;
+}
+
+export interface ListDocumentsParams extends PaginationParams {
+  q?: string;
+}
+
+export interface IngestDocumentParams {
+  title: string;
+  content: string;
+  sourcePath?: string | null;
+  contentType?: string;
+  distillMemories?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface IngestDocumentResponse {
+  document: DocumentItem;
+  unchanged: boolean;
+  chunksCreated: number;
+  distilledMemoriesCount?: number;
+}
+
 // ─── Memory Operations (Recall, Remember, Report, Feedback) ───
 
 export interface RecallParams {
   namespace?: string;
   query?: string;
   intent?: string;
+  sessionId?: string;
   subject?: string | null;
   type?: MemoryType | MemoryType[];
   enforce?: boolean;
@@ -367,6 +524,9 @@ export interface RecallResponse {
   recallId: string;
   promptContext: string;
   memories: MemoryItem[];
+  matchedThread?: ThreadItem | null;
+  activeThreads?: ThreadItem[];
+  documentChunks?: DocumentChunkSearchResult[];
   matchedTags?: string[];
   guardMode?: "strict" | "advisory";
   profile?: string | null;
@@ -375,9 +535,13 @@ export interface RecallResponse {
 export interface RememberParams {
   namespace?: string;
   title?: string;
+  content?: string;
   context?: string | null;
   observation?: string | null;
   tags?: string[];
+  entities?: string[];
+  resources?: string[];
+  appliesAt?: string[];
   subject?: string | null;
   type?: MemoryType;
   enforce?: boolean;
@@ -388,7 +552,8 @@ export interface RememberParams {
   expiresAt?: string | Date | null;
   metadata?: Record<string, unknown>;
   raw?: string;
-  content?: string;
+  touched?: string[];
+  actions?: ThreadActionItem[];
   sessionId?: string;
   activeMemoryIds?: string[];
   async?: boolean;
@@ -399,6 +564,7 @@ export interface RememberResponse {
   reinforced?: Array<{ id: string; title: string; confidence?: number }>;
   evolved?: MemoryItem[];
   superseded?: Array<{ id: string; title: string }>;
+  thread?: ThreadItem | null;
   note?: string;
   accepted?: boolean;
   jobId?: string;
@@ -778,10 +944,11 @@ export interface OwnerUsage {
       percent: number;
       types: {
         guard?: number;
-        directive: number;
+        instruction: number;
+        decision: number;
         fact: number;
         preference: number;
-        observation: number;
+        observation?: number;
         provisional: number;
       };
     };

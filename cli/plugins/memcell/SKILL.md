@@ -1,6 +1,6 @@
 ---
 name: memcell
-description: Living memory for this project and the libraries it uses. Recall before acting — it carries what was established here (decisions, conventions, dead ends) braided with continuously-updated memories of the open-source world your training data ended before, every claim carrying confidence earned from reported outcomes rather than asserted. Use at the start of any non-trivial task, before writing against an API you believe you already know, whenever an approach fails or a decision is made, and whenever a document carries decisions. Report outcomes afterwards — a memory never told what happened stops learning.
+description: Living memory for this workspace and the libraries it uses. Recall before acting — it carries what was established here (instructions, decisions, facts, preferences, active session threads, and grounded workspace documents) braided with continuously-updated memories of the open-source world your training data ended before, every claim carrying confidence earned from reported outcomes rather than asserted. Use at the start of any non-trivial task, before writing against an API you believe you already know, whenever an approach fails or a decision is made, and whenever a document carries decisions. Report outcomes afterwards — a memory never told what happened stops learning.
 ---
 
 # memcell
@@ -8,9 +8,9 @@ description: Living memory for this project and the libraries it uses. Recall be
 Memory your agents recall from before they act, and report back to
 afterwards. Two things braided into one answer:
 
-- **This project** — decisions, conventions, gotchas and dead ends
-  established while working here. Filed from real work, not authored by
-  hand.
+- **This workspace** — instructions, decisions, facts, preferences, active
+  working threads, and grounded document excerpts established while working
+  here. Filed from real work, not authored by hand.
 - **The open world** — continuously-seeded memories of libraries,
   frameworks and docs, tracking what is true _now_ rather than at your
   training cutoff.
@@ -33,6 +33,8 @@ they are there.
 memcell recall "<what you are trying to do or know>"
 memcell remember "<one claim, in one sentence>"
 memcell report <memory-id> worked|failed
+memcell thread
+memcell ingest <path>
 memcell import <file>
 ```
 
@@ -53,12 +55,14 @@ memcell recall "is this ORM's transaction API still the current one?"
 
 Do this at the start of a task, not after writing code — and again before
 writing against a library API you are recalling from training rather than
-reading. Each answer carries a confidence figure and the id you need to
-report on it.
+reading. Each answer carries a confidence figure, any 1-hop knowledge graph
+relations (`justifies`, `depends_on`, `limits`, `supersedes`, etc.), active
+or resumed working threads, grounded workspace document chunks, and the id
+you need to report on it.
 
 **Reading a result:**
 
-- **0.7 and above** — the project's current position. Follow it, or state
+- **0.7 and above** — the workspace's current position. Follow it, or state
   plainly why you are departing from it.
 - **below 0.7** — a lead. Weigh it against what you find in the code.
 - **`dead_end`** — an approach already tried and failed here. Do not retry
@@ -78,26 +82,27 @@ proceed, and file what you learn.
 
 ## remember — when something is established
 
-One claim, one sentence, when work settles something durable that a
+One claim, one sentence, when work settles something durable (`instruction`, `decision`, `fact`, or `preference`) that a
 transcript would bury.
 
 ```
-memcell remember "Retries cap at five attempts; after that the job parks in the dead-letter table." --type directive --enforce
+memcell remember "Retries cap at five attempts; after that the job parks in the dead-letter table." --type instruction --enforce
+memcell remember "Use Next.js for both backend and frontend with shadcn for UI." --type decision
 memcell remember "Polling the gateway for capture status times out under load." --type fact --observation "timed out after 50 concurrent requests"
 ```
 
-File decisions, constraints discovered, and approaches that failed. Do not
+File instructions, architectural or product decisions, constraints discovered, and approaches that failed. Do not
 file activity ("fixed the retry bug"), restatements of code, or anything
 `git log` already carries.
 
-An **action guard** or **operational memory** — something a future session could disobey — takes `--at`, naming
+An **action guard** or **standing instruction** — something a future session could disobey — takes `--at`, naming
 the moments it bears on, so it is served again at the one it applies to
 rather than only at the start of a session:
 
 ```
-memcell remember "Never push straight to main." --at send
-memcell remember "Run the formatter before committing." --at record
-memcell remember "Work on a copy; the original is the reference." --at change
+memcell remember "Never push straight to main." --type instruction --at send
+memcell remember "Run the formatter before committing." --type instruction --at record
+memcell remember "Work on a copy; the original is the reference." --type instruction --at change
 ```
 
 `read` looked something up, nothing changed · `change` something of yours
@@ -126,20 +131,21 @@ different thing: it is recorded on its own, moves no confidence, and brings
 the memory back on your next recall. Say so in the conversation either
 way, rather than silently overriding it.
 
-## import — when a document carries decisions
+## ingest & import — when files or documents carry context
 
-Hand specs, ADRs, and runbooks over whole:
+Index workspace documentation, specs, and project manifests for grounded RAG retrieval and knowledge graph bootstrap:
 
 ```
+memcell ingest
 memcell import docs/adr/012-retry-policy.md
 ```
 
-Do not summarize the document yourself — it is distilled into individual
-claims, each keeping provenance back to what it came from.
+Do not summarize the document yourself — it is indexed for grounded retrieval and distilled into individual
+memories, each keeping provenance back to what it came from.
 
 ## While you work
 
-In a wired project, hooks already recall at session start and capture the
-turn's material at the end, so routine work needs no filing from you. The
+In a wired workspace, hooks already recall at session start and capture the
+turn's material and working thread checkpoint at the end, so routine work needs no filing from you. The
 calls above are what you reach for mid-turn: recall before deciding, report
 when an outcome lands.

@@ -20,7 +20,7 @@ async def ingest_claim(client: AsyncMemcellClient, claim: str):
     res = await client.remember(
         namespace=namespace,
         title=claim,
-        type="directive",
+        type="instruction",
         scope="workspace",
     )
     mem = res.created[0] if res.created else (res.evolved[0] if res.evolved else None)

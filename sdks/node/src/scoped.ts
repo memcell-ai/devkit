@@ -10,14 +10,20 @@ import type {
   CreateRelationParams,
   DeleteMemoryOptions,
   DeleteMemoryResponse,
+  DocumentChunkSearchResult,
+  DocumentItem,
   FeedbackParams,
   FeedbackResponse,
+  IngestDocumentParams,
+  IngestDocumentResponse,
   InviteCollaboratorParams,
   JobEvent,
   ListAgentsParams,
   ListCollaboratorsParams,
   ListCollaboratorsResponse,
+  ListDocumentsParams,
   ListMemoriesParams,
+  ListThreadsParams,
   ListWorkspaceRelationsParams,
   ListWorkspaceActivityParams,
   ListPromotionsParams,
@@ -41,8 +47,11 @@ import type {
   ScopeOptions,
   ScopedExecutionContext,
   ScopedExecutionResult,
+  ThreadDetailResponse,
+  ThreadItem,
   UpdateAgentParams,
   UpdateMemoryParams,
+  UpdateThreadParams,
   WaitForJobOptions,
   WrapExecutionOptions,
 } from "./types.js";
@@ -287,8 +296,44 @@ export class ScopedMemCell {
   }
 
   /**
+   * Scoped session thread operations bound to this namespace.
+   */
+  readonly threads = {
+    list: (params?: ListThreadsParams): Promise<PaginatedResult<ThreadItem>> =>
+      this.client.threads.list(this.namespace, params),
+    get: (threadId: string): Promise<ThreadDetailResponse> =>
+      this.client.threads.get(this.namespace, threadId),
+    update: (
+      threadId: string,
+      params: UpdateThreadParams,
+    ): Promise<ThreadItem> =>
+      this.client.threads.update(this.namespace, threadId, params),
+    delete: (threadId: string): Promise<{ deleted: boolean }> =>
+      this.client.threads.delete(this.namespace, threadId),
+  };
+
+  /**
+   * Scoped grounded RAG document operations bound to this namespace.
+   */
+  readonly documents = {
+    list: (
+      params?: ListDocumentsParams,
+    ): Promise<PaginatedResult<DocumentItem>> =>
+      this.client.documents.list(this.namespace, params),
+    ingest: (params: IngestDocumentParams): Promise<IngestDocumentResponse> =>
+      this.client.documents.ingest(this.namespace, params),
+    search: (
+      query: string,
+      limit = 5,
+    ): Promise<{ chunks: DocumentChunkSearchResult[] }> =>
+      this.client.documents.search(this.namespace, query, limit),
+    delete: (documentId: string): Promise<{ deleted: boolean }> =>
+      this.client.documents.delete(this.namespace, documentId),
+  };
+
+  /**
    * Automated execution wrapper implementing the complete Agentic Closed-Loop:
-   * 1. Pre-Flight Recall: Queries relevant memories (directives, facts, preferences) for the action.
+   * 1. Pre-Flight Recall: Queries relevant memories (instructions, decisions, facts, preferences) for the action.
    * 2. In-Flight Execution: Runs the agent callback with promptContext and memories.
    * 3. Post-Flight Reinforcement: Automatically reports outcome ('worked' on resolution, 'failed' on exception)
    *    and attributes feedback before re-throwing any error.

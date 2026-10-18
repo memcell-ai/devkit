@@ -23,13 +23,13 @@ def main():
     print(f"Connecting to: {instance} [Workspace: {namespace}]\n")
     print(f"Client ID: {client_id}\n")
 
-    # 1. Ingest an operational directive statement
-    print("1. Ingesting operational directive statement...")
+    # 1. Ingest an operational instruction statement
+    print("1. Ingesting operational instruction statement...")
     title = "Mandate dual-signature authorization for transaction reconciliations exceeding $100,000"
     res = client.remember(
         namespace=namespace,
         title=title,
-        type="directive",
+        type="instruction",
         scope="workspace",
     )
     memory = (

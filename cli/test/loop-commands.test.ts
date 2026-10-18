@@ -174,8 +174,8 @@ describe("remember", () => {
 
   it("carries a type when one is named", async () => {
     answer = () => ({ id: "s9", scope: "team", confidence: 0.55, note: "Filed." });
-    await remember("Never call the gateway from a migration.", "directive");
-    expect(calls[0]!.body.type).toBe("directive");
+    await remember("Never call the gateway from a migration.", "instruction");
+    expect(calls[0]!.body.type).toBe("instruction");
   });
 });
 

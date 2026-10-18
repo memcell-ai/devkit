@@ -76,6 +76,32 @@ export type { Adapter, Wiring } from "./shared.js";
 export { installSkill, removeSkill, verifySkill } from "./skill.js";
 
 /**
+ * Self-healing layer for hook-wired workspaces:
+ * When native lifecycle hooks are installed for any agent in `projectDir`,
+ * removes colliding standalone `.mcp.json` and `.agents/skills/memcell/SKILL.md`
+ * files and strips any legacy `mcpServers.memcell` entries from hooked agent configs
+ * so hooks operate as the single, zero-overlap integration layer.
+ */
+export async function healWiringCollisions(projectDir: string): Promise<string[]> {
+  const healed: string[] = [];
+  if (await removeSkill(projectDir)) healed.push("skill");
+  if (await mcpAdapter.remove(projectDir)) healed.push("mcp");
+
+  const seen = new Set<Adapter>();
+  for (const adapter of allAdapters()) {
+    if (seen.has(adapter)) continue;
+    seen.add(adapter);
+    const wiring = await adapter.verify(projectDir).catch(() => []);
+    const isHookWired = wiring.some((w) => w.ok);
+    const isStale = await adapter.stale?.(projectDir).catch(() => false);
+    if (isHookWired || isStale) {
+      await adapter.install(projectDir).catch(() => undefined);
+    }
+  }
+  return healed;
+}
+
+/**
  * Bring an older release's wiring up to date, in place.
  *
  * Two things changed shape: hooks stopped naming an interpreter path and a
@@ -91,13 +117,24 @@ export { installSkill, removeSkill, verifySkill } from "./skill.js";
  */
 export async function migrateWiring(projectDir: string): Promise<string[]> {
   const carried: string[] = [];
+  let anyHookWired = false;
+  const seen = new Set<Adapter>();
   for (const adapter of allAdapters()) {
+    if (seen.has(adapter)) continue;
+    seen.add(adapter);
+    const wiring = await adapter.verify(projectDir).catch(() => []);
+    if (wiring.some((w) => w.ok)) anyHookWired = true;
     const stale = await adapter.stale?.(projectDir).catch(() => false);
     if (!stale) continue;
     // install() is the migration: it rewrites our entries in place and
     // sweeps the locations older releases used.
     await adapter.install(projectDir).catch(() => undefined);
     carried.push(adapter.name);
+    anyHookWired = true;
+  }
+  if (anyHookWired) {
+    await removeSkill(projectDir).catch(() => undefined);
+    await mcpAdapter.remove(projectDir).catch(() => undefined);
   }
   return carried;
 }

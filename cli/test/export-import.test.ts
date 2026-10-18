@@ -37,7 +37,7 @@ const doc = {
     },
     {
       text: "Batch refunds through the ledger job.",
-      type: "directive",
+      type: "instruction",
       scope: "team",
       status: "active",
       confidence: 0.8,
@@ -72,8 +72,8 @@ describe("the markdown renderers", () => {
   it("groups by type in reading order, and only what is active", () => {
     const md = renderMarkdown(doc, "Project memory");
     const at = (needle: string) => md.indexOf(needle);
-    expect(at("## Directives & Guards")).toBeGreaterThan(-1);
-    expect(at("## Directives & Guards")).toBeLessThan(at("## Preferences"));
+    expect(at("## Instructions & Guards")).toBeGreaterThan(-1);
+    expect(at("## Instructions & Guards")).toBeLessThan(at("## Preferences"));
     expect(at("## Preferences")).toBeLessThan(at("## Observations & Learnings"));
     expect(at("## Observations & Learnings")).toBeLessThan(at("## Facts"));
     expect(md).toContain("Batch refunds through the ledger job.");
@@ -95,7 +95,7 @@ describe("the markdown renderers", () => {
     expect(rules).not.toContain("the old worker");
   });
 
-  it("groups guard and directive types under Directives & Guards", () => {
+  it("groups guard and instruction types under Instructions & Guards", () => {
     const docWithGuard = {
       space: { slug: "ops", name: "ops", exportedAt: "2026-08-21T00:00:00.000Z" },
       memories: [
@@ -112,7 +112,7 @@ describe("the markdown renderers", () => {
       ],
     };
     const md = renderMarkdown(docWithGuard, "Ops Memory");
-    expect(md).toContain("## Directives & Guards");
+    expect(md).toContain("## Instructions & Guards");
     expect(md).toContain("- Never push directly to main branch.");
   });
 });

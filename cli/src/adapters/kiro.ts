@@ -5,13 +5,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -112,9 +112,10 @@ export const kiro: Adapter = {
 
     const mcpAt = mcpFile(resolve(projectDir));
     const mcp = await readJson<McpFile>(mcpAt);
-    mcp.mcpServers ??= {};
-    mcp.mcpServers.memcell = { command: MCP_COMMAND, args: MCP_ARGS };
-    await writeJson(mcpAt, mcp);
+    if (mcp.mcpServers && oursMcp(mcp.mcpServers.memcell)) {
+      delete mcp.mcpServers.memcell;
+      await rmIfEmptied(mcpAt, mcp, "mcpServers");
+    }
     return at;
   },
 
@@ -154,19 +155,22 @@ export const kiro: Adapter = {
     }));
   },
 
-  // ── speak — RAW context text; Kiro adds stdout to context verbatim ───────
-  speak(_moment: Moment, context: string | null): string | null {
+  // ── speak — RAW context text; Kiro adds stdout to context verbatim ───
+  speak(moment: Moment, context: string | null): string | null {
+    if (moment === "session-end" || moment === "turn-end") return null;
     return context && context.trim() ? context : null;
   },
 
   // ── read — the session JSONL, Prompt / AssistantMessage / ToolResults ────
   async read(payload: Incoming, from: number): Promise<Session> {
+    const directPath = payload.transcript_path ?? payload.transcriptPath;
     const sid = payload.session_id ?? payload.sessionId;
-    if (!sid) return emptySession(from);
+    if (!directPath && !sid) return emptySession(from);
     const home = process.env.KIRO_HOME ?? join(homedir(), ".kiro");
-    const path = join(home, "sessions", "cli", `${sid}.jsonl`);
+    const path = directPath ?? join(home, "sessions", "cli", `${sid}.jsonl`);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { kind?: string; data?: { content?: unknown } };
       const blocks = Array.isArray(entry.data?.content) ? entry.data.content : [];
@@ -178,15 +182,20 @@ export const kiro: Adapter = {
           kind?: string;
           data?: { name?: string; input?: Record<string, unknown> };
         }[]) {
-          if (b?.kind === "toolUse" && WRITE_TOOLS.has(b.data?.name ?? "")) {
-            addTouched(touched, pathOf(b.data?.input), payload.cwd);
+          if (b?.kind === "toolUse") {
+            recordToolAction(b.data?.name, b.data?.input, {
+              cwd: payload.cwd,
+              writeTools: WRITE_TOOLS,
+              touched,
+              actions,
+            });
           }
         }
         const text = blockText(blocks);
         if (text.trim()) said.push(`assistant: ${text.trim()}`);
       }
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

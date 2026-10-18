@@ -281,7 +281,7 @@ export async function importFiles(
   let reinforced = 0;
 
   for (const file of chosen) {
-    const shown = (relative(process.cwd(), file) || file).replace(/\\/g, "/");
+    const shown = (relative(process.cwd(), file) || file).replaceAll("\\", "/");
     let raw: string;
     try {
       raw = await readFile(file, "utf8");

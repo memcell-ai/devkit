@@ -61,7 +61,7 @@ describe("usage get", () => {
         memories: {
           total: 1250,
           limit: 10000,
-          types: { directive: 800, preference: 450 },
+          types: { instruction: 800, preference: 450 },
         },
         apiRequests: {
           total: 35000,

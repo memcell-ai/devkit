@@ -13,7 +13,7 @@ from memcell import (
 
 def test_models_ontology_exports():
     assert "workspace" in MEMORY_SCOPES
-    assert "directive" in MEMORY_TYPES
+    assert "instruction" in MEMORY_TYPES
     assert MemoryItem is not None
     assert WorkspaceItem is not None
 
@@ -43,7 +43,7 @@ def test_sync_client_workspaces_and_memories():
                         {
                             "id": "mem-1",
                             "title": "Use PostgreSQL 16",
-                            "type": "directive",
+                            "type": "instruction",
                             "confidence": 0.95,
                         }
                     ],

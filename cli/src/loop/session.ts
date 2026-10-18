@@ -16,6 +16,8 @@ import { machineDir, machineFile } from "../machine.js";
 export interface ActiveMemory {
   memoryId: string;
   text: string;
+  content?: string | null;
+  resources?: string[];
   appliesAt: string[];
   refuses?: boolean;
   title?: string;
@@ -32,9 +34,19 @@ export interface SessionCache {
    * Memories SERVED immediately before an act, and which act.
    *
    * The pairing is a fact rather than an inference: the guard knows it put
-   * this directive in front of this act, at this moment.
+   * this instruction in front of this act, at this moment.
    */
   servedAt?: { memoryId: string; act: string; tool: string; became: string }[];
+  /** Structured tool/command/file actions captured from hook events in the current turn. */
+  pendingActions?: {
+    type: "tool_call" | "file_touch" | "command" | "milestone";
+    name: string;
+    target?: string;
+    summary: string;
+    outcome?: string;
+  }[];
+  /** Files modified during hook events in the current turn. */
+  pendingTouched?: string[];
   /** Characters of the transcript already processed, so a turn ships what
    *  is new rather than the whole conversation again. */
   read: number;
@@ -44,12 +56,29 @@ export interface SessionCache {
   /** Guidance staged during before-act to be delivered at after-act (for harnesses
    *  like Cursor whose preToolUse hook only accepts permission decisions). */
   pendingGuidance?: string | null;
+  /** Memory IDs already injected into the agent prompt context during this session to prevent turn-over-turn context flooding. */
+  injectedMemoryIds?: string[];
+  /** Document chunk keys already injected into the agent prompt context during this session. */
+  injectedChunkIds?: string[];
+  /** Thread IDs already injected into the agent prompt context during this session. */
+  injectedThreadIds?: string[];
+  /** Last user prompt recalled in the active turn so multi-invocation harnesses (e.g. Antigravity PreInvocation) do not re-run recall after every tool call within the same turn. */
+  lastRecalledPrompt?: string | null;
 }
 
 export type Note = SessionCache;
 
+function cleanSessionFileId(id: string): string {
+  return id
+    .trim()
+    .replaceAll("/", "_")
+    .replaceAll("\\", "_")
+    .replaceAll(":", "_")
+    .replaceAll("..", "_");
+}
+
 const dir = () => machineFile("sessions");
-const file = (id: string) => join(dir(), `${id.replace(/[^\w-]/g, "")}.json`);
+const file = (id: string) => join(dir(), `${cleanSessionFileId(id)}.json`);
 
 const EMPTY: SessionCache = {
   space: "",
@@ -57,6 +86,9 @@ const EMPTY: SessionCache = {
   fired: {},
   activeMemories: [],
   servedAt: [],
+  injectedMemoryIds: [],
+  injectedChunkIds: [],
+  injectedThreadIds: [],
 };
 
 export async function sessionCacheFor(id: string): Promise<SessionCache> {
@@ -66,6 +98,8 @@ export async function sessionCacheFor(id: string): Promise<SessionCache> {
     const memories: ActiveMemory[] = rawMemories.map((m: any) => ({
       memoryId: m.memoryId || "",
       text: m.text,
+      ...(m.content ? { content: m.content } : {}),
+      ...(Array.isArray(m.resources) ? { resources: m.resources } : {}),
       appliesAt: m.appliesAt || [],
       refuses: m.refuses,
       title: m.title,
@@ -81,6 +115,9 @@ export async function sessionCacheFor(id: string): Promise<SessionCache> {
         tool: s.tool,
         became: s.became,
       })),
+      injectedMemoryIds: Array.isArray(raw.injectedMemoryIds) ? raw.injectedMemoryIds : [],
+      injectedChunkIds: Array.isArray(raw.injectedChunkIds) ? raw.injectedChunkIds : [],
+      injectedThreadIds: Array.isArray(raw.injectedThreadIds) ? raw.injectedThreadIds : [],
     };
   } catch {
     return { ...EMPTY };
@@ -121,10 +158,15 @@ export interface ProjectLogScope {
 }
 
 function sanitizeSegment(segment: string): string {
-  const clean = segment
-    .replace(/[^a-zA-Z0-9_.-]/g, "_")
-    .replace(/\.+/g, ".")
-    .replace(/^\./, "");
+  let clean = segment
+    .trim()
+    .replaceAll("/", "_")
+    .replaceAll("\\", "_")
+    .replaceAll(":", "_")
+    .replaceAll("..", "_");
+  while (clean.startsWith(".")) {
+    clean = clean.slice(1);
+  }
   return clean || "unknown";
 }
 

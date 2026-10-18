@@ -12,18 +12,18 @@ client = MemcellClient(token=token, base_url=instance)
 
 @tool
 def recall_memory(intent: str) -> str:
-    """Retrieve relevant operational directives, policies, and guidelines from MemCell."""
+    """Retrieve relevant operational instructions, policies, and guidelines from MemCell."""
     recall = client.recall(namespace=namespace, intent=intent)
-    return recall.prompt_context or "No relevant directives established in workspace."
+    return recall.prompt_context or "No relevant instructions established in workspace."
 
 
 @tool
-def remember_directive(claim: str, directive_type: str = "directive") -> str:
+def remember_instruction(claim: str, instruction_type: str = "instruction") -> str:
     """File a newly established policy, guideline, or fact into MemCell workspace memory."""
     res = client.remember(
         namespace=namespace,
         title=claim,
-        type=directive_type,
+        type=instruction_type,
         scope="workspace",
     )
     mem = res.created[0] if res.created else (res.evolved[0] if res.evolved else None)
@@ -35,11 +35,11 @@ def main():
     print("=== LangChain Tool Integration with MemCell ===\n")
     print(f"Initialized tools for workspace: {namespace}\n")
 
-    # 1. Simulate agent invoking the remember_directive tool
-    res = remember_directive.invoke(
+    # 1. Simulate agent invoking the remember_instruction tool
+    res = remember_instruction.invoke(
         {
             "claim": "All international shipments requiring customs clearance must include harmonized tariff codes (HTS)",
-            "directive_type": "guard",
+            "instruction_type": "guard",
         }
     )
     print("Tool Output [remember]:", res)

@@ -20,7 +20,7 @@ async function askAgent(userPrompt: string) {
 
   // 2. Build model prompt with synthesized context
   const systemPrompt = [
-    "You are an operations assistant adhering strictly to company directives.",
+    "You are an operations assistant adhering strictly to company instructions.",
     recallResult.promptContext ? `\n${recallResult.promptContext}` : "",
   ]
     .filter(Boolean)
@@ -53,7 +53,7 @@ async function main() {
     namespace,
     title:
       "All financial reports must specify amounts in USD and include variance percentages",
-    type: "directive",
+    type: "instruction",
     scope: "workspace",
   });
 

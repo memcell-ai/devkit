@@ -2,7 +2,7 @@
 
 Demonstrates the core epistemic loop in MemCell using the official `@memcell/sdk`:
 
-1. Ingesting an operational directive with `client.memories.remember()`.
+1. Ingesting an operational instruction with `client.memories.remember()`.
 2. Performing semantic intent recall with `client.recall.search()`.
 3. Feeding back execution results with `client.report()`.
 

@@ -26,12 +26,12 @@ async function processSupportTicket(ticket: SupportTicket) {
     minConfidence: 0.7,
   });
 
-  console.log(`\n[Recalled ${recall.memories.length} policy directives]`);
-  console.log(recall.promptContext || "(No specific directives matched)");
+  console.log(`\n[Recalled ${recall.memories.length} policy instructions]`);
+  console.log(recall.promptContext || "(No specific instructions matched)");
 
-  // Simulated agent evaluation against recalled guard directives
+  // Simulated agent evaluation against recalled guard instructions
   const hasGuard = recall.memories.some(
-    (m) => (m.type === "guard" || m.type === "directive") && m.enforce,
+    (m) => (m.type === "guard" || m.type === "instruction") && m.enforce,
   );
   if (hasGuard && ticket.message.toLowerCase().includes("refund")) {
     console.log(
@@ -39,7 +39,7 @@ async function processSupportTicket(ticket: SupportTicket) {
     );
     // Report outcome
     const guardMem = recall.memories.find(
-      (m) => (m.type === "guard" || m.type === "directive") && m.enforce,
+      (m) => (m.type === "guard" || m.type === "instruction") && m.enforce,
     );
     if (guardMem) {
       await client.report({
@@ -68,12 +68,12 @@ async function setupWorkspacePolicies() {
     enforce: true,
   });
 
-  // Operational directive: Response SLA
+  // Operational instruction: Response SLA
   await client.remember({
     namespace,
     title:
       "Urgent tickets must be acknowledged within 5 minutes with incident ticket ID",
-    type: "directive",
+    type: "instruction",
     scope: "workspace",
   });
 }

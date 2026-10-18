@@ -4,13 +4,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, type LifecycleHook } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -115,9 +115,11 @@ export const cursor: Adapter = {
 
     const mcpAt = mcpFile(resolve(projectDir));
     const mcp = await readJson<McpFile>(mcpAt);
-    mcp.mcpServers ??= {};
-    mcp.mcpServers.memcell = { command: MCP_COMMAND, args: MCP_ARGS };
-    await writeJson(mcpAt, mcp);
+    if (mcp.mcpServers && oursMcp(mcp.mcpServers.memcell)) {
+      delete mcp.mcpServers.memcell;
+      if (Object.keys(mcp.mcpServers).length === 0) delete mcp.mcpServers;
+      await writeJson(mcpAt, mcp);
+    }
     return at;
   },
 
@@ -193,6 +195,7 @@ export const cursor: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as {
         role?: string;
@@ -210,8 +213,13 @@ export const cursor: Adapter = {
           text?: string;
           input?: Record<string, unknown>;
         }[]) {
-          if (block?.type === "tool_use" && WRITE_TOOLS.has(block.name ?? "")) {
-            addTouched(touched, pathOf(block.input), payload.cwd);
+          if (block?.type === "tool_use") {
+            recordToolAction(block.name, block.input, {
+              cwd: payload.cwd,
+              writeTools: WRITE_TOOLS,
+              touched,
+              actions,
+            });
           }
         }
       }
@@ -229,7 +237,7 @@ export const cursor: Adapter = {
             : "";
       if (text.trim()) said.push(`${role}: ${text.trim()}`);
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
@@ -245,7 +253,7 @@ export const cursor: Adapter = {
  * `change` is the same set the capture side already learned — one list, so
  * the two halves cannot drift into disagreeing about what a write is. A tool
  * nobody verified is left out: that act goes unguarded, which is silence
- * rather than a directive shown where it does not apply.
+ * rather than an instruction shown where it does not apply.
  */
 export const SURFACE: Surface = {
   moments: {

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { number, text } from "../config.js";
-import { credentialFor } from "../instance.js";
+import { credentialFor, normalize } from "../instance.js";
 import { machineFile } from "../machine.js";
 import { installService } from "./service.js";
 import { badge, blank, cmd, good, label, place, row, say, value, warn } from "../ui.js";
@@ -108,7 +108,7 @@ async function resolveServerBundle(
   // 4. Download from platform endpoint
   await mkdir(serverDir, { recursive: true });
 
-  const downloadUrl = `${instance.replace(/\/+$/, "")}/api/v1/download/server?platform=${process.platform}&arch=${process.arch}&version=latest&stream=true`;
+  const downloadUrl = `${normalize(instance)}/api/v1/download/server?platform=${process.platform}&arch=${process.arch}&version=latest&stream=true`;
 
   say(
     row(0, [badge("memcell"), label("downloading local server bundle...")]),

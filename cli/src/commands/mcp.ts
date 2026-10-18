@@ -31,7 +31,7 @@ const DEFAULT_TOOLS = [
   {
     name: "recall",
     description:
-      "Ask the workspace's memory before acting. Evaluates intent against durable directives and facts. Zero conversation retention: query text is strictly ephemeral and never stored. Pass the recallId to 'report' so task outcomes sharpen what was recalled.",
+      "Ask the workspace's memory before acting. Evaluates intent against durable instructions, decisions, facts, preferences, active session threads, and grounded RAG documents. Zero conversation retention: query text is strictly ephemeral and never stored. Pass the recallId to 'report' so task outcomes sharpen what was recalled.",
     inputSchema: {
       type: "object",
       properties: {
@@ -49,8 +49,7 @@ const DEFAULT_TOOLS = [
         },
         type: {
           type: "string",
-          description:
-            "Optional memory type filter: guard, directive, fact, preference, or observation",
+          description: "Optional memory type filter: instruction, decision, fact, or preference",
         },
         tags: {
           type: "array",
@@ -59,7 +58,7 @@ const DEFAULT_TOOLS = [
         },
         scope: {
           type: "string",
-          description: "Operational scope filter (e.g. 'common', 'domain:finance')",
+          description: "Operational scope filter (e.g. 'workspace', 'user', 'organization')",
         },
         scopes: {
           type: "array",
@@ -76,13 +75,13 @@ const DEFAULT_TOOLS = [
   {
     name: "remember",
     description:
-      "Record knowledge into MemCell. Accepts raw text, conversational excerpts, or structured hints. MemCell generically distills material into atomic memories and reconciles against existing memory.",
+      "Record knowledge into MemCell. Accepts raw text, conversational excerpts, or structured hints. MemCell distills material into atomic memories, links them into the workspace Knowledge Graph, and checkpoints session threads.",
     inputSchema: {
       type: "object",
       properties: {
         content: {
           type: "string",
-          description: "Text content, directive, or transcript to remember",
+          description: "Text content, instruction, decision, or transcript to remember",
         },
         raw: {
           type: "string",
@@ -90,11 +89,11 @@ const DEFAULT_TOOLS = [
         },
         learning: {
           type: "string",
-          description: "The concrete knowledge, fact, preference, or directive to persist",
+          description: "The concrete instruction, decision, fact, or preference to persist",
         },
         type: {
           type: "string",
-          description: "Memory type: directive, fact, preference, guard, or observation",
+          description: "Memory type: instruction, decision, fact, or preference",
         },
         title: {
           type: "string",

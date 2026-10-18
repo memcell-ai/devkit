@@ -82,7 +82,7 @@ export interface Guard extends At {
 export type ToolGuard = Guard;
 export type PreActPolicy = Guard;
 
-/** The five action classes a standing directive can bear on. Mirrors the record's own
+/** The five action classes a standing instruction can bear on. Mirrors the record's own
  *  vocabulary; the mapping from a tool name to one of these is per-agent and
  *  lives above, never in the record. */
 export type ActClass = "read" | "change" | "record" | "send" | "answer";

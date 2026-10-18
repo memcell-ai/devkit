@@ -10,9 +10,21 @@ import { wired } from "./wired.js";
 // shell. The same API endpoint the hooks and the MCP tool call, so an agent with no
 // MCP support reaches the identical answer.
 
+interface ServedRelation {
+  relationType: string;
+  direction?: string;
+  targetTitle: string;
+  targetMemoryId: string;
+}
+
 interface Served {
   memoryId: string;
   text: string;
+  content?: string | null;
+  context?: string | null;
+  observation?: string | null;
+  resources?: string[];
+  relations?: ServedRelation[];
   type?: string | null;
   enforce?: boolean;
   confidence: number;
@@ -201,16 +213,32 @@ export async function recall(
       return 0;
     }
 
-    if (effectiveFormat === "prompt" || effectiveFormat === "xml") {
+    if (
+      effectiveFormat === "prompt" ||
+      effectiveFormat === "xml" ||
+      effectiveFormat === "markdown"
+    ) {
       emit(((answer as any).promptContext || "") + "\n");
       return 0;
     }
 
     const ansAny = answer as any;
     const rawList: any[] = ansAny.memories || ansAny.results || [];
+    const matchedThread = ansAny.matchedThread ?? null;
+    const chunks: any[] = Array.isArray(ansAny.chunks)
+      ? ansAny.chunks
+      : Array.isArray(ansAny.documentChunks)
+        ? ansAny.documentChunks
+        : [];
+
     const results: Served[] = rawList.map((s) => ({
       memoryId: s.memoryId || s.id,
       text: s.text || s.title || "",
+      content: s.content ?? null,
+      context: s.context ?? null,
+      observation: s.observation ?? null,
+      resources: Array.isArray(s.resources) ? s.resources : [],
+      relations: Array.isArray(s.relations) ? s.relations : [],
       type: s.type,
       enforce: Boolean(s.enforce),
       confidence: typeof s.confidence === "number" ? s.confidence : 0.5,
@@ -220,7 +248,7 @@ export async function recall(
       pinned: Boolean(s.pinned || s.isPinned || s.status === "pinned"),
     }));
 
-    if (results.length === 0) {
+    if (results.length === 0 && !matchedThread && chunks.length === 0) {
       // An empty answer is an answer: memory does not guess.
       say(
         row(0, [badge("memcell"), label("recall"), place(targetSpace)]),
@@ -229,13 +257,62 @@ export async function recall(
       return 0;
     }
 
-    say(
+    const outputRows: (ReturnType<typeof row> | null)[] = [
       row(
         0,
         [badge("memcell"), label("recall"), place(targetSpace)],
-        [variant(`${results.length}`)],
+        [
+          variant(`${results.length}`),
+          ...(ansAny.recallId ? [id(`recall:${String(ansAny.recallId).slice(0, 8)}`)] : []),
+        ],
       ),
-      ...results.flatMap((s) => [
+    ];
+
+    if (matchedThread && matchedThread.title) {
+      outputRows.push(
+        row(
+          1,
+          [variant("thread")],
+          [value(matchedThread.title)],
+          matchedThread.status ? [variant(matchedThread.status)] : null,
+        ),
+      );
+      if (matchedThread.currentObjective || matchedThread.summary) {
+        outputRows.push(row(2, [label(matchedThread.currentObjective || matchedThread.summary)]));
+      }
+      if (Array.isArray(matchedThread.milestones) && matchedThread.milestones.length > 0) {
+        outputRows.push(
+          row(
+            2,
+            [variant("milestones")],
+            [
+              label(
+                matchedThread.milestones
+                  .slice(-3)
+                  .map((m: any) => {
+                    const phase = m.phase || m.title;
+                    return phase ? `${phase}: ${m.summary}` : String(m.summary || "");
+                  })
+                  .join(" · "),
+              ),
+            ],
+          ),
+        );
+      }
+      if (Array.isArray(matchedThread.decisions) && matchedThread.decisions.length > 0) {
+        outputRows.push(
+          row(2, [variant("decisions")], [label(matchedThread.decisions.slice(0, 3).join(" · "))]),
+        );
+      }
+      if (Array.isArray(matchedThread.nextSteps) && matchedThread.nextSteps.length > 0) {
+        outputRows.push(
+          row(2, [variant("next")], [label(matchedThread.nextSteps.slice(0, 3).join(" · "))]),
+        );
+      }
+    }
+
+    for (const s of results) {
+      outputRows.push(
         row(
           1,
           [value(s.confidence.toFixed(2))],
@@ -246,10 +323,49 @@ export async function recall(
           !(s.verified ?? s.vouched) ? [variant("unvouched")] : null,
           [label(s.text)],
         ),
-        // The id, because reporting an outcome on this needs it.
-        row(2, [id(s.memoryId)]),
-      ]),
-    );
+      );
+      if (s.content && s.content.trim() && s.content.trim() !== s.text.trim()) {
+        outputRows.push(row(2, [label(s.content.trim())]));
+      }
+      if (s.context && s.context.trim() && !s.text.includes(s.context.trim())) {
+        outputRows.push(row(2, [variant("when")], [label(s.context.trim())]));
+      }
+      if (s.observation && s.observation.trim()) {
+        outputRows.push(row(2, [variant("observed")], [label(s.observation.trim())]));
+      }
+      if (s.resources && s.resources.length > 0) {
+        outputRows.push(
+          row(2, [variant("resources")], [label(s.resources.slice(0, 5).join(", "))]),
+        );
+      }
+      if (s.relations && s.relations.length > 0) {
+        for (const rel of s.relations.slice(0, 3)) {
+          const targetTitle =
+            rel.targetTitle ||
+            (rel as any).targetMemory?.title ||
+            (rel as any).sourceMemory?.title ||
+            "";
+          if (targetTitle) {
+            outputRows.push(row(2, [variant(`↳ ${rel.relationType}`)], [label(targetTitle)]));
+          }
+        }
+      }
+      // The id, because reporting an outcome on this needs it.
+      outputRows.push(row(2, [id(s.memoryId)]));
+    }
+
+    if (chunks.length > 0) {
+      for (const c of chunks.slice(0, 3)) {
+        const docLabel = c.documentTitle || c.sourceUri || c.sourcePath || "document";
+        const headingLabel = c.heading ? ` › ${c.heading}` : "";
+        outputRows.push(
+          row(1, [variant("doc")], [value(`${docLabel}${headingLabel}`)]),
+          row(2, [label(String(c.content || "").trim())]),
+        );
+      }
+    }
+
+    say(...outputRows);
     return 0;
   } catch (error) {
     if (error instanceof MemcellError || error instanceof MemCellError) {

@@ -3,14 +3,13 @@ import { join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
+  parseStandardTranscriptEntry,
   readJsonlSlice,
-  TOUCHED_CAP,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
@@ -73,10 +72,15 @@ export const droid: Adapter = {
   get surface() {
     return SURFACE;
   },
-  ...ccHookOps("droid", file, EVENT, { afterInstall: installMcp, alsoRemove: removeMcp }),
+  ...ccHookOps("droid", file, EVENT, {
+    afterInstall: async (dir) => {
+      await removeMcp(dir).catch(() => undefined);
+    },
+    alsoRemove: removeMcp,
+  }),
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
   },
 
@@ -85,48 +89,19 @@ export const droid: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
-      const entry = raw as {
-        type?: string;
-        role?: string;
-        content?: unknown;
-        text?: string;
-        name?: string;
-        tool_name?: string;
-        input?: Record<string, unknown>;
-        tool_input?: Record<string, unknown>;
-      };
-      if (entry.type === "message" || entry.role) {
-        const role = entry.role;
-        if (role !== "user" && role !== "assistant") return;
-        const text =
-          typeof entry.content === "string"
-            ? entry.content
-            : (entry.text ?? blockText(entry.content));
-        if (text.trim()) said.push(`${role}: ${text.trim()}`);
-      } else if (entry.type === "tool_call") {
-        const name = entry.name ?? entry.tool_name ?? "";
-        if (!WRITE_TOOLS.has(name)) return;
-        const input = entry.input ?? entry.tool_input;
-        if (name.toLowerCase().includes("patch")) {
-          const patch = typeof input === "string" ? input : String(input?.input ?? "");
-          for (const f of patchPaths(patch)) addTouched(touched, f, payload.cwd);
-        } else {
-          addTouched(touched, pathOf(input), payload.cwd);
-        }
-      }
+      parseStandardTranscriptEntry(raw, {
+        cwd: payload.cwd,
+        writeTools: WRITE_TOOLS,
+        said,
+        touched,
+        actions,
+      });
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
-
-function blockText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((c): c is { text: string } => typeof (c as { text?: unknown })?.text === "string")
-    .map((c) => c.text)
-    .join("\n");
-}
 
 /**
  * What this harness can do, declared — see surface.ts.
@@ -162,7 +137,7 @@ export const SURFACE: Surface = {
     },
     "session-end": {
       event: "SessionEnd",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { unsupported: "the session is over — there is nobody left to tell" },
     },
   },
   guard: {

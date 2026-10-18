@@ -1,12 +1,10 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { COMMANDS } from "../src/commands/index.js";
+import { createCli } from "../src/cli.js";
 import { enforceRequirements, resolveContext } from "../src/context.js";
-import { saveCredential } from "../src/instance.js";
-import { parse } from "../src/parse.js";
 import { saveProject } from "../src/workspace.js";
 
 async function scratch() {
@@ -14,41 +12,41 @@ async function scratch() {
 }
 
 describe("global flags parsing", () => {
-  it("accepts --project and -p on commands that did not explicitly declare it", () => {
-    const res = parse(["import", "--project", "my-project"], COMMANDS);
-    expect(res.kind).toBe("run");
-    if (res.kind === "run") {
-      expect(res.flags.project).toBe("my-project");
-    }
+  it("accepts --workspace and -w on commands", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const cli1 = createCli(["import", "--workspace", "my-workspace", "--help"], "1.5.0");
+      const res1 = await cli1.parseAsync();
+      expect(res1.workspace).toBe("my-workspace");
 
-    const shortRes = parse(["import", "-p", "owner/short-proj"], COMMANDS);
-    expect(shortRes.kind).toBe("run");
-    if (shortRes.kind === "run") {
-      expect(shortRes.flags.project).toBe("owner/short-proj");
-    }
-  });
-
-  it("accepts --owner on commands without unknown flag errors", () => {
-    const res = parse(["memory", "list", "--owner", "acme-corp"], COMMANDS);
-    expect(res.kind).toBe("run");
-    if (res.kind === "run") {
-      expect(res.flags.owner).toBe("acme-corp");
+      const cli2 = createCli(["import", "-w", "owner/short-ws", "--help"], "1.5.0");
+      const res2 = await cli2.parseAsync();
+      expect(res2.workspace).toBe("owner/short-ws");
+    } finally {
+      spy.mockRestore();
     }
   });
 
-  it("accepts --json across commands", () => {
-    const res = parse(["export", "--json"], COMMANDS);
-    expect(res.kind).toBe("run");
-    if (res.kind === "run") {
-      expect(res.flags.json).toBe(true);
+  it("accepts --owner and --json across commands", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const cli = createCli(
+        ["memory", "list", "--owner", "acme-corp", "--json", "--help"],
+        "1.5.0",
+      );
+      const res = await cli.parseAsync();
+      expect(res.owner).toBe("acme-corp");
+      expect(res.json).toBe(true);
+    } finally {
+      spy.mockRestore();
     }
   });
 });
 
 describe("execution context resolution", () => {
-  it("resolves project and owner from --project owner/slug flag", async () => {
+  it("resolves workspace and owner from --workspace owner/slug flag", async () => {
     const context = await resolveContext("http://localhost:3000", {
-      project: "acme/backend",
+      workspace: "acme/backend",
     });
     expect(context.project).not.toBeNull();
     expect(context.project?.owner).toBe("acme");
@@ -57,9 +55,9 @@ describe("execution context resolution", () => {
     expect(context.project?.source).toBe("flag");
   });
 
-  it("resolves project and owner when passed separately via flags", async () => {
+  it("resolves workspace and owner when passed separately via flags", async () => {
     const context = await resolveContext("http://localhost:3000", {
-      project: "frontend",
+      workspace: "frontend",
       owner: "design-org",
     });
     expect(context.project).not.toBeNull();
@@ -69,7 +67,7 @@ describe("execution context resolution", () => {
     expect(context.project?.source).toBe("flag");
   });
 
-  it("falls back to local .memcell project file when flags are absent", async () => {
+  it("falls back to local .memcell config file when flags are absent", async () => {
     const dir = await scratch();
     await saveProject(
       {
@@ -114,11 +112,11 @@ describe("aspect requirement gates", () => {
     }
   });
 
-  it("blocks execution when project is required and no project can be resolved", () => {
+  it("blocks execution when workspace is required and no workspace can be resolved", () => {
     const mockCommand = {
       path: ["memory", "list"],
       what: "test",
-      require: { project: "required" as const },
+      require: { workspace: "required" as const },
       run: async () => 0,
     };
 
@@ -141,7 +139,7 @@ describe("aspect requirement gates", () => {
     const mockCommand = {
       path: ["memory", "list"],
       what: "test",
-      require: { auth: "required" as const, project: "required" as const },
+      require: { auth: "required" as const, workspace: "required" as const },
       run: async () => 0,
     };
 

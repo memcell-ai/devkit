@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # MemCell Workspace Bootstrapping Script
-# Provisions an isolated workspace, sets up operational directives, and connects locally.
+# Provisions an isolated workspace, sets up operational instructions, and connects locally.
 
 INSTANCE_URL="${MEMCELL_URL:-http://localhost:3000}"
 WORKSPACE_NAME="Customer Support Ops"
@@ -23,13 +23,13 @@ echo "2. Connecting local directory to $WORKSPACE_SLUG..."
 memcell connect "$WORKSPACE_SLUG" --url "$INSTANCE_URL"
 
 # 3. Seed foundational guard memories
-echo "3. Seeding operational directives..."
+echo "3. Seeding operational instructions..."
 memcell remember "Customer refund requests exceeding $200 must be escalated to a tier-2 supervisor" \
   --type guard \
   --scope workspace
 
 memcell remember "All customer correspondence must maintain a courteous, professional tone" \
-  --type directive \
+  --type instruction \
   --scope workspace
 
 # 4. Verify status

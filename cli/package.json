@@ -53,6 +53,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "@types/yargs": "^17.0.35",
     "prettier": "^3.4.2",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
@@ -60,7 +61,8 @@
   "dependencies": {
     "@memcell/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "smol-toml": "^1.7.1"
+    "smol-toml": "^1.7.1",
+    "yargs": "^18.2.0"
   },
   "repository": {
     "type": "git",

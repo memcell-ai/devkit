@@ -61,8 +61,8 @@ Static instruction files and monolithic system prompts don't solve this:
 
 MemCell pairs two lightweight layers so agents stay aligned without getting in your way:
 
-- **Deterministic Hooks (Zero-Touch)**: Fire automatically on session start, prompt submit, and turn end. Relevant memories and directives are checked before actions begin—without relying on the model remembering to call a tool. _Hooks fail open in <50ms, so offline or slow networks never block your editor._
-- **MCP Tool Bridge (`memcell mcp`)**: Provides interactive tools (`recall`, `remember`, `report`, `ingest`) when agents need to search memory or record discoveries mid-turn.
+- **Deterministic Hooks (Zero-Touch)**: Fire automatically on session start, prompt submit, and turn end. Relevant memories, active session threads, and instructions are checked before actions begin—without relying on the model remembering to call a tool. _Hooks fail open in <50ms, so offline or slow networks never block your editor._
+- **MCP Tool Bridge (`memcell mcp`)**: Provides interactive tools (`recall`, `remember`, `report`) when agents need to search memory or record discoveries mid-turn.
 
 ---
 
@@ -76,14 +76,17 @@ Once connected, agents recall and report memory automatically. You can also inte
 memcell recall "how do we handle multi-tenant database sessions?"
 ```
 
-### 2. Record a Decision or Convention
+### 2. Record a Decision or Instruction
 
 ```sh
-# Record a project convention
-memcell remember "Always use pnpm for package operations; never invoke npm directly"
+# Record a workspace instruction
+memcell remember "Always use pnpm for package operations; never invoke npm directly" --type instruction
 
-# Bind an invariant to a specific lifecycle trigger
-memcell remember "Check database migrations for column locks before altering tables" --at "before db:migrate"
+# Record an architectural decision
+memcell remember "Use Next.js for both backend and frontend with shadcn for UI" --type decision
+
+# Bind an instruction to a specific lifecycle trigger
+memcell remember "Check database migrations for column locks before altering tables" --type instruction --at change
 ```
 
 ### 3. Report What Happened
@@ -91,15 +94,15 @@ memcell remember "Check database migrations for column locks before altering tab
 Memories sharpen when told what happened. When an approach succeeds or fails, report the outcome:
 
 ```sh
-memcell report stmt_019a4b2c worked --note "CI suite passed cleanly"
-memcell report stmt_019a4b2c failed --note "broke Next.js 15 async cookies"
+memcell report mem_019a4b2c worked --note "CI suite passed cleanly"
+memcell report mem_019a4b2c failed --note "broke Next.js 15 async cookies"
 ```
 
 ### 4. Ingest Specs and Existing Guidelines
 
 ```sh
-# Ingest an architecture doc, spec, or post-mortem
-memcell ingest docs/architecture/auth.md
+# Index workspace docs and project manifests for grounded RAG and graph extraction
+memcell ingest
 
 # Scan and import existing guideline files (CLAUDE.md, etc.)
 memcell import
@@ -123,7 +126,7 @@ Displays memories followed, errors avoided, estimated tokens saved from prevente
 | **Cursor**                            | Hooks + MCP Bridge   | Native lifecycle hooks in `.cursor/hooks.json` and stdio bridge in `.cursor/mcp.json`      |
 | **Gemini CLI**                        | Hooks + MCP          | Session and prompt hooks via native CLI harness                                            |
 | **GitHub Copilot CLI**                | Lifecycle Hooks      | Pre-command validation hooks                                                               |
-| **OpenAI Codex / OpenCode**           | Hooks + MCP          | Project descriptor hooks and stdio tools                                                   |
+| **OpenAI Codex / OpenCode**           | Hooks + MCP          | Workspace descriptor hooks and stdio tools                                                 |
 | **Cline & Windsurf**                  | MCP Bridge           | Native editor MCP client configuration                                                     |
 | **Factory Droid, Devin, Kiro, Goose** | Hooks + MCP          | Workspace adapters and tool harnesses                                                      |
 
@@ -138,10 +141,12 @@ Displays memories followed, errors avoided, estimated tokens saved from prevente
 | `memcell connect`               | Connect this directory to MemCell, install hooks, and configure MCP    |
 | `memcell status`                | Check authentication standing, active workspace, and connection health |
 | `memcell stats`                 | Show memories followed, errors avoided, and token savings              |
-| `memcell recall <intent>`       | Query memory for verified memories and past outcomes before acting     |
-| `memcell remember <text>`       | File a memory directive or fact (`--at` for lifecycle triggers)        |
+| `memcell recall <intent>`       | Query memory for verified memories, threads, and documents             |
+| `memcell remember <text>`       | File an instruction, decision, fact, or preference                     |
 | `memcell report <id> <outcome>` | Report `worked`, `failed`, or `avoided` to update confidence           |
-| `memcell ingest <file>`         | Distill a document or specification into atomic memories               |
+| `memcell thread`                | List, inspect, resume, or complete working session threads             |
+| `memcell ingest [paths...]`     | Index workspace docs and manifests into grounded RAG and memory graph  |
+| `memcell document`              | List, search, or delete indexed workspace documents                    |
 | `memcell import [files...]`     | Import existing guideline files (`CLAUDE.md`, etc.)                    |
 | `memcell export`                | Export workspace memories as a portable document (`--format json\|md`) |
 | `memcell orgs`                  | List or switch active organization (`memcell orgs switch <slug>`)      |

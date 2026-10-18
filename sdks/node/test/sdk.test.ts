@@ -221,7 +221,7 @@ describe("MemCell SDK (cli package export)", () => {
                 {
                   id: "st_1",
                   title: "Never skip verification",
-                  type: "directive",
+                  type: "instruction",
                   enforce: true,
                   confidence: 0.95,
                 },
@@ -243,7 +243,7 @@ describe("MemCell SDK (cli package export)", () => {
       const res1 = await memcell.recall({
         namespace: "org/repo",
         query: "deploy procedure",
-        type: ["directive", "fact"],
+        type: ["instruction", "fact"],
         minConfidence: 0.8,
       });
 
@@ -285,7 +285,7 @@ describe("MemCell SDK (cli package export)", () => {
                   {
                     id: "st_1",
                     title: "Validate env before deploy",
-                    type: "directive",
+                    type: "instruction",
                     enforce: true,
                     isGuard: true,
                   },
@@ -709,14 +709,14 @@ describe("MemCell SDK (cli package export)", () => {
           expect(u).toContain("/api/v1/acme/backend/memories?");
           expect(u).toContain("page=2");
           expect(u).toContain("per_page=15");
-          expect(u).toContain("type=directive");
+          expect(u).toContain("type=instruction");
           return new Response(
             JSON.stringify({
               memories: [
                 {
                   id: "stmt_1",
                   title: "Direct connection pool setup",
-                  type: "directive",
+                  type: "instruction",
                   status: "active",
                 },
               ],
@@ -733,7 +733,7 @@ describe("MemCell SDK (cli package export)", () => {
         const res = await memcell.memories.list("acme/backend", {
           page: 2,
           perPage: 15,
-          type: "directive",
+          type: "instruction",
         });
 
         expect(res.items).toHaveLength(1);
@@ -774,7 +774,7 @@ describe("MemCell SDK (cli package export)", () => {
                   memory: {
                     id: "stmt_new",
                     title: "Existing",
-                    type: "directive",
+                    type: "instruction",
                   },
                 }),
                 {
@@ -792,7 +792,7 @@ describe("MemCell SDK (cli package export)", () => {
                   memory: {
                     id: "stmt_new",
                     title: body.title,
-                    type: "directive",
+                    type: "instruction",
                   },
                 }),
                 {
@@ -821,7 +821,7 @@ describe("MemCell SDK (cli package export)", () => {
         });
         const created = await memcell.memories.create("acme/backend", {
           title: "Memory A",
-          type: "directive",
+          type: "instruction",
         });
         expect(created.id).toBe("stmt_new");
 
@@ -1410,7 +1410,7 @@ describe("MemCell SDK (cli package export)", () => {
                   limit: 1000,
                   percent: 10,
                   types: {
-                    directive: 40,
+                    instruction: 40,
                     fact: 30,
                     preference: 20,
                     observation: 10,
@@ -1441,7 +1441,7 @@ describe("MemCell SDK (cli package export)", () => {
           fetch: mockFetch as any,
         });
         const usage = await memcell.usage.get("acme", { timeframe: "30d" });
-        expect(usage.quotas.memories.types.directive).toBe(40);
+        expect(usage.quotas.memories.types.instruction).toBe(40);
         expect(usage.quotas.memories.types.fact).toBe(30);
       });
     });
