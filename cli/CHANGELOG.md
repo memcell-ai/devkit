@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/memcell-ai/devkit/compare/cli-v1.5.0...cli-v1.6.0) (2026-10-18)
+
+
+### Features
+
+* memory engine v2 SDKs, Commander CLI, adapter unification, and zero-heuristic AST linter ([#13](https://github.com/memcell-ai/devkit/issues/13)) ([f8136d7](https://github.com/memcell-ai/devkit/commit/f8136d70c56e0088b0735889580dd4e2ff99692c))
+
 ## [1.5.0](https://github.com/memcell-ai/devkit/compare/cli-v1.4.0...cli-v1.5.0) (2026-10-14)
 
 
