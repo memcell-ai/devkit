@@ -199,14 +199,15 @@ describe("recall", () => {
           text: "Amounts are cents.",
           confidence: 0.8,
           layer: "team",
-          kind: "convention",
+          type: "preference",
         },
         {
           memoryId: "s2",
           text: "Manual database mocks are prohibited — use seedSubjects().",
           confidence: 0.95,
           layer: "team",
-          kind: "gotcha",
+          type: "guard",
+          enforce: true,
         },
       ],
     });
@@ -222,52 +223,37 @@ describe("recall", () => {
     expect(context).toContain("Amounts are cents.");
   });
 
-  it("warns loudly when prompt mentions a guarded flow without its required trigger syntax", async () => {
+  it("classifies guards strictly from structured fields rather than prose keywords", async () => {
     reset();
     answer = () => ({
       momentId: "m5",
       results: [
         {
-          memoryId: "s-rel",
-          text: "Release flow is executed only when explicitly triggered by [release] in a message; no automatic or standing release cadence.",
-          confidence: 0.64,
+          memoryId: "s-fact",
+          text: "Forbidden planet was released in 1956 and must not be confused with later remakes.",
+          confidence: 0.9,
           layer: "team",
-          kind: "convention",
+          type: "fact",
         },
-      ],
-    });
-    fed({ session_id: "r12", cwd: project, prompt: "time for release pipeline" });
-
-    const out = await runMoment("prompt-submit", "claude");
-    const context = out.context ?? "";
-    expect(context).toContain("🚨 OPERATIONAL GUARD TRIGGER REQUIRED:");
-    expect(context).toContain("Directive [s-rel] requires the explicit trigger '[release]'");
-    expect(context).toContain("You MUST HALT and refuse to proceed");
-  });
-
-  it("permits the operation when the prompt includes the required trigger token", async () => {
-    reset();
-    answer = () => ({
-      momentId: "m6",
-      results: [
         {
-          memoryId: "s-rel",
-          text: "Release flow is executed only when explicitly triggered by [release] in a message; no automatic or standing release cadence.",
-          confidence: 0.64,
+          memoryId: "s-enforced",
+          text: "Require human confirmation before initiating outbound wire transfers.",
+          confidence: 0.98,
           layer: "team",
-          kind: "convention",
+          type: "instruction",
+          enforce: true,
         },
       ],
     });
-    fed({ session_id: "r13", cwd: project, prompt: "time for release pipeline [release]" });
+    fed({ session_id: "r12", cwd: project, prompt: "review wire transfer policy" });
 
     const out = await runMoment("prompt-submit", "claude");
     const context = out.context ?? "";
-    expect(context).not.toContain("🚨 OPERATIONAL GUARD TRIGGER REQUIRED:");
     expect(context).toContain("OPERATIONAL GUARDS & INVARIANTS");
     expect(context).toContain(
-      "Release flow is executed only when explicitly triggered by [release]",
+      "[GUARD] Require human confirmation before initiating outbound wire transfers.",
     );
+    expect(context).not.toContain("[GUARD] Forbidden planet");
   });
 
   it("asks about the work itself at session start, where there is no prompt yet", async () => {
@@ -1190,5 +1176,285 @@ describe("Claude Code hook loop integrations", () => {
     });
     const beforeResult = await runMoment("before-act", "claude");
     expect(beforeResult.refuse).toBe("Never spawn workflows without user approval.");
+  });
+
+  it("distills tool-only turns by synthesizing activity log from structured actions and touched files", async () => {
+    reset();
+    const toolOnlyTranscript = join(project, "tool-only.jsonl");
+    await writeFile(
+      toolOnlyTranscript,
+      [
+        JSON.stringify({
+          type: "PLANNER_RESPONSE",
+          content: "",
+          tool_calls: [
+            {
+              name: "write_to_file",
+              args: { TargetFile: `${project}/src/problem.ts` },
+            },
+            {
+              name: "run_command",
+              args: { CommandLine: "npm run typecheck" },
+            },
+          ],
+        }),
+      ].join("\n"),
+    );
+
+    answer = () => ({ created: [{ memoryId: "m_1" }], reinforced: [] });
+    fed({
+      session_id: "ag-tool-only-1",
+      cwd: project,
+      transcript_path: toolOnlyTranscript,
+    });
+
+    await runMoment("turn-end", "antigravity");
+    const rememberCall = calls.find((c) => c.path === "remember");
+    expect(rememberCall).toBeDefined();
+    expect(String(rememberCall!.body.raw)).toContain("write_to_file");
+    expect(String(rememberCall!.body.raw)).toContain("src/problem.ts");
+    expect(rememberCall!.body.touched).toEqual(["src/problem.ts"]);
+    expect(Array.isArray(rememberCall!.body.actions)).toBe(true);
+    expect((rememberCall!.body.actions as any[]).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("ships real-time async mid-turn checkpoints during before-act when transcript advances", async () => {
+    reset();
+    const liveTranscript = join(project, "live-midturn.jsonl");
+    await writeFile(
+      liveTranscript,
+      [
+        JSON.stringify({
+          type: "USER_INPUT",
+          content: "implement problem details helper and add tests",
+        }),
+        JSON.stringify({
+          type: "PLANNER_RESPONSE",
+          content: "Creating src/problem.ts with RFC 7807 fields.",
+          tool_calls: [
+            {
+              name: "write_to_file",
+              args: { TargetFile: `${project}/src/problem.ts` },
+            },
+          ],
+        }),
+      ].join("\n"),
+    );
+
+    answer = () => ({ accepted: true, jobId: "job-mid-1" });
+    fed({
+      session_id: "ag-midturn-1",
+      cwd: project,
+      transcript_path: liveTranscript,
+      tool_name: "run_command",
+      tool_input: { CommandLine: "npm test" },
+    });
+
+    await runMoment("before-act", "antigravity");
+    const rememberCall = calls.find((c) => c.path === "remember");
+    expect(rememberCall).toBeDefined();
+    expect(rememberCall!.body.async).toBe(true);
+    expect(rememberCall!.body.touched).toEqual(["src/problem.ts"]);
+    expect(Array.isArray(rememberCall!.body.actions)).toBe(true);
+  });
+
+  it("deduplicates already-injected memories across turns in the same session while keeping active guards for before-act", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-dedup-1",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-guard-1",
+          text: "Never modify production billing config directly.",
+          confidence: 0.95,
+          layer: "team",
+          appliesAt: ["change"],
+          refuses: true,
+        },
+        {
+          memoryId: "s-fact-1",
+          text: "Settlement batches run at 02:00 UTC.",
+          confidence: 0.85,
+          layer: "workspace",
+        },
+      ],
+    });
+    fed({ session_id: "sess-dedup-1", cwd: project, prompt: "check settlement schedule" });
+    const turn1 = await runMoment("prompt-submit", "claude");
+    expect(turn1.context).toContain("Never modify production billing config directly.");
+    expect(turn1.context).toContain("Settlement batches run at 02:00 UTC.");
+
+    // Turn 2 in the same session returns the same 2 memories plus 1 new memory:
+    // Only the new memory should be injected into prompt context, preventing context flooding.
+    reset();
+    answer = () => ({
+      momentId: "m-dedup-2",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-guard-1",
+          text: "Never modify production billing config directly.",
+          confidence: 0.95,
+          layer: "team",
+          appliesAt: ["change"],
+          refuses: true,
+        },
+        {
+          memoryId: "s-fact-1",
+          text: "Settlement batches run at 02:00 UTC.",
+          confidence: 0.85,
+          layer: "workspace",
+        },
+        {
+          memoryId: "s-fact-2",
+          text: "Wire retries use exponential backoff up to 4 attempts.",
+          confidence: 0.88,
+          layer: "workspace",
+        },
+      ],
+    });
+    fed({ session_id: "sess-dedup-1", cwd: project, prompt: "how do wire retries work?" });
+    const turn2 = await runMoment("prompt-submit", "claude");
+    expect(turn2.context).toContain("Wire retries use exponential backoff up to 4 attempts.");
+    expect(turn2.context).not.toContain("Settlement batches run at 02:00 UTC.");
+    expect(turn2.context).not.toContain("Never modify production billing config directly.");
+
+    // Yet before-act still enforces s-guard-1 in memory!
+    reset();
+    fed({
+      session_id: "sess-dedup-1",
+      cwd: project,
+      tool_name: "Edit",
+      tool_input: { file_path: `${project}/src/billing.ts` },
+    });
+    const beforeAct = await runMoment("before-act", "claude");
+    expect(beforeAct.refuse).toBe("Never modify production billing config directly.");
+
+    // Turn 3: if a previously injected memory is marked diverged, it IS re-injected to correct the agent.
+    reset();
+    answer = () => ({
+      momentId: "m-dedup-3",
+      guardMode: "strict",
+      results: [
+        {
+          memoryId: "s-fact-1",
+          text: "Settlement batches run at 02:00 UTC.",
+          confidence: 0.85,
+          layer: "workspace",
+          diverged: true,
+        },
+      ],
+    });
+    fed({ session_id: "sess-dedup-1", cwd: project, prompt: "schedule batch at 14:00 UTC" });
+    const turn3 = await runMoment("prompt-submit", "claude");
+    expect(turn3.context).toContain("already gone against these this session");
+    expect(turn3.context).toContain("Settlement batches run at 02:00 UTC.");
+  });
+
+  it("strips injected <memcell_context> and hook recall blocks from transcript before sending to remember", async () => {
+    reset();
+    const pollutedTranscript = join(project, "polluted-remember.jsonl");
+    await writeFile(
+      pollutedTranscript,
+      [
+        JSON.stringify({
+          message: {
+            role: "user",
+            content:
+              '<memcell_context>\n<instructions>\n- [id="mem_1"] Never push to main\n</instructions>\n</memcell_context>\nWe decided to store audit logs in S3 with a 90-day retention policy.',
+          },
+        }),
+        JSON.stringify({
+          message: {
+            role: "assistant",
+            content:
+              "From this workspace's memory (api) — already learned here:\n- Some recalled memory [id: 12345678 · 0.90 · team]\n\nConfigured S3 lifecycle policy for 90-day audit retention.",
+          },
+        }),
+      ].join("\n"),
+    );
+
+    answer = () => ({ created: [{ memoryId: "m_clean" }], reinforced: [] });
+    fed({
+      session_id: "sess-clean-remember",
+      cwd: project,
+      transcript_path: pollutedTranscript,
+    });
+
+    await runMoment("turn-end", "claude");
+    const rememberCall = calls.find((c) => c.path === "remember");
+    expect(rememberCall).toBeDefined();
+    const sentRaw = String(rememberCall!.body.raw);
+    expect(sentRaw).not.toContain("<memcell_context>");
+    expect(sentRaw).not.toContain("Never push to main");
+    expect(sentRaw).not.toContain("From this workspace's memory");
+    expect(sentRaw).toContain("90-day audit retention");
+  });
+
+  it("injects prior session thread with phase milestones on Turn 1 and suppresses self-thread echo on subsequent turns", async () => {
+    reset();
+    answer = () => ({
+      momentId: "m-thread-boot-1",
+      results: [
+        {
+          memoryId: "s-stack-1",
+          text: "Sandbox Next.js Project Stack and Architectural Baseline",
+          confidence: 0.7,
+          layer: "workspace",
+        },
+      ],
+      matchedThread: {
+        id: "thr-prior-1",
+        externalSessionId: "sess-old-1",
+        title: "Next.js Sandbox Initialization",
+        status: "active",
+        summary: "Initialized Next.js 16 project structure",
+        currentObjective: "Verify workspace continuity",
+        milestones: [
+          {
+            phase: "Project Setup",
+            summary: "Scaffolded Next.js 16 TypeScript configuration",
+          },
+        ],
+      },
+    });
+
+    fed({ session_id: "sess-new-boot-1", cwd: project, prompt: "what have we done so far?" });
+    const turn1 = await runMoment("prompt-submit", "antigravity");
+    expect(turn1.context).toContain(
+      "ACTIVE / RESUMED SESSION THREAD (Next.js Sandbox Initialization):",
+    );
+    expect(turn1.context).toContain(
+      "Project Setup (Scaffolded Next.js 16 TypeScript configuration)",
+    );
+    expect(turn1.context).not.toContain("undefined");
+    expect(turn1.context).toContain("Sandbox Next.js Project Stack and Architectural Baseline");
+
+    // Turn 2: current session now has its own thread (externalSessionId === "sess-new-boot-1").
+    // It must NOT echo its own thread or re-inject already-served memories.
+    reset();
+    answer = () => ({
+      momentId: "m-thread-boot-2",
+      results: [
+        {
+          memoryId: "s-stack-1",
+          text: "Sandbox Next.js Project Stack and Architectural Baseline",
+          confidence: 0.7,
+          layer: "workspace",
+        },
+      ],
+      matchedThread: {
+        id: "thr-self-2",
+        externalSessionId: "sess-new-boot-1",
+        title: "Current Session Workstream",
+        status: "active",
+        summary: "In progress in current session",
+      },
+    });
+
+    fed({ session_id: "sess-new-boot-1", cwd: project, prompt: "let us add another route" });
+    const turn2 = await runMoment("prompt-submit", "antigravity");
+    expect(turn2.context).toBeUndefined();
   });
 });

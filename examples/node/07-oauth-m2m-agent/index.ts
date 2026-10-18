@@ -21,14 +21,14 @@ async function main() {
   console.log(`Connecting to: ${baseUrl} [Workspace: ${namespace}]`);
   console.log(`Client ID: ${clientId}\n`);
 
-  // 1. Ingest an operational directive statement
+  // 1. Ingest an operational instruction statement
   console.log("1. Storing operational compliance statement...");
   const title =
     "Mandate dual-signature authorization for transaction reconciliations exceeding $100,000";
   const rememberRes = await client.remember({
     namespace,
     title,
-    type: "directive",
+    type: "instruction",
     scope: "workspace",
     context:
       "Applies to automated financial clearing and audit compliance operations.",
@@ -42,7 +42,7 @@ async function main() {
   const intent =
     "Reconcile quarterly high-volume liquidity disbursement of $250,000";
   console.log(
-    `2. Recalling operational directives for intent: "${intent}"...\n`,
+    `2. Recalling operational instructions for intent: "${intent}"...\n`,
   );
   const recallRes = await client.recall({ namespace, intent });
 

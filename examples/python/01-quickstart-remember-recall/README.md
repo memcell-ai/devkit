@@ -2,7 +2,7 @@
 
 Demonstrates foundational memory operations using the official `memcell` Python client:
 
-1. Ingesting directives with `client.memories.remember()`.
+1. Ingesting instructions with `client.memories.remember()`.
 2. Contextual retrieval with `client.recall.search()`.
 3. Reinforcing confidence with `client.report()`.
 

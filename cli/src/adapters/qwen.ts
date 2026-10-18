@@ -3,13 +3,13 @@ import { join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
@@ -66,10 +66,15 @@ export const qwen: Adapter = {
   get surface() {
     return SURFACE;
   },
-  ...ccHookOps("qwen", file, EVENT, { afterInstall: installMcp, alsoRemove: removeMcp }),
+  ...ccHookOps("qwen", file, EVENT, {
+    afterInstall: async (dir) => {
+      await removeMcp(dir).catch(() => undefined);
+    },
+    alsoRemove: removeMcp,
+  }),
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
   },
 
@@ -79,6 +84,7 @@ export const qwen: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as {
         type?: string;
@@ -90,8 +96,13 @@ export const qwen: Adapter = {
       for (const part of parts) {
         const call = (part as { functionCall?: { name?: string; args?: Record<string, unknown> } })
           .functionCall;
-        if (call && WRITE_TOOLS.has(call.name ?? "")) {
-          addTouched(touched, pathOf(call.args), payload.cwd);
+        if (call) {
+          recordToolAction(call.name, call.args, {
+            cwd: payload.cwd,
+            writeTools: WRITE_TOOLS,
+            touched,
+            actions,
+          });
         }
       }
       const text = parts
@@ -102,7 +113,7 @@ export const qwen: Adapter = {
         .join("\n");
       if (text.trim()) said.push(`${role}: ${text.trim()}`);
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
@@ -157,7 +168,7 @@ export const SURFACE: Surface = {
     },
     "session-end": {
       event: "SessionEnd",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { unsupported: "the session is over — there is nobody left to tell" },
     },
   },
   guard: {

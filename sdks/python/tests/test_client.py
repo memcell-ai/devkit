@@ -22,7 +22,7 @@ def test_sync_client_recall_and_remember():
                         {
                             "id": "st_sync_1",
                             "title": "Never skip verification",
-                            "type": "directive",
+                            "type": "instruction",
                             "confidence": 0.95,
                         }
                     ],
@@ -36,7 +36,7 @@ def test_sync_client_recall_and_remember():
                         {
                             "id": "st_sync_2",
                             "title": "Always test locally",
-                            "type": "directive",
+                            "type": "instruction",
                             "confidence": 0.8,
                         }
                     ]
@@ -58,7 +58,7 @@ def test_sync_client_recall_and_remember():
     assert recall.prompt_context == "<memcell>Context</memcell>"
     assert len(recall.memories) == 1
     assert recall.memories[0].title == "Never skip verification"
-    assert recall.memories[0].type == "directive"
+    assert recall.memories[0].type == "instruction"
     sent_payload = json.loads(requests_log[0].content.decode("utf-8"))
     assert sent_payload["metadata"] == {"threadId": "thr_42"}
     assert sent_payload["include_metadata"] is True
@@ -213,7 +213,7 @@ def test_memories_resource_sync():
                         {
                             "id": "mem_1",
                             "title": "Direct connection pool setup",
-                            "type": "directive",
+                            "type": "instruction",
                             "status": "active",
                         }
                     ],
@@ -228,20 +228,20 @@ def test_memories_resource_sync():
                     "memory": {
                         "id": "mem_new",
                         "title": body["title"],
-                        "type": body.get("type", "directive"),
+                        "type": body.get("type", "instruction"),
                     }
                 },
             )
         if u.endswith("/memories/mem_new") and method == "GET":
             return httpx.Response(
                 200,
-                json={"memory": {"id": "mem_new", "title": "Existing", "type": "directive"}},
+                json={"memory": {"id": "mem_new", "title": "Existing", "type": "instruction"}},
             )
         if u.endswith("/memories/mem_new") and method == "PATCH":
             body = json.loads(request.content.decode("utf-8"))
             return httpx.Response(
                 200,
-                json={"memory": {"id": "mem_new", "title": body["title"], "type": "directive"}},
+                json={"memory": {"id": "mem_new", "title": body["title"], "type": "instruction"}},
             )
         if "/memories/mem_new" in u and method == "DELETE":
             all_v = "allVersions=true" in u
@@ -294,12 +294,12 @@ def test_memories_resource_sync():
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
-    listed = memcell.memories.list("acme/backend", page=2, per_page=15, type="directive")
+    listed = memcell.memories.list("acme/backend", page=2, per_page=15, type="instruction")
     assert len(listed.items) == 1
     assert listed.items[0].id == "mem_1"
     assert listed.pagination.total == 25
 
-    created = memcell.memories.create("acme/backend", title="Memory A", type="directive")
+    created = memcell.memories.create("acme/backend", title="Memory A", type="instruction")
     assert created.id == "mem_new"
 
     fetched = memcell.memories.get("acme/backend", "mem_new")
@@ -346,7 +346,7 @@ async def test_memories_resource_async():
                         {
                             "id": "mem_1",
                             "title": "Direct connection pool setup",
-                            "type": "directive",
+                            "type": "instruction",
                             "status": "active",
                         }
                     ],
@@ -662,7 +662,7 @@ def test_usage_resource_sync():
                         "limit": 1000,
                         "percent": 10,
                         "types": {
-                            "directive": 40,
+                            "instruction": 40,
                             "fact": 30,
                             "preference": 20,
                             "observation": 10,
@@ -685,7 +685,7 @@ def test_usage_resource_sync():
     memcell = MemCell(api_key="mc_key", http_client=mock_client)
 
     usage = memcell.usage.get("acme", timeframe="30d")
-    assert usage.quotas.memories.types.directive == 40
+    assert usage.quotas.memories.types.instruction == 40
     assert usage.quotas.memories.types.fact == 30
     assert usage.quotas.memories.types.preference == 20
     assert usage.quotas.memories.types.observation == 10

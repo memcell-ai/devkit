@@ -58,8 +58,12 @@ describe("what the skill is allowed to say", () => {
     // Every `memcell <verb>` the skill teaches must be a verb the parser
     // answers to. A skill naming a command that does not exist sends an
     // agent to a shell error it cannot fix.
-    const { COMMANDS } = await import("../src/commands/index.js");
-    const declared = new Set(COMMANDS.map((c) => c.path[0]));
+    const { YARGS_COMMANDS } = await import("../src/cli.js");
+    const declared = new Set(
+      YARGS_COMMANDS.map(
+        (c) => (Array.isArray(c.command) ? c.command[0] : String(c.command)).split(" ")[0],
+      ),
+    );
     const named = [...SKILL_CONTENT.matchAll(/memcell ([a-z-]+)/g)].map((m) => m[1]!);
     expect(named.length).toBeGreaterThan(0);
     for (const verb of new Set(named)) {

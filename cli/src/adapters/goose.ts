@@ -5,13 +5,13 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
+  parseStandardTranscriptEntry,
   readJsonlSlice,
-  TOUCHED_CAP,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -60,6 +60,8 @@ const WRITE_TOOLS = new Set([
   "developer__patch_file",
   "write_file",
   "edit_file",
+  "Write",
+  "Edit",
   "write",
   "edit",
   "apply_patch",
@@ -96,10 +98,10 @@ async function removeConfig(): Promise<boolean> {
   if (begin === -1) return false;
   const end = text.indexOf(END_MCP, begin);
   if (end === -1) return false;
-  const next = `${text.slice(0, begin)}${text.slice(end + END_MCP.length)}`.replace(
-    /\n{3,}/g,
-    "\n\n",
-  );
+  let next = `${text.slice(0, begin)}${text.slice(end + END_MCP.length)}`;
+  while (next.includes("\n\n\n")) {
+    next = next.replaceAll("\n\n\n", "\n\n");
+  }
   await writeFile(at, next, "utf8").catch(() => undefined);
   return true;
 }
@@ -125,19 +127,26 @@ export const goose: Adapter = {
       const entries = (doc.hooks[EVENT[moment]] ??= []);
       const command = hookCommand(moment, "goose");
       let held = false;
+      const kept: HookEntry[] = [];
       for (const entry of entries) {
         if (hookMatches(entry.command, moment, "goose")) {
-          entry.command = command;
-          held = true;
+          if (!held) {
+            entry.command = command;
+            kept.push(entry);
+            held = true;
+          }
+        } else {
+          kept.push(entry);
         }
       }
       if (!held) {
-        entries.push({ type: "command", command, timeout: 30 });
+        kept.push({ type: "command", command, timeout: 30 });
       }
+      doc.hooks[EVENT[moment]] = kept;
     }
 
     await writeJson(at, doc);
-    await installConfig().catch(() => undefined);
+    await removeConfig().catch(() => undefined);
     return at;
   },
 
@@ -173,8 +182,8 @@ export const goose: Adapter = {
     }));
   },
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({
       hookSpecificOutput: { additionalContext: context },
     });
@@ -192,25 +201,19 @@ export const goose: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
 
     const read = await readJsonlSlice(path, from, (raw) => {
-      const rec = raw as {
-        role?: string;
-        content?: unknown;
-        toolCalls?: { name?: string; args?: Record<string, unknown> }[];
-      };
-      if (rec.role && rec.content) {
-        const text = String(rec.content);
-        if (text.trim()) said.push(`${rec.role}: ${text.trim()}`);
-      }
-      for (const call of rec.toolCalls ?? []) {
-        if (WRITE_TOOLS.has(call.name ?? "")) {
-          addTouched(touched, pathOf(call.args), payload.cwd);
-        }
-      }
+      parseStandardTranscriptEntry(raw, {
+        cwd: payload.cwd,
+        writeTools: WRITE_TOOLS,
+        said,
+        touched,
+        actions,
+      });
     });
 
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

@@ -75,7 +75,7 @@ describe("Memories Relations API", () => {
               targetMemory: {
                 id: "stmt_d1",
                 title: "Use background queue",
-                type: "directive",
+                type: "instruction",
               },
             },
           ],

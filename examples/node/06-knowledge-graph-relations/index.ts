@@ -9,8 +9,8 @@ const client = new MemcellClient({ token, baseUrl: instance });
 async function main() {
   console.log("=== Directed Epistemic Knowledge Graph Relations ===\n");
 
-  // 1. Create a high-level security policy directive memory
-  console.log("1. Creating high-level security policy directive...");
+  // 1. Create a high-level security policy instruction memory
+  console.log("1. Creating high-level security policy instruction...");
   const securityGuardTitle =
     "Financial disbursements exceeding $100,000 require dual-officer biometric cryptographic authorization";
   const existingGuard = (
@@ -20,41 +20,41 @@ async function main() {
   if (!securityGuard) {
     securityGuard = await client.memories.remember(namespace, {
       title: securityGuardTitle,
-      type: "directive",
+      type: "instruction",
       scope: "workspace",
       enforce: true,
     });
-  } else if (securityGuard.type !== "directive") {
+  } else if (securityGuard.type !== "instruction") {
     securityGuard = await client.memories.update(namespace, securityGuard.id, {
-      type: "directive",
+      type: "instruction",
     });
   }
-  console.log(`[OK] Stored guard directive: [${securityGuard.id}]\n`);
+  console.log(`[OK] Stored guard instruction: [${securityGuard.id}]\n`);
 
-  // 2. Create an automated wire execution directive memory
-  console.log("2. Creating operational wire execution directive...");
-  const wireDirectiveTitle =
+  // 2. Create an automated wire execution instruction memory
+  console.log("2. Creating operational wire execution instruction...");
+  const wireInstructionTitle =
     "Automated vendor batch disbursements run nightly at 23:00 UTC";
-  const existingDirective = (
+  const existingInstruction = (
     await client.memories.list(namespace, { q: "Automated vendor batch" })
   ).items[0];
-  const wireDirective =
-    existingDirective ||
+  const wireInstruction =
+    existingInstruction ||
     (await client.memories.remember(namespace, {
-      title: wireDirectiveTitle,
-      type: "directive",
+      title: wireInstructionTitle,
+      type: "instruction",
       scope: "workspace",
     }));
-  console.log(`[OK] Stored directive: [${wireDirective.id}]\n`);
+  console.log(`[OK] Stored instruction: [${wireInstruction.id}]\n`);
 
   // 3. Link memories with a directed `limits` relation
   console.log(
-    "3. Declaring directed 'limits' relation edge: [Security Guard] ──limits──► [Wire Directive]",
+    "3. Declaring directed 'limits' relation edge: [Security Guard] ──limits──► [Wire Instruction]",
   );
   try {
     await client.relations.relate(namespace, {
       sourceId: securityGuard.id,
-      targetId: wireDirective.id,
+      targetId: wireInstruction.id,
       type: "limits",
     });
     console.log("[OK] Epistemic edge created.\n");
@@ -64,11 +64,11 @@ async function main() {
     );
   }
 
-  // 4. Query relations for the operational directive
-  console.log("4. Inspecting relation graph attached to wire directive...");
-  const graph = await client.relations.list(namespace, wireDirective.id);
+  // 4. Query relations for the operational instruction
+  console.log("4. Inspecting relation graph attached to wire instruction...");
+  const graph = await client.relations.list(namespace, wireInstruction.id);
   console.log(
-    `[OK] Incoming constraints on directive (${graph.incoming?.length || 0}):`,
+    `[OK] Incoming constraints on instruction (${graph.incoming?.length || 0}):`,
   );
   for (const edge of graph.incoming || []) {
     console.log(`  ← [${edge.relationType}] constrained by ${edge.sourceId}`);
@@ -82,7 +82,7 @@ async function main() {
   });
 
   console.log(
-    "\nSynthesized Epistemic Prompt Context (Guard + Directive combined):",
+    "\nSynthesized Epistemic Prompt Context (Guard + Instruction combined):",
   );
   console.log(
     "------------------------------------------------------------------",

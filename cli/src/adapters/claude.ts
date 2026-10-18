@@ -5,13 +5,13 @@ import { join } from "node:path";
 import type { LifecycleHook, Moment } from "../loop/moments.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { MCP_ARGS, MCP_COMMAND, oursMcp, readJson, writeJson, type Adapter } from "./shared.js";
 
@@ -143,7 +143,9 @@ async function removeMcp(dir: string): Promise<boolean> {
 }
 
 const wiring = ccHookOps("claude", file, EVENT, {
-  afterInstall: installMcp,
+  afterInstall: async (dir) => {
+    await removeMcp(dir).catch(() => undefined);
+  },
   alsoRemove: removeMcp,
   legacy,
   eventHooks: EVENT_HOOKS,
@@ -160,7 +162,7 @@ export const claude: Adapter = {
     context: string | null,
     heard?: { prompt?: string; transformedPrompt?: string; hookEventName?: string },
   ): string | null {
-    if (!context) return null;
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({
       hookSpecificOutput: {
         hookEventName: heard?.hookEventName ?? EVENT[moment] ?? "PreToolUse",
@@ -190,6 +192,7 @@ export const claude: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { type?: string; message?: { role?: string; content?: unknown } };
       const content = entry.message?.content;
@@ -201,8 +204,13 @@ export const claude: Adapter = {
           name?: string;
           input?: Record<string, unknown>;
         }[]) {
-          if (block?.type !== "tool_use" || !WRITE_TOOLS.has(block.name ?? "")) continue;
-          addTouched(touched, pathOf(block.input), payload.cwd);
+          if (block?.type !== "tool_use") continue;
+          recordToolAction(block.name, block.input, {
+            cwd: payload.cwd,
+            writeTools: WRITE_TOOLS,
+            touched,
+            actions,
+          });
         }
       }
       const text =
@@ -219,7 +227,7 @@ export const claude: Adapter = {
             : "";
       if (text.trim()) said.push(`${role}: ${text.trim()}`);
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 

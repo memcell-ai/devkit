@@ -4,12 +4,13 @@ import { join, resolve } from "node:path";
 
 import { hookCommand, hookMatches, MOMENTS, type Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -37,11 +38,11 @@ import {
 // content, and tool_calls.
 
 const EVENT: Record<Moment, string> = {
-  "session-start": "PreInvocation",
+  "session-start": "SessionStart",
   "prompt-submit": "PreInvocation",
   "before-act": "PreToolUse",
-  "turn-end": "PostInvocation",
-  "session-end": "Stop",
+  "turn-end": "Stop",
+  "session-end": "—",
 };
 
 interface Handler {
@@ -57,6 +58,7 @@ interface GroupedEntry {
 
 interface HookSpec {
   enabled?: boolean;
+  SessionStart?: Handler[];
   PreInvocation?: Handler[];
   PreToolUse?: GroupedEntry[];
   PostInvocation?: Handler[];
@@ -108,20 +110,24 @@ export const antigravity: Adapter = {
   },
 
   async stale(dir: string): Promise<boolean> {
-    const files = [file(resolve(dir))];
-    if ((await staleText(files)) || (await missingMoments(files, Object.values(EVENT)))) {
+    const hookAt = file(resolve(dir));
+    const files = [hookAt];
+    const activeEvents = Object.values(EVENT).filter((e) => e !== "—");
+    if ((await staleText(files)) || (await missingMoments(files, activeEvents))) {
+      return true;
+    }
+    const config = await readJson<HooksConfig>(hookAt).catch(() => null);
+    if (
+      config?.memcell?.PostInvocation?.some((h) =>
+        hookMatches(h.command, "turn-end", "antigravity"),
+      ) ||
+      config?.memcell?.Stop?.some((h) => hookMatches(h.command, "session-end", "antigravity"))
+    ) {
       return true;
     }
     const mcpDoc = await readJson<McpFile>(mcpFile()).catch(() => null);
-    const entry = mcpDoc?.mcpServers?.memcell as { args?: string[] } | undefined;
-    if (entry && Array.isArray(entry.args)) {
-      if (
-        !entry.args.includes("--agent") ||
-        !entry.args.includes("antigravity") ||
-        entry.args.includes("--dir")
-      ) {
-        return true;
-      }
+    if (mcpDoc?.mcpServers && oursMcp(mcpDoc.mcpServers.memcell)) {
+      return true;
     }
     return false;
   },
@@ -131,10 +137,22 @@ export const antigravity: Adapter = {
     const config = await readJson<HooksConfig>(at);
     const spec = (config.memcell ??= {});
 
-    // PreInvocation (prompt-submit & session-start)
+    // SessionStart (session-start)
+    const startCmd = hookCommand("session-start", "antigravity");
+    const nonMatchingSessionStart = (spec.SessionStart ?? []).filter(
+      (h) => !hookMatches(h.command, "session-start", "antigravity"),
+    );
+    spec.SessionStart = [
+      ...nonMatchingSessionStart,
+      { type: "command", command: startCmd, timeout: 30 },
+    ];
+
+    // PreInvocation (prompt-submit)
     const promptCmd = hookCommand("prompt-submit", "antigravity");
     const nonMatchingPreInv = (spec.PreInvocation ?? []).filter(
-      (h) => !hookMatches(h.command, "prompt-submit", "antigravity"),
+      (h) =>
+        !hookMatches(h.command, "prompt-submit", "antigravity") &&
+        !hookMatches(h.command, "session-start", "antigravity"),
     );
     spec.PreInvocation = [
       ...nonMatchingPreInv,
@@ -159,25 +177,29 @@ export const antigravity: Adapter = {
       },
     ];
 
-    // PostInvocation (turn-end)
-    const turnCmd = hookCommand("turn-end", "antigravity");
-    const nonMatchingPostInv = (spec.PostInvocation ?? []).filter(
-      (h) => !hookMatches(h.command, "turn-end", "antigravity"),
-    );
-    spec.PostInvocation = [
-      ...nonMatchingPostInv,
-      { type: "command", command: turnCmd, timeout: 30 },
-    ];
+    // Remove legacy PostInvocation turn-end wiring (PostInvocation fires mid-turn after tool calls)
+    if (spec.PostInvocation) {
+      const cleanedPostInv = spec.PostInvocation.filter(
+        (h) => !hookMatches(h.command, "turn-end", "antigravity"),
+      );
+      if (cleanedPostInv.length > 0) {
+        spec.PostInvocation = cleanedPostInv;
+      } else {
+        delete spec.PostInvocation;
+      }
+    }
 
-    // Stop (session-end)
-    const endCmd = hookCommand("session-end", "antigravity");
+    // Stop (turn-end — fires when the turn execution loop finishes)
+    const turnCmd = hookCommand("turn-end", "antigravity");
     const nonMatchingStop = (spec.Stop ?? []).filter(
-      (h) => !hookMatches(h.command, "session-end", "antigravity"),
+      (h) =>
+        !hookMatches(h.command, "turn-end", "antigravity") &&
+        !hookMatches(h.command, "session-end", "antigravity"),
     );
-    spec.Stop = [...nonMatchingStop, { type: "command", command: endCmd, timeout: 30 }];
+    spec.Stop = [...nonMatchingStop, { type: "command", command: turnCmd, timeout: 30 }];
 
     await writeJson(at, config);
-    await installMcp().catch(() => undefined);
+    await removeMcp().catch(() => undefined);
     return at;
   },
 
@@ -205,7 +227,11 @@ export const antigravity: Adapter = {
     return MOMENTS.map((moment) => {
       let ok = false;
       if (spec) {
-        if (moment === "prompt-submit" || moment === "session-start") {
+        if (moment === "session-start") {
+          ok = Boolean(
+            spec.SessionStart?.some((h) => hookMatches(h.command, "session-start", "antigravity")),
+          );
+        } else if (moment === "prompt-submit") {
           ok = Boolean(
             spec.PreInvocation?.some((h) => hookMatches(h.command, "prompt-submit", "antigravity")),
           );
@@ -216,13 +242,9 @@ export const antigravity: Adapter = {
             ),
           );
         } else if (moment === "turn-end") {
-          ok = Boolean(
-            spec.PostInvocation?.some((h) => hookMatches(h.command, "turn-end", "antigravity")),
-          );
+          ok = Boolean(spec.Stop?.some((h) => hookMatches(h.command, "turn-end", "antigravity")));
         } else if (moment === "session-end") {
-          ok = Boolean(
-            spec.Stop?.some((h) => hookMatches(h.command, "session-end", "antigravity")),
-          );
+          ok = false;
         }
       }
       return { moment, event: EVENT[moment], ok };
@@ -246,9 +268,14 @@ export const antigravity: Adapter = {
       });
     }
 
-    // PreInvocation and PostInvocation inject steps into conversation
+    if (moment === "turn-end") {
+      return null;
+    }
+
+    // SessionStart and PreInvocation inject persistent systemMessage steps into the conversation
+    // trajectory so recalled thread/memory context survives across tool calls within the turn.
     return JSON.stringify({
-      injectSteps: [{ ephemeralMessage: context }],
+      injectSteps: [{ systemMessage: { systemMessage: context } }],
     });
   },
 
@@ -266,12 +293,14 @@ export const antigravity: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
 
     const read = await readJsonlSlice(path, from, (raw) => {
       const rec = raw as {
         type?: string;
         source?: string;
         content?: unknown;
+        thinking?: unknown;
         tool_calls?: {
           name?: string;
           tool_name?: string;
@@ -280,55 +309,77 @@ export const antigravity: Adapter = {
         }[];
       };
 
-      const role =
-        rec.type === "USER_INPUT" || rec.source === "USER_EXPLICIT"
-          ? "user"
-          : rec.type === "PLANNER_RESPONSE" || rec.source === "MODEL"
-            ? "assistant"
-            : null;
-
       for (const call of rec.tool_calls ?? []) {
         const name = call.name ?? call.tool_name ?? "";
-        if (WRITE_TOOLS.has(name)) {
-          const args = call.args ?? call.tool_args ?? {};
-          const target = (args.TargetFile ?? args.AbsolutePath ?? args.path ?? args.file_path) as
-            string | undefined;
-          addTouched(touched, target, payload.cwd);
-        }
+        const args = call.args ?? call.tool_args ?? {};
+        recordToolAction(name, args, {
+          cwd: payload.cwd,
+          writeTools: WRITE_TOOLS,
+          touched,
+          actions,
+        });
       }
 
-      if (!role) return;
-      const text = typeof rec.content === "string" ? rec.content : "";
-      if (!text.trim()) return;
+      const isUser = rec.type === "USER_INPUT" || rec.source === "USER_EXPLICIT";
+      if (isUser) {
+        const text = typeof rec.content === "string" ? rec.content.trim() : "";
+        if (text) said.push(`user: ${text}`);
+        return;
+      }
 
-      if (role === "assistant") {
-        const sanitized = sanitizeAssistantText(text);
-        if (sanitized) said.push(`assistant: ${sanitized}`);
-      } else {
-        said.push(`user: ${text.trim()}`);
+      if (rec.type === "PLANNER_RESPONSE") {
+        const text = typeof rec.content === "string" ? rec.content.trim() : "";
+        if (text) {
+          said.push(`assistant: ${boundAssistantText(text)}`);
+        } else if (typeof rec.thinking === "string" && rec.thinking.trim()) {
+          said.push(`assistant: ${rec.thinking.trim().slice(0, 1200)}`);
+        }
+        return;
+      }
+
+      if (rec.type === "GENERIC") {
+        const text = typeof rec.content === "string" ? rec.content.trim() : "";
+        if (!text) return;
+        // Never dump raw viewed file contents into transcript delta
+        if (text.includes("File Path: ") && text.includes("Showing lines ")) {
+          const prevAction = actions[actions.length - 1];
+          if (prevAction && !prevAction.outcome) {
+            prevAction.outcome = "Read file";
+          }
+          return;
+        }
+        // Attach concise outcome to the preceding tool action or capture ask_question responses
+        const firstLine =
+          text
+            .split("\n")
+            .find((l) => l.trim() && !l.startsWith("Created At:") && !l.startsWith("Completed At:"))
+            ?.trim() ?? "";
+        const prevAction = actions[actions.length - 1];
+        if (prevAction && !prevAction.outcome && firstLine) {
+          prevAction.outcome = firstLine.slice(0, 240);
+        }
+        if (text.includes("A1:") || text.includes("The command exited")) {
+          said.push(`assistant: ${text.slice(0, 800)}`);
+        }
+        return;
+      }
+
+      if (rec.source === "MODEL") {
+        const text = typeof rec.content === "string" ? rec.content.trim() : "";
+        if (text) {
+          said.push(`assistant: ${boundAssistantText(text)}`);
+        }
       }
     });
 
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
-/**
- * Sanitizes assistant text to prevent AST/code-block dumps and huge internal monologues
- * from overwhelming the distillation stage.
- */
-function sanitizeAssistantText(raw: string): string {
-  // Replace large code blocks (>200 chars) with a brief placeholder so code syntax isn't mined as memory
-  const strippedCode = raw.replace(/```[\s\S]*?```/g, (match) => {
-    if (match.length > 200) {
-      return "[code snippet omitted]";
-    }
-    return match;
-  });
-
-  const trimmed = strippedCode.trim();
-  if (trimmed.length > 3000) {
-    return trimmed.slice(0, 1500) + "\n\n[...]\n\n" + trimmed.slice(-1500);
+function boundAssistantText(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length > 6000) {
+    return trimmed.slice(0, 3000) + "\n\n[...]\n\n" + trimmed.slice(-3000);
   }
   return trimmed;
 }
@@ -336,12 +387,12 @@ function sanitizeAssistantText(raw: string): string {
 export const SURFACE: Surface = {
   moments: {
     "session-start": {
-      event: "PreInvocation",
-      inject: { via: "json", path: "injectSteps[0].ephemeralMessage" },
+      event: "SessionStart",
+      inject: { via: "json", path: "injectSteps[0].systemMessage.systemMessage" },
     },
     "prompt-submit": {
       event: "PreInvocation",
-      inject: { via: "json", path: "injectSteps[0].ephemeralMessage" },
+      inject: { via: "json", path: "injectSteps[0].systemMessage.systemMessage" },
     },
     "before-act": {
       event: "PreToolUse",
@@ -350,13 +401,14 @@ export const SURFACE: Surface = {
       ),
     },
     "turn-end": {
-      event: "PostInvocation",
-      inject: { via: "json", path: "injectSteps[0].ephemeralMessage" },
-    },
-    "session-end": {
       event: "Stop",
-      inject: { via: "json", path: "reason" },
+      inject: unsupported(
+        "Antigravity Stop hook fires at turn completion and only injects reason when blocking termination",
+      ),
     },
+    "session-end": unsupported(
+      "Antigravity has no session-close hook; Stop fires at the end of each turn",
+    ),
   },
   guard: {
     event: "PreToolUse",

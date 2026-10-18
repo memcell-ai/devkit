@@ -5,6 +5,7 @@ import { getSdkClient } from "../sdk-client.js";
 import {
   badge,
   bad,
+  blank,
   cmd,
   emit,
   good,
@@ -101,16 +102,17 @@ export async function listMemories(
       ...items.flatMap((s: any) => [
         row(
           1,
-          [value(s.confidence !== undefined ? s.confidence.toFixed(2) : "0.50")],
+          [label(s.confidence !== undefined ? s.confidence.toFixed(2) : "0.50")],
           s.type ? [variant(s.type)] : null,
           [scopeBadge(s.scope || "workspace")],
           s.enforce ? [variant("guard")] : null,
           s.status === "pinned" ? [variant("pinned")] : null,
-          [label(s.title)],
+          [value(s.title)],
         ),
         row(2, [idSeg(s.id)]),
       ]),
-      row(2, [label("inspect one with"), cmd("memcell memory get <id>")]),
+      blank(),
+      row(1, [label("inspect one with"), cmd("memcell memory get <id>")]),
     );
     return 0;
   } catch (error) {
@@ -163,8 +165,15 @@ export async function getMemory(
         s.status ? [variant(s.status)] : null,
       ),
       row(1, [label("memory:"), value(s.title)]),
+      s.content ? row(2, [label("specification:"), label(s.content)]) : null,
       s.context ? row(2, [label("context:"), label(s.context)]) : null,
       s.observation ? row(2, [label("observation:"), label(s.observation)]) : null,
+      Array.isArray(s.resources) && s.resources.length > 0
+        ? row(2, [label("resources:"), list(s.resources)])
+        : null,
+      Array.isArray(s.appliesAt) && s.appliesAt.length > 0
+        ? row(2, [label("applies at:"), list(s.appliesAt)])
+        : null,
       (s as any).requiredRoles?.length
         ? row(2, [label("required roles:"), list((s as any).requiredRoles)])
         : null,
@@ -249,8 +258,24 @@ export async function createMemory(
 
     const status = typeof flags.status === "string" ? (flags.status as any) : undefined;
 
+    const content = typeof flags.content === "string" ? flags.content : undefined;
     const context = typeof flags.context === "string" ? flags.context : undefined;
     const observation = typeof flags.observation === "string" ? flags.observation : undefined;
+    const resources =
+      typeof flags.resources === "string"
+        ? flags.resources
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean)
+        : undefined;
+    const appliesAtRaw = flags["applies-at"] ?? flags.appliesAt;
+    const appliesAt =
+      typeof appliesAtRaw === "string"
+        ? appliesAtRaw
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean)
+        : undefined;
     const enforce =
       flags.enforce === true
         ? true
@@ -272,6 +297,7 @@ export async function createMemory(
 
     const created = await memClient.create(namespace, {
       title: memoryText,
+      content,
       type: type as any,
       scope,
       status,
@@ -280,6 +306,8 @@ export async function createMemory(
       metadata,
       context,
       observation,
+      resources,
+      appliesAt,
       enforce,
     } as any);
 
@@ -311,10 +339,26 @@ export async function updateMemory(
     const namespace = await resolveNamespace(sdk, target);
 
     const memoryText = typeof flags.text === "string" ? flags.text : undefined;
+    const content = typeof flags.content === "string" ? flags.content : undefined;
     const type = typeof flags.type === "string" ? (flags.type as any) : undefined;
     const status = typeof flags.status === "string" ? (flags.status as any) : undefined;
     const context = typeof flags.context === "string" ? flags.context : undefined;
     const observation = typeof flags.observation === "string" ? flags.observation : undefined;
+    const resources =
+      typeof flags.resources === "string"
+        ? flags.resources
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean)
+        : undefined;
+    const appliesAtRaw = flags["applies-at"] ?? flags.appliesAt;
+    const appliesAt =
+      typeof appliesAtRaw === "string"
+        ? appliesAtRaw
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean)
+        : undefined;
     const enforce =
       flags.enforce === true
         ? true
@@ -336,11 +380,14 @@ export async function updateMemory(
 
     const updated = await memClient.update(namespace, memoryId, {
       title: memoryText,
+      content,
       type,
       status,
       metadata,
       context,
       observation,
+      resources,
+      appliesAt,
       enforce,
     });
 
@@ -459,7 +506,7 @@ export async function adoptMemory(
       return 1;
     }
 
-    const res = await memClient.adopt(namespace, memoryId, { targetProjectIds: [into] });
+    const res = await memClient.adopt(namespace, memoryId, { targetWorkspaceIds: [into] });
     const targetInfo = res.adopted?.[0];
 
     say(

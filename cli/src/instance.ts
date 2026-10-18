@@ -31,7 +31,9 @@ const file = () => join(dir(), "credentials.json");
 
 /** Trailing slashes are a foot-gun once these become URL prefixes. */
 export function normalize(instance: string): string {
-  return instance.replace(/\/+$/, "");
+  let end = instance.length;
+  while (end > 0 && instance[end - 1] === "/") end--;
+  return instance.slice(0, end);
 }
 
 /**

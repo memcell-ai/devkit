@@ -206,7 +206,31 @@ export async function missingMoments(files: string[], events: string[]): Promise
   const texts = await Promise.all(files.map((at) => readFile(at, "utf8").catch(() => "")));
   const text = texts.join("\n");
   if (!text.includes("memcell")) return false;
-  return events.some((event) => event.length > 0 && !text.includes(event));
+  return events.some((event) => event.length > 0 && event !== "—" && !text.includes(event));
+}
+
+function hasPinnedMemcellPath(line: string): boolean {
+  const idx = line.indexOf("memcell");
+  if (idx <= 0) return false;
+  // Walk backward from "memcell" through non-whitespace, non-quote path characters
+  let start = idx;
+  while (start > 0) {
+    const ch = line[start - 1]!;
+    if (ch === '"' || ch === "'" || ch === " " || ch === "\t") break;
+    start--;
+  }
+  if (start === 0) return false;
+  const prefix = line.slice(start, idx);
+  if (prefix.startsWith("/")) return true;
+  if (
+    prefix.length >= 3 &&
+    ((prefix[0]! >= "A" && prefix[0]! <= "Z") || (prefix[0]! >= "a" && prefix[0]! <= "z")) &&
+    prefix[1] === ":" &&
+    (prefix[2] === "\\" || prefix[2] === "/")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export async function staleText(files: string[]): Promise<boolean> {
@@ -217,7 +241,7 @@ export async function staleText(files: string[]): Promise<boolean> {
       if (!line.includes("memcell") || !line.includes("hook")) continue;
       // The two shapes an older release left behind.
       if (line.includes("--agent")) return true;
-      if (/["'\s](\/|[A-Za-z]:\\)[^"'\s]*memcell/.test(line)) return true;
+      if (hasPinnedMemcellPath(line)) return true;
     }
   }
   return false;

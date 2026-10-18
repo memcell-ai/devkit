@@ -13,12 +13,12 @@ def main():
     print("=== MemCell Python Quickstart ===")
     print(f"Connecting to: {instance} [Workspace: {namespace}]\n")
 
-    # 1. Ingest an operational directive memory
-    print("1. Ingesting operational directive...")
+    # 1. Ingest an operational instruction memory
+    print("1. Ingesting operational instruction...")
     res = client.remember(
         namespace=namespace,
         title="Escalate supplier contract renewals over $50,000 to legal counsel",
-        type="directive",
+        type="instruction",
         scope="workspace",
     )
     memory = (

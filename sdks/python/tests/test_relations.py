@@ -48,7 +48,7 @@ def test_relations_sync():
                             "targetMemory": {
                                 "id": "mem_d1",
                                 "title": "Deploy workers",
-                                "type": "directive",
+                                "type": "instruction",
                             },
                         }
                     ],

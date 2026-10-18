@@ -8,8 +8,8 @@
 //   turn end · session end        → report.   A memory the turn's own
 //     work corroborated is one the recall got right, and saying so is the
 //     only thing that moves confidence.
-//   before act                    → pre-act guard evaluation. A directive
-//     read at the top of a session and needed forty steps later is a directive
+//   before act                    → pre-act guard evaluation. An instruction
+//     read at the top of a session and needed forty steps later is an instruction
 //     nobody is holding by the time it applies. This fires before an
 //     individual act and evaluates active memories bearing on THAT act. It fires many
 //     times a turn, so it costs no call: active memories come down once
@@ -39,7 +39,7 @@ export type PipelinePhase = "recall" | "remember" | "report";
 export const PIPELINE_PHASES: Record<LifecycleHook, PipelinePhase[]> = {
   "session-start": ["recall"],
   "prompt-submit": ["recall"],
-  // Evaluated in-memory from active directives held in session cache. No remote phase runs.
+  // Evaluated in-memory from active instructions held in session cache. No remote phase runs.
   "before-act": [],
   // Delivered in-memory from staged guidance or failure recovery context. No remote phase runs.
   "after-act": [],
@@ -60,7 +60,18 @@ export const LEGS = PIPELINE_PHASES;
 /** An entry living in a runner's throwaway cache — `npx`'s content store,
  *  pnpm's dlx dir. A path in there is not an installation and must never be
  *  wired into anyone's config: the cache prunes, the hook dies. */
-export const THROWAWAY = /[\\/]_npx[\\/]|[\\/]dlx-|[\\/]\.pnpm-store[\\/]/;
+export function isThrowawayPath(where: string): boolean {
+  const normalized = where.replaceAll("\\", "/");
+  return (
+    normalized.includes("/_npx/") ||
+    normalized.includes("/dlx-") ||
+    normalized.includes("/.pnpm-store/")
+  );
+}
+
+export const THROWAWAY = {
+  test: isThrowawayPath,
+};
 
 /**
  * The wiring names `memcell` and nothing else.

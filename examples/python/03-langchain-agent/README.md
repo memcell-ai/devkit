@@ -3,7 +3,7 @@
 Demonstrates creating custom `@tool` functions that connect LangChain agents directly to MemCell:
 
 1. `recall_memory`: Allows an agent to fetch dynamic guidance relevant to its current plan.
-2. `remember_directive`: Enables an agent to persist newly established knowledge.
+2. `remember_instruction`: Enables an agent to persist newly established knowledge.
 
 ---
 

@@ -30,7 +30,7 @@ def audit_wire_transaction(amount: float, beneficiary_country: str):
 
     # Verify enforced guards
     for mem in recall.memories:
-        if (mem.type in ["guard", "directive"]) and mem.enforce:
+        if (mem.type in ["guard", "instruction"]) and mem.enforce:
             # Check sanction list policy
             if (
                 "high-risk jurisdiction" in mem.title.lower()

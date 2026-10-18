@@ -74,15 +74,15 @@ def test_compounded_live_lifecycle_flow(env):
     assert guard.type == "guard"
     guard_id = guard.id
 
-    # 2. Operational directive memory
-    directive = scoped_agent.memories.create(
+    # 2. Operational instruction memory
+    instruction = scoped_agent.memories.create(
         title="Verify customer IBAN and identity records prior to processing refund dispatches",
-        type="directive",
+        type="instruction",
         scope="workspace",
     )
-    assert directive.id
-    directive_id = directive.id
-    initial_version = directive.version or 1
+    assert instruction.id
+    instruction_id = instruction.id
+    initial_version = instruction.version or 1
 
     # 3. User-scoped personal preference memory
     personal = scoped_agent.memories.create(
@@ -105,17 +105,17 @@ def test_compounded_live_lifecycle_flow(env):
     provisional_id = provisional.id
 
     # ── Stage 6: Epistemic Knowledge Graph Relations ──
-    # Connect directive -> guard with `limits` relation (directive constrains guard)
+    # Connect instruction -> guard with `limits` relation (instruction constrains guard)
     rel = env.client.relations.relate(
         env.namespace,
-        source_id=directive_id,
+        source_id=instruction_id,
         target_id=guard_id,
         type="limits",
     )
     assert rel.get("ok") is True
 
-    # Inspect relations on directive
-    graph = env.client.relations.list(env.namespace, directive_id)
+    # Inspect relations on instruction
+    graph = env.client.relations.list(env.namespace, instruction_id)
     outgoing_targets = [
         r.target_id for r in graph.outgoing if r.relation_type == "limits"
     ]
@@ -171,19 +171,19 @@ def test_compounded_live_lifecycle_flow(env):
     # ── Stage 10: Memory Evolution, Lineage History & Star Toggling ──
     updated_dir = env.client.memories.update(
         env.namespace,
-        directive_id,
+        instruction_id,
         title="Verify customer IBAN, identity records, and tax exemption status prior to refund dispatches",
     )
     assert (updated_dir.version or 1) > initial_version
 
-    history = env.client.memories.history(env.namespace, directive_id)
+    history = env.client.memories.history(env.namespace, instruction_id)
     assert history.total_versions >= 2
     assert len(history.history) >= 2
 
-    star_res = env.client.memories.star(env.namespace, directive_id, starred=True)
+    star_res = env.client.memories.star(env.namespace, instruction_id, starred=True)
     assert star_res.starred is True
 
-    unstar_res = env.client.memories.star(env.namespace, directive_id, starred=False)
+    unstar_res = env.client.memories.star(env.namespace, instruction_id, starred=False)
     assert unstar_res.starred is False
 
     # ── Stage 11: Security Gate: Agent Key Revocation ──

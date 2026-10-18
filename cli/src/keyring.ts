@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
+import { normalize } from "./instance.js";
 import { machineDir, machineFile } from "./machine.js";
 import { findWorkspace } from "./workspace.js";
 
@@ -46,7 +47,7 @@ const file = () => machineFile("agent-keys.json");
 /** Instance and id together: an id is unique only within one memcell, and a
  *  key minted against a laptop's dev server must never be found for the
  *  hosted one. */
-const handle = (instance: string, keyId: string) => `${instance.replace(/\/+$/, "")}|${keyId}`;
+const handle = (instance: string, keyId: string) => `${normalize(instance)}|${keyId}`;
 
 async function read(): Promise<Store> {
   try {
@@ -80,13 +81,13 @@ export async function pruneProjectKeys(
 
   const real = (p: string) => realpath(resolve(p)).catch(() => resolve(p));
   const at = await real(projectDir);
-  const wanted = instance.replace(/\/+$/, "");
+  const wanted = normalize(instance);
 
   const remaining: Record<string, AgentKey> = {};
   let pruned = 0;
 
   for (const [h, keyEntry] of Object.entries(store.keys)) {
-    const isSameInstance = keyEntry.instance.replace(/\/+$/, "") === wanted;
+    const isSameInstance = normalize(keyEntry.instance) === wanted;
     const isSameProject =
       (projectId && keyEntry.projectId && keyEntry.projectId === projectId) ||
       (await real(keyEntry.projectPath ?? keyEntry.project)) === at;
@@ -112,14 +113,14 @@ export async function saveAgentKey(entry: AgentKey): Promise<void> {
   const real = (p: string) => realpath(resolve(p)).catch(() => resolve(p));
   const resolvedPath = resolve(entry.projectPath ?? entry.project);
   const targetProject = await real(resolvedPath);
-  const targetInstance = entry.instance.replace(/\/+$/, "");
+  const targetInstance = normalize(entry.instance);
   const targetAgent = entry.agent?.toLowerCase();
   const targetProjectId = entry.projectId;
 
   const cleaned: Record<string, AgentKey> = {};
 
   for (const [h, k] of Object.entries(store.keys ?? {})) {
-    const isSameInstance = k.instance.replace(/\/+$/, "") === targetInstance;
+    const isSameInstance = normalize(k.instance) === targetInstance;
     const isSameProject =
       targetProjectId && k.projectId
         ? k.projectId === targetProjectId
@@ -160,9 +161,9 @@ export async function agentKeyForProject(
   projectIdOrSlug?: string,
 ): Promise<AgentKey | null> {
   const real = (p: string) => realpath(resolve(p)).catch(() => resolve(p));
-  const wanted = instance.replace(/\/+$/, "");
+  const wanted = normalize(instance);
   const entries = Object.values((await read()).keys ?? {}).filter(
-    (k) => k.instance.replace(/\/+$/, "") === wanted,
+    (k) => normalize(k.instance) === wanted,
   );
   if (entries.length === 0) return null;
 
@@ -263,7 +264,7 @@ export async function listConnectedProjects(instance?: string): Promise<
   }[]
 > {
   const store = await read();
-  const wanted = instance ? instance.replace(/\/+$/, "") : null;
+  const wanted = instance ? normalize(instance) : null;
   const seen = new Set<string>();
   const projects: {
     instance: string;
@@ -275,7 +276,7 @@ export async function listConnectedProjects(instance?: string): Promise<
   }[] = [];
 
   for (const k of Object.values(store.keys ?? {})) {
-    const inst = k.instance.replace(/\/+$/, "");
+    const inst = normalize(k.instance);
     if (wanted && inst !== wanted) continue;
     const slug = k.projectSlug ?? k.space;
     const dedupeKey = `${inst}|${k.projectId ?? ""}|${slug ?? ""}|${k.projectPath ?? k.project}`;

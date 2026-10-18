@@ -17,9 +17,9 @@ describe("CLI Insights, Export & Lifecycle E2E", () => {
     // Seed at least one memory to test formatting
     env.runCli([
       "remember",
-      "Operational directive: Record audit traces for external compliance verification",
+      "Operational instruction: Record audit traces for external compliance verification",
       "--type",
-      "directive",
+      "instruction",
       "--scope",
       "workspace",
     ]);
@@ -59,14 +59,14 @@ describe("CLI Insights, Export & Lifecycle E2E", () => {
     if (!env) return;
 
     const res = env.runCli(["export", "--format", "agents-md"]);
-    expect(res.stdout).toMatch(/# Memory Context|Directives/i);
+    expect(res.stdout).toMatch(/# Memory Context|Instructions/i);
   });
 
   it("exports workspace memories in claude-md format", () => {
     if (!env) return;
 
     const res = env.runCli(["export", "--format", "claude-md"]);
-    expect(res.stdout).toMatch(/# Memory Context|Directives/i);
+    expect(res.stdout).toMatch(/# Memory Context|Instructions/i);
   });
 
   it("exports workspace memories in cursorrules format", () => {

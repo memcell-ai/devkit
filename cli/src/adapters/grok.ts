@@ -4,14 +4,13 @@ import { dirname, join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import { MCP_ARGS, MCP_COMMAND, type Adapter } from "./shared.js";
@@ -57,14 +56,20 @@ function stripped(text: string): string {
   if (begin === -1) return text;
   const end = text.indexOf(END, begin);
   if (end === -1) return text;
-  return `${text.slice(0, begin)}${text.slice(end + END.length)}`.replace(/\n{3,}/g, "\n\n");
+  let next = `${text.slice(0, begin)}${text.slice(end + END.length)}`;
+  while (next.includes("\n\n\n")) {
+    next = next.replaceAll("\n\n\n", "\n\n");
+  }
+  return next;
 }
 
 async function installMcp(dir: string): Promise<void> {
   const at = tomlFile(dir);
   const current = await readFile(at, "utf8").catch(() => "");
   await mkdir(dirname(at), { recursive: true });
-  await writeFile(at, `${stripped(current).trimEnd()}\n\n${block()}\n`.replace(/^\n+/, ""));
+  const base = stripped(current).trimEnd();
+  const next = base ? `${base}\n\n${block()}\n` : `${block()}\n`;
+  await writeFile(at, next);
 }
 
 async function removeMcp(dir: string): Promise<boolean> {
@@ -82,22 +87,36 @@ export const grok: Adapter = {
   get surface() {
     return SURFACE;
   },
-  ...ccHookOps("grok", hooksFile, EVENT, { afterInstall: installMcp, alsoRemove: removeMcp }),
+  ...ccHookOps("grok", hooksFile, EVENT, {
+    afterInstall: async (dir) => {
+      await removeMcp(dir).catch(() => undefined);
+    },
+    alsoRemove: removeMcp,
+  }),
 
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ additional_context: context });
   },
 
   // ── read — the ACP update stream its hooks name ──────────────────────────
-  // Each line is a session/update notification; the update's
-  // `sessionUpdate` kind says what it is: message chunks carry the words,
-  // tool_call carries the rawInput whose path names the write.
   async read(payload: Incoming, from: number): Promise<Session> {
     const path = payload.transcript_path ?? payload.transcriptPath;
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
+    let activeRole: "user" | "assistant" | null = null;
+    let activeChunkBuffer = "";
+
+    const flushRoleBuffer = (): void => {
+      if (activeRole && activeChunkBuffer.trim()) {
+        said.push(`${activeRole}: ${activeChunkBuffer.trim()}`);
+      }
+      activeRole = null;
+      activeChunkBuffer = "";
+    };
+
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { params?: { update?: Record<string, unknown> } } & {
         update?: Record<string, unknown>;
@@ -109,23 +128,25 @@ export const grok: Adapter = {
         const role = kind === "user_message_chunk" ? "user" : "assistant";
         const content = update.content as { text?: string } | string | undefined;
         const text = typeof content === "string" ? content : (content?.text ?? "");
-        if (text.trim()) said.push(`${role}: ${text.trim()}`);
+        if (role !== activeRole) {
+          flushRoleBuffer();
+          activeRole = role;
+        }
+        activeChunkBuffer += text;
       } else if (kind === "tool_call" || kind === "tool_call_update") {
+        flushRoleBuffer();
         const name = String(update.title ?? update.toolName ?? update.name ?? "");
         const input = update.rawInput as Record<string, unknown> | string | undefined;
-        if (
-          name === "apply_patch" ||
-          (typeof input === "string" && input.includes("*** Begin Patch"))
-        ) {
-          const patch =
-            typeof input === "string" ? input : String((input as { input?: unknown })?.input ?? "");
-          for (const f of patchPaths(patch)) addTouched(touched, f, payload.cwd);
-        } else if (WRITE_TOOLS.has(name) && typeof input === "object") {
-          addTouched(touched, pathOf(input), payload.cwd);
-        }
+        recordToolAction(name, input, {
+          cwd: payload.cwd,
+          writeTools: WRITE_TOOLS,
+          touched,
+          actions,
+        });
       }
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    flushRoleBuffer();
+    return finalizeSession(said, touched, actions, read);
   },
 };
 
@@ -147,29 +168,29 @@ export const SURFACE: Surface = {
   moments: {
     "session-start": {
       event: "SessionStart",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { via: "json", path: "additional_context" },
     },
     "prompt-submit": {
       event: "UserPromptSubmit",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { via: "json", path: "additional_context" },
     },
     "before-act": {
       event: "PreToolUse",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { via: "json", path: "additional_context" },
     },
     "turn-end": {
       event: "Stop",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { via: "json", path: "additional_context" },
     },
     "session-end": {
       event: "SessionEnd",
-      inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+      inject: { unsupported: "the session is over — there is nobody left to tell" },
     },
   },
   guard: {
     event: "PreToolUse",
     matcher: (tools) => (tools.length > 0 ? tools.join("|") : undefined),
-    inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
+    inject: { via: "json", path: "additional_context" },
     refuse: { via: "exit-code", code: 2 },
     tools: {
       read: ["read_file", "grep", "list_dir"],

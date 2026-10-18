@@ -72,17 +72,37 @@ export async function report(
     const moved = (await (sdk.feedback
       ? sdk.feedback(feedbackPayload)
       : (sdk as any).report(feedbackPayload))) as any;
-    const fromNum: number =
-      typeof moved?.from === "number" ? moved.from : (moved?.attributed?.[0]?.from ?? 0.5);
-    const toNum: number =
-      typeof moved?.to === "number" ? moved.to : (moved?.attributed?.[0]?.to ?? 0.6);
+    const attr = moved?.attributed?.[0];
+    const fromNum: number | undefined =
+      typeof moved?.from === "number"
+        ? moved.from
+        : typeof moved?.oldConfidence === "number"
+          ? moved.oldConfidence
+          : typeof attr?.oldConfidence === "number"
+            ? attr.oldConfidence
+            : typeof attr?.from === "number"
+              ? attr.from
+              : undefined;
+    const toNum: number | undefined =
+      typeof moved?.to === "number"
+        ? moved.to
+        : typeof moved?.newConfidence === "number"
+          ? moved.newConfidence
+          : typeof attr?.newConfidence === "number"
+            ? attr.newConfidence
+            : typeof attr?.to === "number"
+              ? attr.to
+              : undefined;
+    const hasConfidence = typeof fromNum === "number" && typeof toNum === "number";
     say(
       row(0, [badge("memcell"), label("report"), place(targetSpace)]),
-      row(
-        1,
-        [good(outcome)],
-        [label("confidence"), value(`${fromNum.toFixed(2)} → ${toNum.toFixed(2)}`)],
-      ),
+      hasConfidence
+        ? row(
+            1,
+            [good(outcome)],
+            [label("confidence"), value(`${fromNum.toFixed(2)} → ${toNum.toFixed(2)}`)],
+          )
+        : row(1, [good(outcome)]),
     );
     return 0;
   } catch (error) {

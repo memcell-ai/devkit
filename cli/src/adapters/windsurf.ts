@@ -3,14 +3,13 @@ import { join } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  patchPaths,
-  pathOf,
+  finalizeSession,
+  parseStandardTranscriptEntry,
   readJsonlSlice,
-  TOUCHED_CAP,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { ccHookOps } from "./cc-hooks.js";
 import {
@@ -70,7 +69,9 @@ const WRITE_TOOLS = new Set([
 ]);
 
 const wiring = ccHookOps("windsurf", file, EVENT, {
-  afterInstall: installMcp,
+  afterInstall: async (dir) => {
+    await removeMcp(dir).catch(() => undefined);
+  },
   alsoRemove: removeMcp,
   legacy: (dir) => [join(dir, ".codeium", "windsurf", "hooks.json")],
 });
@@ -116,7 +117,7 @@ export const windsurf: Adapter = {
   ...wiring,
 
   speak(moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({
       hookSpecificOutput: {
         hookEventName: EVENT[moment],
@@ -137,31 +138,18 @@ export const windsurf: Adapter = {
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
 
     const read = await readJsonlSlice(path, from, (raw) => {
-      const rec = raw as {
-        type?: string;
-        role?: string;
-        content?: unknown;
-        message?: { role?: string; content?: unknown };
-        toolCalls?: { name?: string; args?: Record<string, unknown> }[];
-      };
-
-      const role = rec.role ?? rec.message?.role ?? (rec.type === "user" ? "user" : null);
-      if (role && (rec.content || rec.message?.content)) {
-        const text = String(rec.content ?? rec.message?.content ?? "");
-        if (text.trim()) said.push(`${role}: ${text.trim()}`);
-      }
-
-      for (const call of rec.toolCalls ?? []) {
-        if (WRITE_TOOLS.has(call.name ?? "")) {
-          addTouched(touched, pathOf(call.args), payload.cwd);
-          const patch = typeof call.args?.patch === "string" ? call.args.patch : "";
-          if (patch) for (const p of patchPaths(patch)) addTouched(touched, p, payload.cwd);
-        }
-      }
+      parseStandardTranscriptEntry(raw, {
+        cwd: payload.cwd,
+        writeTools: WRITE_TOOLS,
+        said,
+        touched,
+        actions,
+      });
     });
 
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };

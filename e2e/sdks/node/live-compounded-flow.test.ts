@@ -16,8 +16,8 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
   let scopedAgent: ReturnType<MemcellClient["workspace"]>;
 
   let guardMemoryId: string;
-  let directiveMemoryId: string;
-  let initialDirectiveVersion: number;
+  let instructionMemoryId: string;
+  let initialInstructionVersion: number;
   let personalMemoryId: string;
   let provisionalMemoryId: string;
 
@@ -99,7 +99,7 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
   });
 
   // Stage 5: Epistemic Ingestion Across Types, Scopes, and Statuses
-  it("Stage 5: agent ingests guards, directives, personal preferences, and provisional observations", async () => {
+  it("Stage 5: agent ingests guards, instructions, personal preferences, and provisional observations", async () => {
     if (!env || !scopedAgent) return;
 
     // 1. Enforced guard memory
@@ -114,16 +114,16 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
     expect(guard.type).toBe("guard");
     guardMemoryId = guard.id;
 
-    // 2. Operational directive memory
-    const directive = await scopedAgent.memories.create({
+    // 2. Operational instruction memory
+    const instruction = await scopedAgent.memories.create({
       title:
         "Verify customer IBAN and identity records prior to processing refund dispatches",
-      type: "directive",
+      type: "instruction",
       scope: "workspace",
     });
-    expect(directive.id).toBeDefined();
-    directiveMemoryId = directive.id;
-    initialDirectiveVersion = directive.version || 1;
+    expect(instruction.id).toBeDefined();
+    instructionMemoryId = instruction.id;
+    initialInstructionVersion = instruction.version || 1;
 
     // 3. User-scoped personal preference memory
     const personal = await scopedAgent.memories.create({
@@ -150,20 +150,20 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
 
   // Stage 6: Epistemic Knowledge Graph Relations
   it("Stage 6: declares directed epistemic limits edge and inspects relation graph", async () => {
-    if (!env || !guardMemoryId || !directiveMemoryId) return;
+    if (!env || !guardMemoryId || !instructionMemoryId) return;
 
-    // Connect directive -> guard with `limits` relation (directive constrains guard)
+    // Connect instruction -> guard with `limits` relation (instruction constrains guard)
     const rel = await env.client.relations.relate(env.namespace, {
-      sourceId: directiveMemoryId,
+      sourceId: instructionMemoryId,
       targetId: guardMemoryId,
       type: "limits",
     });
     expect(rel.ok).toBe(true);
 
-    // Inspect relations on directive
+    // Inspect relations on instruction
     const graph = await env.client.relations.list(
       env.namespace,
-      directiveMemoryId,
+      instructionMemoryId,
     );
     const hasOutgoing = (graph.outgoing || []).some(
       (r: any) =>
@@ -174,7 +174,7 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
   });
 
   // Stage 7: Semantic Recall, Graph Synthesis, & Provisional Filtering
-  it("Stage 7: recalls relevant directives, prioritizes guards, and filters provisional noise", async () => {
+  it("Stage 7: recalls relevant instructions, prioritizes guards, and filters provisional noise", async () => {
     if (!env || !scopedAgent) return;
 
     // Semantic recall for refund disbursement intent
@@ -185,7 +185,7 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
     expect(recall.memories.length).toBeGreaterThanOrEqual(1);
     expect(recall.promptContext.length).toBeGreaterThan(0);
 
-    // Prompt context should contain synthesized epistemic directives
+    // Prompt context should contain synthesized epistemic instructions
     expect(recall.promptContext).toMatch(/disbursement|refund|authorization/i);
 
     // Provisional memory must be excluded by default from standard recall
@@ -250,23 +250,23 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
 
   // Stage 10: Memory Evolution, Lineage History & Star Toggling
   it("Stage 10: updates memory content, verifies version lineage, and stars/unstars", async () => {
-    if (!env || !directiveMemoryId) return;
+    if (!env || !instructionMemoryId) return;
 
     // Update memory
     const updated = await env.client.memories.update(
       env.namespace,
-      directiveMemoryId,
+      instructionMemoryId,
       {
         title:
           "Verify customer IBAN, identity records, and tax exemption status prior to refund dispatches",
       },
     );
-    expect(updated.version).toBeGreaterThan(initialDirectiveVersion);
+    expect(updated.version).toBeGreaterThan(initialInstructionVersion);
 
     // Inspect cryptographic revision history
     const history = await env.client.memories.history(
       env.namespace,
-      directiveMemoryId,
+      instructionMemoryId,
     );
     expect(history.totalVersions).toBeGreaterThanOrEqual(2);
     expect((history.history || history.items)!.length).toBeGreaterThanOrEqual(
@@ -276,7 +276,7 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
     // Star memory
     const starRes = await env.client.memories.star(
       env.namespace,
-      directiveMemoryId,
+      instructionMemoryId,
       true,
     );
     expect(starRes.starred).toBe(true);
@@ -284,7 +284,7 @@ describe("Node SDK Compounded Live Lifecycle E2E", () => {
     // Unstar memory
     const unstarRes = await env.client.memories.star(
       env.namespace,
-      directiveMemoryId,
+      instructionMemoryId,
       false,
     );
     expect(unstarRes.starred).toBe(false);

@@ -11,13 +11,13 @@ Understanding how to inject this context into your LLM's conversation loop is es
 MemCell does not simply concatenate raw database strings. Its recall engine synthesizes memories with high epistemic density:
 
 ```
-[MemCell Epistemic Directives]
+[MemCell Epistemic Instructions]
 • [Guard] Escalate any outbound payment exceeding $10,000 to a compliance supervisor (enforced).
-• [Directive] Format transaction logs with ISO-8601 timestamps and ISO-4217 currency symbols.
+• [Instruction] Format transaction logs with ISO-8601 timestamps and ISO-4217 currency symbols.
 • [Preference] Address clients by formal honorific unless prior correspondence indicates first-name basis.
 ```
 
-- **Clear Epistemic Markers**: Directives and guards are highlighted clearly for the LLM.
+- **Clear Epistemic Markers**: Instructions and guards are highlighted clearly for the LLM.
 - **Guards Prioritized**: Enforced guard constraints are ordered prominently at the top.
 - **Token Pruning**: Redundant phrases, metadata, and lower-confidence noise are stripped out.
 

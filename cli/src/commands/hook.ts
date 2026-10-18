@@ -220,6 +220,8 @@ export async function hookVerify(program?: string): Promise<number> {
       const eventsStr = info.events.join(",");
       if (info.ok) {
         say(row(1, [good(moment.padEnd(20, " "))], [label(eventsStr)]));
+      } else if (eventsStr === "—") {
+        say(row(1, [label(moment.padEnd(20, " "))], [label("—")]));
       } else {
         allHealthy = false;
         say(row(1, [bad(moment.padEnd(20, " "))], [label(eventsStr)], [warn("unconfigured")]));
@@ -229,3 +231,54 @@ export async function hookVerify(program?: string): Promise<number> {
 
   return allHealthy ? 0 : 1;
 }
+
+export async function hookInstall(program?: string): Promise<number> {
+  const root = process.cwd();
+  const workspace = await findWorkspace(root).catch(() => null);
+  const targetDir = workspace?.root ?? root;
+
+  if (program) {
+    const adapter = adapterFor(program.toLowerCase().trim());
+    if (!adapter) {
+      say(
+        row(0, [badge("memcell"), label("hook install"), warn(`unknown agent "${program}"`)]),
+        row(1, [label("supported:"), list(allAdapters().map((a) => a.name))]),
+      );
+      return 1;
+    }
+    await adapter.install(targetDir);
+    say(
+      row(0, [badge("memcell"), label("hook install"), place(targetDir)]),
+      row(1, [good("installed hooks for")], [value(adapter.name)]),
+    );
+    return 0;
+  }
+
+  const { detected } = await import("../agents.js");
+  const present = [...(await detected())];
+  if (present.length === 0) {
+    say(
+      row(0, [badge("memcell"), label("hook install"), place(targetDir)]),
+      row(1, [warn("no agents detected in this directory")]),
+      row(2, [label("specify an agent explicitly:"), cmd("memcell hook install <agent>")]),
+    );
+    return 1;
+  }
+
+  const installed: string[] = [];
+  for (const name of present) {
+    const adapter = adapterFor(name);
+    if (!adapter) continue;
+    await adapter.install(targetDir);
+    installed.push(name);
+  }
+
+  say(
+    row(0, [badge("memcell"), label("hook install"), place(targetDir)]),
+    row(1, [good("installed hooks for")], [list(installed)]),
+  );
+  return 0;
+}
+
+export const disconnect = hookRemove;
+export const hookStatus = hookVerify;

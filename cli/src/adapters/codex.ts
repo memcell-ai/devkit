@@ -7,11 +7,13 @@ import { hookCommand, MOMENTS, type Moment } from "../loop/moments.js";
 import {
   addTouched,
   emptySession,
-  patchPaths,
+  finalizeSession,
   readJsonlSlice,
-  TOUCHED_CAP,
+  recordToolAction,
+  relativeTo,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import { missingMoments, staleText, type Adapter, type Wiring } from "./shared.js";
 
@@ -53,12 +55,6 @@ const block = (): string =>
         `additionalContextLimit = 5000`,
       ].join("\n"),
     ),
-    // The MCP registration rides the same managed block, so the whole-block
-    // rewrite keeps it current and remove strips it with everything else.
-    ``,
-    `[mcp_servers.memcell]`,
-    `command = "memcell"`,
-    `args = ["mcp"]`,
     END,
   ].join("\n");
 
@@ -69,7 +65,11 @@ function stripped(text: string): string {
   if (begin === -1) return text;
   const end = text.indexOf(END, begin);
   if (end === -1) return text;
-  return `${text.slice(0, begin)}${text.slice(end + END.length)}`.replace(/\n{3,}/g, "\n\n");
+  let next = `${text.slice(0, begin)}${text.slice(end + END.length)}`;
+  while (next.includes("\n\n\n")) {
+    next = next.replaceAll("\n\n\n", "\n\n");
+  }
+  return next;
 }
 
 export const codex: Adapter = {
@@ -116,29 +116,19 @@ export const codex: Adapter = {
   },
 
   // ── speak — additionalContext, same envelope its hooks parse ─────────────
-  speak(_moment: Moment, context: string | null): string | null {
-    if (!context) return null;
+  speak(moment: Moment, context: string | null): string | null {
+    if (!context || moment === "session-end") return null;
     return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
   },
 
   // ── read — the rollout, handed over or located ───────────────────────────
-  // Codex's newer hooks hand `transcript_path` (the live rollout .jsonl);
-  // older ones and the legacy notify do not, so the reader can also locate
-  // it under `$CODEX_HOME/sessions/YYYY/MM/DD/` by the session id on each
-  // rollout's metadata line, else the newest one naming this cwd.
-  //
-  // Text is `response_item` lines with a `message` payload; a write is an
-  // `event_msg` of type `patch_apply_end`, whose `changes` object is keyed
-  // by the absolute path of every file the patch touched — the cleanest
-  // signal any agent gives. The apply_patch envelope is the fallback for
-  // builds that do not emit it. (Proven against a rollout a real
-  // `codex exec` wrote.)
   async read(payload: Incoming, from: number): Promise<Session> {
     const path =
       payload.transcript_path ?? payload.transcriptPath ?? (await locateRollout(payload));
     if (!path) return emptySession(from);
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { type?: string; payload?: Record<string, unknown> };
       const p = entry.payload ?? {};
@@ -150,17 +140,48 @@ export const codex: Adapter = {
         if (text.trim()) said.push(`${role}: ${text.trim()}`);
       } else if (entry.type === "event_msg" && pt === "patch_apply_end") {
         const changes = p.changes as Record<string, unknown> | undefined;
-        for (const file of Object.keys(changes ?? {})) addTouched(touched, file, payload.cwd);
-      } else if (entry.type === "response_item" && pt === "custom_tool_call") {
-        const input = typeof p.input === "string" ? p.input : "";
-        if (input.includes("*** Begin Patch")) {
-          for (const file of patchPaths(input)) addTouched(touched, file, payload.cwd);
+        const files = Object.keys(changes ?? {});
+        for (const file of files) addTouched(touched, file, payload.cwd);
+        if (files.length > 0) {
+          const relFiles = files.map((f) => relativeTo(f, payload.cwd));
+          actions.push({
+            type: "file_touch",
+            name: "patch_apply",
+            target: relFiles.join(", ").slice(0, 200),
+            summary: `Patched ${relFiles.join(", ").slice(0, 200)}`,
+          });
         }
+      } else if (
+        entry.type === "response_item" &&
+        (pt === "custom_tool_call" || pt === "function_call")
+      ) {
+        const name = String(p.name ?? pt ?? "tool");
+        let input: Record<string, unknown> | string | undefined =
+          typeof p.input === "string"
+            ? p.input
+            : typeof p.arguments === "string"
+              ? p.arguments
+              : (p.input as Record<string, unknown> | undefined);
+        if (typeof input === "string" && !input.includes("*** Begin Patch")) {
+          try {
+            input = JSON.parse(input) as Record<string, unknown>;
+          } catch {
+            // keep as string
+          }
+        }
+        recordToolAction(name, input, {
+          cwd: payload.cwd,
+          writeTools: WRITE_TOOLS,
+          touched,
+          actions,
+        });
       }
     });
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read };
+    return finalizeSession(said, touched, actions, read);
   },
 };
+
+const WRITE_TOOLS = new Set(["Edit", "Write", "apply_patch", "write_file", "replace", "edit_file"]);
 
 /** Codex message content: a string, or an array of `{ type: text|input_text
  *  |output_text, text }` blocks. */
@@ -290,9 +311,8 @@ export const SURFACE: Surface = {
     inject: { via: "json", path: "hookSpecificOutput.additionalContext" },
     refuse: { via: "exit-code", code: 2 },
     tools: {
-      read: ["Read", "Grep", "Glob"],
-      change: ["Edit", "Write", "apply_patch"],
-      // One shell is record AND send; which one is decided from the command.
+      read: ["Read", "Grep", "Glob", "Bash"],
+      change: ["Edit", "Write", "apply_patch", "Bash"],
       record: ["Bash"],
       send: ["Bash"],
     },

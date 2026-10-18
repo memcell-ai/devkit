@@ -13,6 +13,8 @@ export {
 } from "./memories.js";
 
 export { WorkspacesNamespace } from "./workspaces.js";
+export { ThreadsNamespace } from "./threads.js";
+export { DocumentsNamespace } from "./documents.js";
 export { AgentsNamespace } from "./agents.js";
 export { CollaboratorsNamespace } from "./collaborators.js";
 export { UsageNamespace } from "./usage.js";
@@ -90,6 +92,23 @@ export type {
   CreateMemoryRelationParams,
   MemoryRelationsResponse,
   ListWorkspaceRelationsParams,
+
+  // Threads
+  ThreadStatus,
+  ThreadMilestoneItem,
+  ThreadActionItem,
+  ThreadItem,
+  ThreadTurnItem,
+  ListThreadsParams,
+  UpdateThreadParams,
+  ThreadDetailResponse,
+
+  // Documents (RAG)
+  DocumentItem,
+  DocumentChunkSearchResult,
+  ListDocumentsParams,
+  IngestDocumentParams,
+  IngestDocumentResponse,
 
   // Workspaces
   WorkspaceItem,

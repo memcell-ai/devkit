@@ -181,5 +181,52 @@ describe("connect idempotency & self-healing", () => {
 
     const hooks = await readFile(join(cursorDir, ".cursor", "hooks.json"), "utf8");
     expect(hooks).toContain("beforeSubmitPrompt");
+    // Ensure SKILL.md and .mcp.json are NOT installed when native hooks are active
+    await expect(
+      readFile(join(cursorDir, ".agents", "skills", "memcell", "SKILL.md"), "utf8"),
+    ).rejects.toThrow();
+    await expect(readFile(join(cursorDir, ".mcp.json"), "utf8")).rejects.toThrow();
+  });
+
+  it("self-heals and removes colliding SKILL.md and .mcp.json when connecting a hook-capable agent", async () => {
+    const healDir = await mkdtemp(join(tmpdir(), "memcell-heal-collision-"));
+    process.cwd = () => healDir;
+
+    const { installSkill } = await import("../src/adapters/skill.js");
+    const { mcpAdapter } = await import("../src/adapters/mcp.js");
+    installSkill(healDir);
+    await mcpAdapter.install(healDir);
+
+    // Confirm both exist prior to connect
+    expect(
+      await readFile(join(healDir, ".agents", "skills", "memcell", "SKILL.md"), "utf8"),
+    ).toContain("memcell");
+    expect(await readFile(join(healDir, ".mcp.json"), "utf8")).toContain("memcell");
+
+    answer = () => ({
+      instance,
+      project: { id: "p-heal", slug: "heal-proj", name: "Heal Project" },
+      space: { id: "p-heal", slug: "heal-proj", name: "Heal Project" },
+      key: "mc_ag_heal_key",
+      keyId: "key-heal",
+      agentId: "ag-heal",
+    });
+
+    const code = await connect(instance, {
+      project: "heal-proj",
+      agent: "antigravity",
+      from: "test",
+    });
+    expect(code).toBe(0);
+
+    // Native hooks installed
+    const hooks = await readFile(join(healDir, ".agents", "hooks.json"), "utf8");
+    expect(hooks).toContain("PreInvocation");
+
+    // Colliding SKILL.md and .mcp.json removed by self-healing layer
+    await expect(
+      readFile(join(healDir, ".agents", "skills", "memcell", "SKILL.md"), "utf8"),
+    ).rejects.toThrow();
+    await expect(readFile(join(healDir, ".mcp.json"), "utf8")).rejects.toThrow();
   });
 });

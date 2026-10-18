@@ -5,12 +5,12 @@ import { dirname, join, resolve } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
-  TOUCHED_CAP,
+  finalizeSession,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -83,11 +83,31 @@ const fire = (moment, payload) =>
 export default definePluginEntry({
   register(api) {
     api.registerMemoryCapability({
-      async promptBuilder({ sessionId, cwd }) {
-        const answer = await fire("session-start", { cwd, session_id: sessionId });
+      async promptBuilder({ sessionId, cwd, prompt }) {
+        const answer = await fire("session-start", { cwd, session_id: sessionId, prompt });
         const context = answer?.hookSpecificOutput?.additionalContext;
         return context ? { prependContext: context } : {};
       },
+    });
+    api.on("before_prompt_build", async ({ sessionId, cwd, prompt }) => {
+      const answer = await fire("prompt-submit", {
+        cwd: cwd ?? process.cwd(),
+        session_id: sessionId,
+        prompt,
+      });
+      const context = answer?.hookSpecificOutput?.additionalContext;
+      return context ? { prependContext: context } : {};
+    });
+    api.on("before_tool_call", async ({ sessionId, cwd, toolName, toolInput, name, arguments: args }) => {
+      const answer = await fire("before-act", {
+        cwd: cwd ?? process.cwd(),
+        session_id: sessionId,
+        tool_name: toolName ?? name,
+        tool_input: toolInput ?? args,
+      });
+      if (answer?.refuse) {
+        throw new Error(answer.refuse);
+      }
     });
     api.on("agent_end", async ({ sessionId }) => {
       await fire("turn-end", { cwd: process.cwd(), session_id: sessionId });
@@ -127,16 +147,17 @@ export const openclaw: Adapter = {
     const at = pluginFile(resolve(projectDir));
     await mkdir(dirname(at), { recursive: true });
     await writeFile(at, plugin());
-    // MCP rides openclaw's own config (JSON5-tolerant; a plain object is
-    // valid JSON5, so writeJson is safe).
     const cfg = await readJson<{
       mcp?: { servers?: Record<string, unknown> };
       [k: string]: unknown;
     }>(configFile());
-    cfg.mcp ??= {};
-    cfg.mcp.servers ??= {};
-    cfg.mcp.servers.memcell = { command: MCP_COMMAND, args: MCP_ARGS, transport: "stdio" };
-    await writeJson(configFile(), cfg);
+    const server = cfg.mcp?.servers?.memcell as { command?: string } | undefined;
+    if (oursMcp(server)) {
+      delete cfg.mcp!.servers!.memcell;
+      if (Object.keys(cfg.mcp!.servers!).length === 0) delete cfg.mcp!.servers;
+      if (cfg.mcp && Object.keys(cfg.mcp).length === 0) delete cfg.mcp;
+      await rmIfEmptied(configFile(), cfg as Record<string, unknown>, "mcp");
+    }
     return at;
   },
 
@@ -202,6 +223,7 @@ export const openclaw: Adapter = {
 
     const said: string[] = [];
     const touched: string[] = [];
+    const actions: ThreadAction[] = [];
     for (const row of rows.filter((r) => r.seq >= from)) {
       try {
         const event = JSON.parse(row.event_json) as {
@@ -220,8 +242,13 @@ export const openclaw: Adapter = {
             name?: string;
             arguments?: Record<string, unknown>;
           }[]) {
-            if (b?.type === "toolCall" && WRITE_TOOLS.has(b.name ?? "")) {
-              addTouched(touched, pathOf(b.arguments), payload.cwd);
+            if (b?.type === "toolCall") {
+              recordToolAction(b.name, b.arguments, {
+                cwd: payload.cwd,
+                writeTools: WRITE_TOOLS,
+                touched,
+                actions,
+              });
             }
           }
           const text =
@@ -238,7 +265,7 @@ export const openclaw: Adapter = {
       }
     }
     const nextFrom = rows.length ? rows[rows.length - 1]!.seq + 1 : from;
-    return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read: nextFrom };
+    return finalizeSession(said, touched, actions, nextFrom);
   },
 };
 

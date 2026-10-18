@@ -34,7 +34,7 @@ const { promptContext } = await memory.recall({
 });
 
 console.log(promptContext);
-// [directive] Require explicit customer confirmation before applying refunds over $500 (confidence: 0.94)
+// [instruction] Require explicit customer confirmation before applying refunds over $500 (confidence: 0.94)
 ```
 
 ---
@@ -43,7 +43,7 @@ console.log(promptContext);
 
 ### 1. `recall` — Query Memory Before Acting
 
-Query verified directives, facts, preferences, and observations using natural language.
+Query verified instructions, decisions, facts, and preferences using natural language.
 
 ```typescript
 const recall = await memory.recall({
@@ -57,14 +57,14 @@ console.log(recall.promptContext);
 
 ### 2. `remember` — Save Memories
 
-Save a verified directive, fact, preference, or observation so future agents inherit it immediately:
+Save a verified instruction, decision, fact, or preference so future agents inherit it immediately:
 
 ```typescript
 await memory.remember({
   namespace: "acme/support",
   title:
     "Require explicit customer confirmation before applying refunds over $500",
-  type: "directive",
+  type: "instruction",
 });
 ```
 
@@ -103,7 +103,7 @@ async function handleRefund(ticketId: string, amount: number) {
     },
     async (ctx) => {
       // 1. ctx.promptContext automatically contains active memories:
-      //    e.g. "[directive] Require explicit customer confirmation before applying refunds over $500"
+      //    e.g. "[instruction] Require explicit customer confirmation before applying refunds over $500"
 
       // 2. Execute operation with verified context:
       const res = await processRefund(ticketId, amount);
@@ -125,7 +125,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 - `list(namespace, params)`: Paginated query with filtering by `type`, `status`, `scope`, `q`, `sort`.
 - `get(namespace, id)`: Retrieve an individual memory.
-- `create(namespace, params)`: Create a memory (`directive`, `fact`, `preference`, `observation`).
+- `create(namespace, params)`: Create a memory (`instruction`, `decision`, `fact`, `preference`).
 - `update(namespace, id, params)`: Update memory content, status, confidence, or metadata.
 - `delete(namespace, id)`: Delete a memory.
 - `star(namespace, id, starred)`: Star or unstar a memory.

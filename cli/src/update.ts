@@ -17,8 +17,7 @@ export const ONE_DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function isNewerVersion(latest: string, current: string): boolean {
   const parse = (v: string): number[] =>
-    v
-      .replace(/^v/, "")
+    (v.startsWith("v") ? v.slice(1) : v)
       .split("-")[0]!
       .split(".")
       .map((n) => parseInt(n, 10) || 0);

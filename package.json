@@ -17,8 +17,9 @@
     "test:e2e": "pnpm run test:e2e:cli && pnpm run test:e2e:node && pnpm run test:e2e:python",
     "format": "prettier --write \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"e2e/**/*.{ts,js,json,md}\" \"guides/**/*.{ts,js,json,md}\" \"examples/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
     "format:check": "prettier --check \"sdks/**/*.{ts,js,json,md}\" \"cli/**/*.{ts,js,json,md}\" \"e2e/**/*.{ts,js,json,md}\" \"guides/**/*.{ts,js,json,md}\" \"examples/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "lint:ast": "node scripts/lint-no-heuristics.mjs",
     "lint:py": "cd sdks/python && ruff check && ruff format --check",
-    "lint": "pnpm run typecheck && pnpm run lint:py"
+    "lint": "pnpm run lint:ast && pnpm run typecheck && pnpm run lint:py"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

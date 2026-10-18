@@ -5,12 +5,12 @@ import { dirname, join, resolve } from "node:path";
 
 import type { Moment } from "../loop/moments.js";
 import {
-  addTouched,
   emptySession,
-  pathOf,
-  TOUCHED_CAP,
+  finalizeSession,
+  recordToolAction,
   type Incoming,
   type Session,
+  type ThreadAction,
 } from "./capture.js";
 import {
   MCP_ARGS,
@@ -124,6 +124,18 @@ export const MemcellPlugin = async ({ directory }) => {
         });
       }
     },
+    "tool.execute.before": async (input, output) => {
+      const sessionID = input?.sessionID ?? output?.sessionID;
+      const answer = await fire("before-act", {
+        cwd: directory,
+        session_id: sessionID,
+        tool_name: input?.tool ?? input?.name,
+        tool_input: output?.args ?? input?.args,
+      });
+      if (answer?.refuse) {
+        throw new Error(answer.refuse);
+      }
+    },
     event: async ({ event }) => {
       if (event?.type !== "session.idle") return;
       await fire("turn-end", {
@@ -139,10 +151,10 @@ ${END}
 /** The four moments as the plugin realizes them — session-end has no
  *  plugin event worth trusting yet, and the wiring says so honestly. */
 const EVENT: Record<Moment, string> = {
-  "session-start": "chat.message (first of session)",
+  "session-start": "chat.message",
   "prompt-submit": "chat.message",
   "before-act": "tool.execute.before",
-  "turn-end": "event session.idle",
+  "turn-end": "session.idle",
   "session-end": "—",
 };
 
@@ -172,14 +184,17 @@ export function opencodeFamily(family: Family): Adapter {
       const at = pluginFile(resolve(projectDir));
       await mkdir(dirname(at), { recursive: true });
       await writeFile(at, plugin(family.name));
-      // The MCP registration rides opencode's own config: type local, the
-      // bridge command, nothing else.
-      const cfg = await readJson<{ mcp?: Record<string, unknown>; [k: string]: unknown }>(
-        configFile(resolve(projectDir)),
-      );
-      cfg.mcp ??= {};
-      cfg.mcp.memcell = { type: "local", command: [MCP_COMMAND, ...MCP_ARGS], enabled: true };
-      await writeJson(configFile(resolve(projectDir)), cfg);
+      const cfgAt = configFile(resolve(projectDir));
+      const cfg = await readJson<{ mcp?: Record<string, unknown>; [k: string]: unknown }>(cfgAt);
+      if (cfg.mcp && isOursLocal(cfg.mcp.memcell)) {
+        delete cfg.mcp.memcell;
+        if (Object.keys(cfg.mcp).length === 0) delete cfg.mcp;
+        if (Object.keys(cfg).length === 0) {
+          await rm(cfgAt, { force: true });
+        } else {
+          await writeJson(cfgAt, cfg);
+        }
+      }
       return at;
     },
 
@@ -198,7 +213,11 @@ export function opencodeFamily(family: Family): Adapter {
       if (cfg.mcp && isOursLocal(cfg.mcp.memcell)) {
         delete cfg.mcp.memcell;
         if (Object.keys(cfg.mcp).length === 0) delete cfg.mcp;
-        await writeJson(cfgAt, cfg);
+        if (Object.keys(cfg).length === 0) {
+          await rm(cfgAt, { force: true });
+        } else {
+          await writeJson(cfgAt, cfg);
+        }
         removed = true;
       }
       return removed ? at : null;
@@ -221,9 +240,6 @@ export function opencodeFamily(family: Family): Adapter {
     },
 
     // ── read — the session database, fail-open ───────────────────────────
-    // part rows carry the session's text and tool calls as JSON `data`;
-    // the read cursor is how many of the session's parts have already
-    // shipped, so a turn slices only what is new.
     async read(payload: Incoming, from: number): Promise<Session> {
       const sid = payload.session_id ?? payload.sessionId;
       if (!sid) return emptySession(from);
@@ -243,13 +259,12 @@ export function opencodeFamily(family: Family): Adapter {
           db.close();
         }
       } catch {
-        // No module, no database, or a schema this build does not know:
-        // an empty session, never an error in somebody's coding session.
         return emptySession(from);
       }
 
       const said: string[] = [];
       const touched: string[] = [];
+      const actions: ThreadAction[] = [];
       for (const row of rows.slice(from)) {
         try {
           const message = JSON.parse(row.mdata ?? "{}") as { role?: string };
@@ -260,19 +275,22 @@ export function opencodeFamily(family: Family): Adapter {
             tool?: string;
             state?: { input?: Record<string, unknown> };
           };
-          // Synthetic parts are what memcell itself injected — reading them
-          // back would hand the memory its own words as the session's.
           if (part.type === "text" && part.text?.trim() && !part.synthetic) {
             const role = message.role === "user" ? "user" : "assistant";
             said.push(`${role}: ${part.text.trim()}`);
-          } else if (part.type === "tool" && WRITE_TOOLS.has(part.tool ?? "")) {
-            addTouched(touched, pathOf(part.state?.input), payload.cwd);
+          } else if (part.type === "tool") {
+            recordToolAction(part.tool, part.state?.input, {
+              cwd: payload.cwd,
+              writeTools: WRITE_TOOLS,
+              touched,
+              actions,
+            });
           }
         } catch {
           // One malformed row is not a reason to lose the rest.
         }
       }
-      return { text: said.join("\n\n"), touched: touched.slice(0, TOUCHED_CAP), read: rows.length };
+      return finalizeSession(said, touched, actions, rows.length);
     },
   };
 }

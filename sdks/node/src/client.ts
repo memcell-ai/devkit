@@ -15,6 +15,8 @@ import { OperatorNamespace } from "./operator.js";
 import { InvitationsNamespace } from "./invitations.js";
 import { OrganizationTeamsNamespace } from "./teams.js";
 import { OrganizationInsightsNamespace } from "./insights.js";
+import { ThreadsNamespace } from "./threads.js";
+import { DocumentsNamespace } from "./documents.js";
 import {
   MemCellError,
   RateLimitError,
@@ -52,6 +54,16 @@ export class MemCell {
    * Epistemic memory relations and knowledge graph APIs.
    */
   readonly relations: MemoryRelationsNamespace;
+
+  /**
+   * Session threads and parallel workstream APIs.
+   */
+  readonly threads: ThreadsNamespace;
+
+  /**
+   * Grounded RAG document ingestion and search APIs.
+   */
+  readonly documents: DocumentsNamespace;
 
   /**
    * Workspace boundary management APIs.
@@ -134,7 +146,11 @@ export class MemCell {
     ) {
       base = process.env.MEMCELL_BASE_URL;
     }
-    this.baseUrl = (base || "https://api.memcell.io").replace(/\/+$/, "");
+    let rawBase = base || "https://api.memcell.io";
+    while (rawBase.endsWith("/")) {
+      rawBase = rawBase.slice(0, -1);
+    }
+    this.baseUrl = rawBase;
     this.config = config;
     this.customFetch = config.fetch;
 
@@ -211,6 +227,8 @@ export class MemCell {
 
     this.memories = new MemoriesNamespace(this);
     this.relations = this.memories.relations;
+    this.threads = new ThreadsNamespace(this);
+    this.documents = new DocumentsNamespace(this);
     this.workspaces = new WorkspacesNamespace(this);
     this.agents = new AgentsNamespace(this);
     this.collaborators = new CollaboratorsNamespace(this);
@@ -308,6 +326,7 @@ export class MemCell {
     const payload: Record<string, unknown> = {
       query,
       intent: query,
+      sessionId: params.sessionId,
       subject: params.subject,
       type: effectiveType,
       enforce: params.enforce,
@@ -338,9 +357,14 @@ export class MemCell {
       rootId: s.rootId,
       title: s.title || s.text || "",
       text: s.text || s.title || "",
+      content: s.content ?? null,
       context: s.context ?? null,
       observation: s.observation ?? null,
       tags: s.tags ?? [],
+      entities: s.entities ?? [],
+      resources: s.resources ?? [],
+      appliesAt: s.appliesAt ?? s.applies_at ?? [],
+      relations: s.relations,
       subject: s.subject ?? null,
       type: s.type,
       enforce: s.enforce ?? false,
@@ -368,6 +392,9 @@ export class MemCell {
       recallId: json.recallId || json.momentId || "",
       promptContext: json.promptContext || "",
       memories,
+      matchedThread: json.matchedThread ?? null,
+      activeThreads: json.activeThreads,
+      documentChunks: json.documentChunks,
       matchedTags: json.matchedTags,
       guardMode: json.guardMode,
       profile: json.profile,
@@ -383,9 +410,13 @@ export class MemCell {
 
     const payload: Record<string, unknown> = {
       title: params.title,
+      content: params.title ? params.content : undefined,
       context: params.context,
       observation: params.observation,
       tags: params.tags,
+      entities: params.entities,
+      resources: params.resources,
+      appliesAt: params.appliesAt,
       subject: params.subject,
       type: effectiveType,
       enforce: params.enforce,
@@ -398,7 +429,9 @@ export class MemCell {
         params.expiresAt instanceof Date
           ? params.expiresAt.toISOString()
           : params.expiresAt,
-      raw: params.raw ?? params.content,
+      raw: params.raw ?? (!params.title ? params.content : undefined),
+      touched: params.touched,
+      actions: params.actions,
       sessionId: params.sessionId,
       activeMemoryIds: params.activeMemoryIds,
       async: params.async,
@@ -428,9 +461,13 @@ export class MemCell {
     const created: MemoryItem[] = rawCreated.map((s) => ({
       id: s.id,
       title: s.title,
+      content: s.content ?? null,
       context: s.context ?? null,
       observation: s.observation ?? null,
       tags: s.tags ?? [],
+      entities: s.entities ?? [],
+      resources: s.resources ?? [],
+      appliesAt: s.appliesAt ?? s.applies_at ?? [],
       subject: s.subject ?? null,
       type: s.type,
       enforce: s.enforce ?? false,
@@ -445,9 +482,13 @@ export class MemCell {
     const evolved: MemoryItem[] = rawEvolved.map((s) => ({
       id: s.id,
       title: s.title,
+      content: s.content ?? null,
       context: s.context ?? null,
       observation: s.observation ?? null,
       tags: s.tags ?? [],
+      entities: s.entities ?? [],
+      resources: s.resources ?? [],
+      appliesAt: s.appliesAt ?? s.applies_at ?? [],
       subject: s.subject ?? null,
       type: s.type,
       enforce: s.enforce ?? false,
@@ -463,6 +504,7 @@ export class MemCell {
       evolved,
       reinforced: json.reinforced,
       superseded: json.superseded,
+      thread: json.thread ?? null,
       note: json.note,
     };
   }
@@ -575,7 +617,7 @@ export class MemCell {
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith("data:")) {
-              const jsonStr = trimmed.replace(/^data:\s*/, "");
+              const jsonStr = trimmed.slice(5).trimStart();
               try {
                 const event = JSON.parse(jsonStr) as JobEvent;
                 if (options?.onProgress) {

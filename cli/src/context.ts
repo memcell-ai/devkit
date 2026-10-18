@@ -16,14 +16,15 @@ interface MeResponse {
 /**
  * Resolves unified execution context across the 4-tier hierarchy:
  * 1. Explicit CLI flags (--workspace, --project, --owner)
- * 2. Local directory project file (.memcell / findProject())
- * 3. Active CLI config (memcell config get project / workspace / organization)
- * 4. User session profile & active project/workspace from instance
+ * 2. Local directory workspace file (.memcell/config.toml)
+ * 3. Active CLI config (memcell config get workspace / organization)
+ * 4. User session profile & active workspace from instance
  */
 export async function resolveContext(
   instance: string,
   flags: Record<string, string | true> = {},
   from?: string,
+  options?: { skipRemote?: boolean },
 ): Promise<ResolvedContext> {
   const credential = await credentialFor(instance).catch(() => null);
 
@@ -59,7 +60,7 @@ export async function resolveContext(
     }
   }
 
-  // 2. Fall back to local project file (.memcell)
+  // 2. Fall back to local workspace file (.memcell)
   if (!project) {
     const found = await findWorkspace(from).catch(() => null);
     if (found?.project) {
@@ -100,8 +101,8 @@ export async function resolveContext(
     }
   }
 
-  // 4. Resolve owner or active project from session if logged in
-  if (credential && (!owner || !project)) {
+  // 4. Resolve owner or active workspace from session if logged in
+  if (!options?.skipRemote && credential && (!owner || !project)) {
     try {
       const me = await call<MeResponse>(instance, "/api/v1/me", { bearer: credential.token });
       const activeProj = me.activeWorkspace || me.activeProject || me.activeSpace;
@@ -155,7 +156,7 @@ export function enforceRequirements(
     return { ok: false, exitCode: 1 };
   }
 
-  // 2. Project / Workspace requirement gate
+  // 2. Workspace requirement gate
   const requiresProject =
     command.require?.workspace === "required" || command.require?.project === "required";
   if (requiresProject && !context.project) {

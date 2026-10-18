@@ -5,16 +5,27 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-MemoryType = Literal["directive", "fact", "preference", "guard", "observation"]
-MEMORY_TYPES = ("directive", "fact", "preference", "guard", "observation")
+MemoryType = Literal["instruction", "decision", "fact", "preference"]
+MEMORY_TYPES = ("instruction", "decision", "fact", "preference")
 
 MEMORY_SCOPES = ("organization", "team", "workspace", "user")
 MemoryScope = Literal["organization", "team", "workspace", "user", str]
 
 PromotionStatus = Literal["pending", "approved", "rejected"]
-RelationType = Literal["limits", "justifies", "refines", "depends_on", "tensions_with"]
+RelationType = Literal[
+    "relates_to",
+    "part_of",
+    "depends_on",
+    "justifies",
+    "refines",
+    "limits",
+    "supersedes",
+    "caused_by",
+    "tensions_with",
+]
 MemoryStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
+ThreadStatus = Literal["active", "paused", "completed"]
 
 T = TypeVar("T")
 
@@ -63,11 +74,15 @@ class MemoryItem(BaseModel):
     root_id: str | None = None
     version: int | None = 1
     title: str
+    content: str | None = None
     context: str | None = None
     observation: str | None = None
     tags: list[str] = Field(default_factory=list)
+    entities: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    applies_at: list[str] = Field(default_factory=list)
     subject: str | None = None
-    type: MemoryType = "directive"
+    type: MemoryType = "instruction"
     enforce: bool = False
     status: MemoryStatus = "active"
     confidence: float = 0.5
@@ -83,6 +98,8 @@ class MemoryItem(BaseModel):
     required_roles: list[str] = Field(default_factory=list)
     scope_promoted_at: datetime | None = None
     scope_promoted_by: str | None = None
+    source_thread_id: str | None = None
+    source_document_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     author: MemoryAuthor | None = None
     source: str | None = None
@@ -95,11 +112,13 @@ class MemoryItem(BaseModel):
     @classmethod
     def _validate_type(cls, v: Any) -> str:
         if not v:
-            return "directive"
+            return "instruction"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference", "guard", "observation"):
+        if s in ("instruction", "decision", "fact", "preference"):
             return s
-        return "directive"
+        if s == "observation":
+            return "fact"
+        return "instruction"
 
     @property
     def text(self) -> str:
@@ -118,12 +137,16 @@ class MemoryHistoryItem(BaseModel):
     root_id: str
     version: int
     title: str
+    content: str | None = None
     context: str | None = None
     observation: str | None = None
     tags: list[str] = Field(default_factory=list)
+    entities: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    applies_at: list[str] = Field(default_factory=list)
     confidence: float = 0.5
     status: MemoryStatus = "active"
-    type: MemoryType = "directive"
+    type: MemoryType = "instruction"
     enforce: bool = False
     subject: str | None = None
     scope: str = "workspace"
@@ -138,11 +161,13 @@ class MemoryHistoryItem(BaseModel):
     @classmethod
     def _validate_type(cls, v: Any) -> str:
         if not v:
-            return "directive"
+            return "instruction"
         s = str(v).lower()
-        if s in ("directive", "fact", "preference", "guard", "observation"):
+        if s in ("instruction", "decision", "fact", "preference"):
             return s
-        return "directive"
+        if s == "observation":
+            return "fact"
+        return "instruction"
 
 
 class MemoryHistoryResponse(BaseModel):
@@ -200,12 +225,83 @@ class PromoteMemoryResponse(BaseModel):
     promotion_request: MemoryPromotionRequest | None = None
 
 
+class ThreadMilestoneItem(BaseModel):
+    phase: str | None = None
+    title: str | None = None
+    summary: str
+    timestamp: str | None = None
+
+
+class ThreadActionItem(BaseModel):
+    type: Literal["tool_call", "file_touch", "command", "milestone"] = "tool_call"
+    category: str | None = None
+    name: str = ""
+    tool: str | None = None
+    target: str | None = None
+    summary: str = ""
+    input_summary: str | None = None
+    output_summary: str | None = None
+    outcome: str | None = None
+    status: str | None = None
+
+
+class ThreadTurnItem(BaseModel):
+    id: str
+    thread_id: str
+    workspace_id: str
+    turn_index: int = 1
+    summary: str = ""
+    user_intent: str | None = None
+    agent_outcome: str | None = None
+    actions: list[ThreadActionItem] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    extracted_memory_ids: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+
+
+class ThreadItem(BaseModel):
+    id: str
+    workspace_id: str
+    user_id: str | None = None
+    agent_id: str | None = None
+    external_session_id: str | None = None
+    title: str
+    status: ThreadStatus = "active"
+    summary: str = ""
+    current_objective: str | None = None
+    decisions: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    entities: list[str] = Field(default_factory=list)
+    milestones: list[ThreadMilestoneItem] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    turns: list[ThreadTurnItem] = Field(default_factory=list)
+    turn_count: int = 1
+    last_active_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class DocumentChunkSearchResult(BaseModel):
+    id: str
+    document_id: str
+    document_title: str
+    source_path: str | None = None
+    chunk_index: int = 0
+    heading: str | None = None
+    content: str
+    score: float = 0.0
+
+
 class RecallResponse(BaseModel):
     """Result of pre-flight memory recall."""
 
     recall_id: str
     prompt_context: str
     memories: list[MemoryItem] = Field(default_factory=list)
+    matched_thread: ThreadItem | None = None
+    active_threads: list[ThreadItem] | None = None
+    document_chunks: list[DocumentChunkSearchResult] | None = None
     matched_tags: list[str] | None = None
     guard_mode: str | None = None
     profile: dict[str, Any] | None = None
@@ -218,6 +314,7 @@ class RememberResponse(BaseModel):
     evolved: list[MemoryItem] = Field(default_factory=list)
     reinforced: list[dict[str, Any]] | None = None
     superseded: list[dict[str, Any]] | None = None
+    thread: ThreadItem | None = None
     note: str | None = None
     accepted: bool | None = None
     job_id: str | None = None
@@ -404,7 +501,8 @@ class OrgInvitationItem(BaseModel):
 
 class MemoryTypeQuotas(BaseModel):
     guard: int | None = None
-    directive: int = 0
+    instruction: int = 0
+    decision: int = 0
     fact: int = 0
     preference: int = 0
     observation: int = 0

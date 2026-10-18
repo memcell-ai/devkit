@@ -11,11 +11,11 @@ client = MemcellClient(token=token, base_url=instance)
 
 def seed_editorial_standards():
     """Seed workspace memories for the crew."""
-    print("Seeding editorial team workspace directives...")
+    print("Seeding editorial team workspace instructions...")
     client.remember(
         namespace=namespace,
         title="Tone guideline: Professional, authoritative, and concise; avoid promotional hyperbole",
-        type="directive",
+        type="instruction",
         scope="workspace",
     )
     client.remember(
@@ -35,14 +35,14 @@ def main():
     research_intent = "Research Q2 enterprise cloud adoption statistics"
     print(f"\n1. Researcher agent queries MemCell for: '{research_intent}'")
     research_recall = client.recall(namespace=namespace, intent=research_intent)
-    print("Injected Directives for Researcher:")
+    print("Injected Instructions for Researcher:")
     print(research_recall.prompt_context)
 
     # Step 2: Writer agent drafts article
     draft_intent = "Draft summary of enterprise cloud survey results"
     print(f"\n2. Writer agent queries MemCell for: '{draft_intent}'")
     writer_recall = client.recall(namespace=namespace, intent=draft_intent)
-    print("Injected Directives for Writer:")
+    print("Injected Instructions for Writer:")
     print(writer_recall.prompt_context)
 
     print(

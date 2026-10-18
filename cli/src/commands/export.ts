@@ -40,7 +40,8 @@ export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 /** The types, in the order a reader wants them: what was decided, what must
  *  be followed, what to avoid, then everything known. */
 const SECTIONS: [title: string, types: (string | null)[]][] = [
-  ["Directives & Guards", ["directive", "guard"]],
+  ["Instructions & Guards", ["instruction", "guard"]],
+  ["Decisions", ["decision"]],
   ["Preferences", ["preference"]],
   ["Observations & Learnings", ["observation"]],
   ["Facts", ["fact", null]],
@@ -82,7 +83,10 @@ export function renderCursorrules(doc: ExportDoc): string {
   return (
     [
       `# ${spaceInfo.name} — exported from memcell ${spaceInfo.exportedAt.slice(0, 10)}`,
-      ...live.map((s) => lineOf(s).replace(/^- /, "")),
+      ...live.map((s) => {
+        const line = lineOf(s);
+        return line.startsWith("- ") ? line.slice(2) : line;
+      }),
     ].join("\n") + "\n"
   );
 }
