@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/memcell-ai/devkit/compare/cli-v1.6.0...cli-v1.6.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **cli:** resolve nested recall relations and filter non-existent local resource paths ([#15](https://github.com/memcell-ai/devkit/issues/15)) ([95ef576](https://github.com/memcell-ai/devkit/commit/95ef5761b6730825e52921771a615a5b96815dfe))
+
 ## [1.6.0](https://github.com/memcell-ai/devkit/compare/cli-v1.5.0...cli-v1.6.0) (2026-10-18)
 
 
