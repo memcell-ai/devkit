@@ -10,11 +10,16 @@ export function isActClass(val: string): val is ActClass {
 }
 
 export interface RawMemoryRelation {
+  id?: string;
+  sourceId?: string;
+  targetId?: string;
   relationType: string;
-  direction: "outgoing" | "incoming";
-  targetMemoryId: string;
-  targetTitle: string;
+  direction?: "outgoing" | "incoming";
+  targetMemoryId?: string;
+  targetTitle?: string;
   targetType?: string;
+  targetMemory?: { id: string; title: string; type?: string };
+  sourceMemory?: { id: string; title: string; type?: string };
 }
 
 export interface RawMemoryInput {
