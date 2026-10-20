@@ -1,5 +1,7 @@
 import { actOf } from "./act.js";
 import { can } from "../adapters/surface.js";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname } from "node:path";
 import {
   evaluatePreAct,
@@ -337,6 +339,20 @@ function collapseWhitespace(input: string): string {
   return parts.join(" ");
 }
 
+const HOME_DIR = homedir();
+
+function filterExistingLocalResources(resources: string[] | undefined): string[] {
+  if (!resources || resources.length === 0) return [];
+  return resources.filter((res) => {
+    const trimmed = res?.trim();
+    if (!trimmed) return false;
+    if (HOME_DIR && trimmed.startsWith(`${HOME_DIR}/`)) {
+      return existsSync(trimmed);
+    }
+    return true;
+  });
+}
+
 function formatMemoryLine(r: Recalled, prefix = ""): string {
   const lines = [
     `- ${prefix}${r.text}  [id: ${(r.memoryId || "").slice(0, 8)} · ${r.confidence.toFixed(2)} · ${r.layer}${r.contested ? " · contested" : ""}]`,
@@ -344,14 +360,28 @@ function formatMemoryLine(r: Recalled, prefix = ""): string {
   if (r.content && r.content.trim()) {
     lines.push(`  Specification: ${r.content.trim()}`);
   }
-  if (r.resources && r.resources.length > 0) {
-    lines.push(`  Applies to: ${r.resources.slice(0, 6).join(", ")}`);
+  const validResources = filterExistingLocalResources(r.resources);
+  if (validResources.length > 0) {
+    lines.push(`  Applies to: ${validResources.slice(0, 6).join(", ")}`);
   }
   if (r.relations && r.relations.length > 0) {
-    for (const rel of r.relations.slice(0, 3)) {
+    const seenRels = new Set<string>();
+    for (const rel of r.relations) {
+      const linkedTitle = rel.targetTitle ?? rel.targetMemory?.title ?? rel.sourceMemory?.title;
+      const linkedId =
+        rel.targetMemoryId ??
+        rel.targetMemory?.id ??
+        rel.sourceMemory?.id ??
+        (rel.sourceId && rel.sourceId !== r.memoryId ? rel.sourceId : rel.targetId) ??
+        "";
+      if (!linkedTitle || (r.memoryId && linkedId === r.memoryId)) continue;
+      const dedupKey = `${rel.relationType}:${linkedId || linkedTitle}`;
+      if (seenRels.has(dedupKey)) continue;
+      seenRels.add(dedupKey);
       lines.push(
-        `  ↳ [${rel.relationType}] ${rel.targetTitle} [id: ${(rel.targetMemoryId || "").slice(0, 8)}]`,
+        `  ↳ [${rel.relationType}] ${linkedTitle}${linkedId ? ` [id: ${linkedId.slice(0, 8)}]` : ""}`,
       );
+      if (seenRels.size >= 3) break;
     }
   }
   return lines.join("\n");
@@ -373,6 +403,7 @@ export function asContext(
 
   if (extras?.matchedThread) {
     const mt = extras.matchedThread;
+    const validThreadResources = filterExistingLocalResources(mt.resources);
     const threadLines = [
       `ACTIVE / RESUMED SESSION THREAD (${mt.title}):`,
       ...(mt.currentObjective ? [`- Objective: ${mt.currentObjective}`] : []),
@@ -394,8 +425,8 @@ export function asContext(
       ...(mt.nextSteps && mt.nextSteps.length > 0
         ? [`- Open Next Steps: ${mt.nextSteps.join(" | ")}`]
         : []),
-      ...(mt.resources && mt.resources.length > 0
-        ? [`- Touched Resources: ${mt.resources.slice(0, 10).join(", ")}`]
+      ...(validThreadResources.length > 0
+        ? [`- Touched Resources: ${validThreadResources.slice(0, 10).join(", ")}`]
         : []),
       "",
     ];

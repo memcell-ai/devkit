@@ -299,6 +299,8 @@ export const antigravity: Adapter = {
       const rec = raw as {
         type?: string;
         source?: string;
+        status?: string;
+        error?: string;
         content?: unknown;
         thinking?: unknown;
         tool_calls?: {
@@ -338,7 +340,19 @@ export const antigravity: Adapter = {
       }
 
       if (rec.type === "GENERIC") {
+        const errorText = typeof rec.error === "string" ? rec.error.trim() : "";
         const text = typeof rec.content === "string" ? rec.content.trim() : "";
+        if (rec.status === "ERROR" || errorText) {
+          const prevAction = actions[actions.length - 1];
+          if (prevAction) {
+            prevAction.outcome = `failed: ${(errorText || text || "tool error").slice(0, 200)}`;
+            if (prevAction.target) {
+              const idx = touched.indexOf(prevAction.target);
+              if (idx !== -1) touched.splice(idx, 1);
+            }
+          }
+          return;
+        }
         if (!text) return;
         // Never dump raw viewed file contents into transcript delta
         if (text.includes("File Path: ") && text.includes("Showing lines ")) {
