@@ -68,8 +68,8 @@ jobs:
             exit 0
           fi
           for i in $(seq 1 24); do
-            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/@memcell%2Fsdk/$version" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
+            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/-/npm/v1/attestations/@memcell%2fsdk@$version" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(Array.isArray(v.attestations)&&v.attestations.length>0?0:1)})"; then
               echo "@memcell/sdk@$version is attested"; exit 0
             fi
             sleep 5
@@ -131,8 +131,8 @@ jobs:
             exit 0
           fi
           for i in $(seq 1 24); do
-            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/memcell/$version" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
+            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/-/npm/v1/attestations/memcell@$version" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(Array.isArray(v.attestations)&&v.attestations.length>0?0:1)})"; then
               echo "memcell@$version is attested"; exit 0
             fi
             sleep 5
