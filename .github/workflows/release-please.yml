@@ -67,9 +67,9 @@ jobs:
             echo "@memcell/sdk@$version has no provenance: the repository is private"
             exit 0
           fi
-          for i in $(seq 1 12); do
-            if curl -fsS "https://registry.npmjs.org/@memcell/sdk" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d).versions['$version'];process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
+          for i in $(seq 1 24); do
+            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/@memcell%2Fsdk/$version" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
               echo "@memcell/sdk@$version is attested"; exit 0
             fi
             sleep 5
@@ -78,8 +78,8 @@ jobs:
           exit 1
 
   publish-cli:
-    needs: release-please
-    if: needs.release-please.outputs.cli_released == 'true'
+    needs: [release-please, publish-node]
+    if: always() && needs.release-please.outputs.cli_released == 'true' && (needs.publish-node.result == 'success' || needs.publish-node.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -97,11 +97,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "@memcell/sdk" run build
       - run: pnpm --filter "memcell" run build
-      - name: Verify package output
+      - name: Resolve workspace dependencies & verify package output
         run: |
           set -euo pipefail
           test -f cli/dist/bin.js
           test -f cli/dist/index.js
+          node -e '
+            const fs = require("node:fs");
+            const sdkPkg = JSON.parse(fs.readFileSync("sdks/node/package.json", "utf8"));
+            const cliPkg = JSON.parse(fs.readFileSync("cli/package.json", "utf8"));
+            if (cliPkg.dependencies && cliPkg.dependencies["@memcell/sdk"]) {
+              cliPkg.dependencies["@memcell/sdk"] = "^" + sdkPkg.version;
+            }
+            for (const [dep, spec] of Object.entries(cliPkg.dependencies || {})) {
+              if (typeof spec === "string" && spec.startsWith("workspace:")) {
+                throw new Error("Unresolved workspace dependency in cli/package.json: " + dep + "=" + spec);
+              }
+            }
+            fs.writeFileSync("cli/package.json", JSON.stringify(cliPkg, null, 2) + "\n");
+          '
       - name: Publish to npm
         run: |
           cd cli
@@ -116,9 +130,9 @@ jobs:
             echo "memcell@$version has no provenance: the repository is private"
             exit 0
           fi
-          for i in $(seq 1 12); do
-            if curl -fsS "https://registry.npmjs.org/memcell" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d).versions['$version'];process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
+          for i in $(seq 1 24); do
+            if curl -fsSH "Cache-Control: no-cache" "https://registry.npmjs.org/memcell/$version" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const v=JSON.parse(d);process.exit(v&&v.dist&&v.dist.attestations?0:1)})"; then
               echo "memcell@$version is attested"; exit 0
             fi
             sleep 5
