@@ -234,21 +234,105 @@ export async function transferWorkspace(
     return 1;
   }
 
-  const to = typeof flags.to === "string" ? flags.to : (flags.owner as string | undefined);
-  if (!to) {
+  const rawTo = typeof flags.to === "string" ? flags.to : (flags.owner as string | undefined);
+  if (!rawTo) {
     say(row(0, [bad("missing target owner")], [label("specify --to <new-owner>")]));
+    return 1;
+  }
+
+  const toParts = rawTo.split("/");
+  const targetOwner = toParts[0] || rawTo;
+  const targetSlugOverride =
+    typeof flags["new-slug"] === "string"
+      ? flags["new-slug"]
+      : toParts.length > 1
+        ? toParts[1]
+        : undefined;
+
+  try {
+    const sdk = await getSdkClient(instance);
+    const wsClient = getWorkspacesClient(sdk);
+    const namespace = await resolveNamespace(sdk, targetSlug);
+    await wsClient.transfer(namespace, {
+      targetOwner,
+      ...(targetSlugOverride ? { targetSlug: targetSlugOverride } : {}),
+    });
+
+    const destination = targetSlugOverride ? `${targetOwner}/${targetSlugOverride}` : targetOwner;
+
+    say(
+      row(0, [badge("memcell"), label("workspace transfer"), place(namespace)]),
+      row(1, [good("transferred ownership to")], [value(destination)]),
+    );
+    return 0;
+  } catch (error) {
+    return refused(instance, error as Error);
+  }
+}
+
+export async function copyWorkspace(
+  instance: string,
+  sourceSlug: string,
+  targetArg?: string,
+  flags: Record<string, string | true> = {},
+): Promise<number> {
+  if (!(await credentialFor(instance))) {
+    needsSession(instance);
     return 1;
   }
 
   try {
     const sdk = await getSdkClient(instance);
     const wsClient = getWorkspacesClient(sdk);
-    const namespace = await resolveNamespace(sdk, targetSlug);
-    await wsClient.transfer(namespace, { targetOwner: to });
+    const namespace = await resolveNamespace(sdk, sourceSlug);
 
+    let targetOwner = typeof flags.to === "string" ? flags.to : (flags.owner as string | undefined);
+    let targetSlug = typeof flags.slug === "string" ? flags.slug : undefined;
+
+    if (targetArg) {
+      const parts = targetArg.split("/");
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        targetOwner = targetOwner || parts[0];
+        targetSlug = targetSlug || parts[1];
+      } else {
+        targetSlug = targetSlug || targetArg;
+      }
+    }
+
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    const visibility =
+      flags.visibility === "public" || flags.visibility === "private"
+        ? flags.visibility
+        : undefined;
+    const includeThreads = flags["no-threads"] !== true && flags.threads !== "false";
+    const includeDocuments = flags["no-documents"] !== true && flags.documents !== "false";
+
+    const result = await wsClient.copy(namespace, {
+      ...(targetOwner ? { targetOwner } : {}),
+      ...(targetSlug ? { targetSlug } : {}),
+      ...(name ? { name } : {}),
+      ...(visibility ? { visibility } : {}),
+      includeThreads,
+      includeDocuments,
+    });
+
+    if (flags.json === true) {
+      emit(JSON.stringify(result, null, 2) + "\n");
+      return 0;
+    }
+
+    const dest = `${result.workspace.ownerSlug}/${result.workspace.slug}`;
     say(
-      row(0, [badge("memcell"), label("workspace transfer"), place(namespace)]),
-      row(1, [good("transferred ownership to")], [value(to)]),
+      row(0, [badge("memcell"), label("workspace copy"), place(namespace)]),
+      row(1, [good("copied workspace to")], [value(dest)], [label(result.workspace.name)]),
+      row(
+        2,
+        [label("memories:")],
+        [value(String(result.copied.memories))],
+        [label("relations:")],
+        [value(String(result.copied.relations))],
+      ),
+      row(2, [label("switch to it with"), cmd(`memcell workspace use ${dest}`)]),
     );
     return 0;
   } catch (error) {

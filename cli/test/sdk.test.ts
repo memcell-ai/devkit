@@ -4,13 +4,13 @@ import { MemCell, ScopedMemCell, AuthManager, MemCellError, RateLimitError } fro
 describe("MemCell SDK (cli package export)", () => {
   describe("AuthManager", () => {
     it("returns Bearer with API key directly", async () => {
-      const auth = new AuthManager({ apiKey: "mc_live_123" }, "https://api.memcell.io");
+      const auth = new AuthManager({ apiKey: "mc_live_123" }, "https://memcell.ai");
       const header = await auth.getAuthorizationHeader();
       expect(header).toBe("Bearer mc_live_123");
     });
 
     it("returns Bearer with accessToken directly", async () => {
-      const auth = new AuthManager({ accessToken: "jwt_token_abc" }, "https://api.memcell.io");
+      const auth = new AuthManager({ accessToken: "jwt_token_abc" }, "https://memcell.ai");
       const header = await auth.getAuthorizationHeader();
       expect(header).toBe("Bearer jwt_token_abc");
     });
@@ -43,7 +43,7 @@ describe("MemCell SDK (cli package export)", () => {
           clientSecret: "secret_xyz",
           scope: "memory:read",
         },
-        "https://api.memcell.io",
+        "https://memcell.ai",
         mockFetch as any,
       );
 
@@ -77,7 +77,7 @@ describe("MemCell SDK (cli package export)", () => {
 
       const auth = new AuthManager(
         { clientId: "cid", clientSecret: "csec" },
-        "https://api.memcell.io",
+        "https://memcell.ai",
         mockFetch as any,
       );
 
@@ -118,11 +118,11 @@ describe("MemCell SDK (cli package export)", () => {
 
       const memcell = new MemCell({
         auth: { apiKey: "key_1" },
-        baseUrl: "https://custom.memcell.io///",
+        baseUrl: "https://custom.memcell.ai///",
         fetch: mockFetch as any,
       });
 
-      expect(memcell.baseUrl).toBe("https://custom.memcell.io");
+      expect(memcell.baseUrl).toBe("https://custom.memcell.ai");
 
       const res1 = await memcell.recall({
         namespace: "org/repo",
@@ -133,7 +133,7 @@ describe("MemCell SDK (cli package export)", () => {
 
       expect(res1.recallId).toBe("rec_123");
       expect(res1.memories).toHaveLength(1);
-      expect(requests[0]?.url).toBe("https://custom.memcell.io/api/v1/org/repo/recall");
+      expect(requests[0]?.url).toBe("https://custom.memcell.ai/api/v1/org/repo/recall");
       expect(requests[0]?.body.intent).toBe("deploy procedure");
     });
 

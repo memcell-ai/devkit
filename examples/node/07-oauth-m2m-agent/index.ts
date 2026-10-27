@@ -21,8 +21,8 @@ async function main() {
   console.log(`Connecting to: ${baseUrl} [Workspace: ${namespace}]`);
   console.log(`Client ID: ${clientId}\n`);
 
-  // 1. Ingest an operational instruction statement
-  console.log("1. Storing operational compliance statement...");
+  // 1. Ingest an operational compliance memory
+  console.log("1. Storing operational compliance memory...");
   const title =
     "Mandate dual-signature authorization for transaction reconciliations exceeding $100,000";
   const rememberRes = await client.remember({
@@ -34,27 +34,25 @@ async function main() {
       "Applies to automated financial clearing and audit compliance operations.",
   });
 
-  const memory = rememberRes.created[0] || rememberRes.evolved[0];
+  const memory = rememberRes.created[0] || rememberRes.evolved?.[0];
   const memoryId = memory?.id || "";
-  console.log(`[OK] Statement recorded: [${memoryId || "created"}] ${title}\n`);
+  console.log(`[OK] Memory recorded: [${memoryId || "created"}] ${title}\n`);
 
   // 2. Semantic recall with automatic token exchange & in-flight deduplication
   const intent =
     "Reconcile quarterly high-volume liquidity disbursement of $250,000";
-  console.log(
-    `2. Recalling operational instructions for intent: "${intent}"...\n`,
-  );
+  console.log(`2. Recalling operational memories for intent: "${intent}"...\n`);
   const recallRes = await client.recall({ namespace, intent });
 
   console.log(
-    `[OK] Retrieved ${recallRes.memories.length} relevant statement nodes.`,
+    `[OK] Retrieved ${recallRes.memories.length} relevant workspace memories.`,
   );
   console.log("\nSynthesized Prompt Context for Autonomous Agent:");
   console.log("--------------------------------------------------");
   console.log(recallRes.promptContext);
   console.log("--------------------------------------------------\n");
 
-  // 3. Report execution outcome to update Bayesian confidence trajectory
+  // 3. Report execution outcome to update empirical confidence
   console.log("3. Reporting agent execution outcome...");
   const targetId = memoryId || recallRes.memories[0]?.id;
   await client.report({
@@ -66,9 +64,7 @@ async function main() {
     reason:
       "Compliance agent enforced dual-authorization before generating ledger transaction.",
   });
-  console.log(
-    "[OK] Outcome reported: Bayesian confidence trajectory reinforced.\n",
-  );
+  console.log("[OK] Outcome reported: empirical confidence reinforced.\n");
   console.log(
     "M2M OAuth token lifecycle demonstration completed successfully.",
   );

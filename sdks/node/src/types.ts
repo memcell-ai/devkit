@@ -369,6 +369,7 @@ export interface ListWorkspaceRelationsParams extends PaginationParams {
 // ─── Threads Domain (Session Continuity & Parallel Workstreams) ───
 
 export type ThreadStatus = "active" | "paused" | "completed";
+export type ThreadScope = "user" | "workspace";
 
 export interface ThreadMilestoneItem {
   phase?: string;
@@ -398,6 +399,7 @@ export interface ThreadItem {
   externalSessionId?: string | null;
   title: string;
   status: ThreadStatus;
+  scope?: ThreadScope;
   summary: string;
   currentObjective?: string | null;
   decisions: string[];
@@ -429,6 +431,7 @@ export interface ThreadTurnItem {
 
 export interface ListThreadsParams extends PaginationParams {
   status?: ThreadStatus;
+  scope?: ThreadScope | "all";
   entity?: string;
   q?: string;
 }
@@ -436,6 +439,7 @@ export interface ListThreadsParams extends PaginationParams {
 export interface UpdateThreadParams {
   title?: string;
   status?: ThreadStatus;
+  scope?: ThreadScope;
   summary?: string;
   currentObjective?: string | null;
   decisions?: string[];
@@ -457,9 +461,14 @@ export interface DocumentItem {
   id: string;
   workspaceId: string;
   title: string;
+  path?: string | null;
   sourcePath?: string | null;
+  sourceUri?: string | null;
+  sourceType?: string;
   contentType: string;
   contentHash: string;
+  summary?: string | null;
+  status?: string;
   chunkCount: number;
   sizeBytes: number;
   metadata?: Record<string, unknown>;
@@ -467,11 +476,23 @@ export interface DocumentItem {
   updatedAt: string | Date;
 }
 
+export interface DocumentChunkItem {
+  id: string;
+  documentId: string;
+  chunkIndex: number;
+  heading?: string | null;
+  content: string;
+  tokenCount?: number;
+  createdAt?: string | Date;
+}
+
 export interface DocumentChunkSearchResult {
   id: string;
   documentId: string;
   documentTitle: string;
+  path?: string | null;
   sourcePath?: string | null;
+  sourceUri?: string | null;
   chunkIndex: number;
   heading?: string | null;
   content: string;
@@ -482,20 +503,160 @@ export interface ListDocumentsParams extends PaginationParams {
   q?: string;
 }
 
+export interface SearchDocumentsOptions {
+  query: string;
+  limit?: number;
+}
+
 export interface IngestDocumentParams {
-  title: string;
-  content: string;
+  title?: string;
+  content?: string;
+  /**
+   * Binary file bytes (`Uint8Array` or `ArrayBuffer`) or base64-encoded string
+   * for PDF, DOCX, CSV, TSV, HTML, JSON, or Markdown uploads.
+   */
+  file?: Uint8Array | ArrayBuffer | string;
+  fileBase64?: string;
+  filename?: string;
+  mimeType?: string;
+  path?: string | null;
   sourcePath?: string | null;
+  sourceUri?: string | null;
   contentType?: string;
+  distill?: boolean;
   distillMemories?: boolean;
   metadata?: Record<string, unknown>;
 }
 
 export interface IngestDocumentResponse {
   document: DocumentItem;
-  unchanged: boolean;
+  chunkCount: number;
   chunksCreated: number;
+  deduplicated: boolean;
+  unchanged: boolean;
+  distilled?: {
+    created: MemoryItem[];
+    reinforced?: Array<{ id: string; title: string; confidence?: number }>;
+    evolved?: MemoryItem[];
+  };
   distilledMemoriesCount?: number;
+  memoriesCreated?: number;
+}
+
+export interface DocumentDetailResponse {
+  document: DocumentItem;
+  chunks: DocumentChunkItem[];
+  memories: MemoryItem[];
+}
+
+// ─── Workspace Sources Domain (URL / Sitemap, Inbound Webhook, GitHub) ───
+
+export type SourceType = "url" | "webhook" | "github";
+
+export type SourceStatus = "idle" | "syncing" | "ready" | "error";
+
+export interface SourceItem {
+  id: string;
+  workspaceId: string;
+  type: SourceType;
+  name: string;
+  repoFullName?: string | null;
+  defaultBranch?: string | null;
+  config?: Record<string, unknown>;
+  status: SourceStatus;
+  lastSyncedSha?: string | null;
+  lastSyncedAt?: string | Date | null;
+  lastError?: string | null;
+  documentCount: number;
+  memoryCount: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface CreateUrlSourceParams {
+  type: "url";
+  url: string;
+  name?: string;
+  maxPages?: number;
+  distillMemories?: boolean;
+}
+
+export interface CreateWebhookSourceParams {
+  type: "webhook";
+  name?: string;
+  distillMemories?: boolean;
+}
+
+export interface CreateGitHubSourceParams {
+  type?: "github";
+  repoFullName: string;
+  defaultBranch?: string;
+  name?: string;
+  rootPath?: string;
+  installationId?: string;
+}
+
+export type CreateSourceParams =
+  CreateUrlSourceParams | CreateWebhookSourceParams | CreateGitHubSourceParams;
+
+export interface CreateSourceResponse {
+  source: SourceItem;
+  webhookSecret?: string | null;
+  ingestPath?: string | null;
+}
+
+export interface SyncSourceOptions {
+  distillMemories?: boolean;
+  maxFiles?: number;
+  maxPages?: number;
+}
+
+export interface SyncSourceResponse {
+  source?: SourceItem;
+  status: string;
+  syncedFiles: number;
+  skippedFiles?: number;
+  totalChunks: number;
+  totalMemories: number;
+  headSha?: string | null;
+  message?: string;
+}
+
+export interface WebhookIngestDocumentInput {
+  title?: string;
+  content?: string;
+  file?: Uint8Array | ArrayBuffer | string;
+  fileBase64?: string;
+  filename?: string;
+  mimeType?: string;
+  contentType?: string;
+  sourceUri?: string;
+  distill?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WebhookIngestParams extends WebhookIngestDocumentInput {
+  documents?: WebhookIngestDocumentInput[];
+  distillMemories?: boolean;
+  /**
+   * Optional `whsrc_...` signing secret returned when creating a webhook source.
+   * When omitted, the SDK authenticates with its configured bearer token/API key.
+   */
+  secret?: string;
+}
+
+export interface WebhookIngestResponse {
+  status: string;
+  ingestedDocuments: number;
+  skippedDocuments: number;
+  totalChunks: number;
+  totalMemories: number;
+  documents: Array<{
+    id: string;
+    title: string;
+    chunkCount: number;
+    deduplicated: boolean;
+  }>;
 }
 
 // ─── Memory Operations (Recall, Remember, Report, Feedback) ───
@@ -684,6 +845,7 @@ export interface WorkspaceItem {
   id: string;
   name: string;
   slug: string;
+  ownerSlug?: string;
   description?: string | null;
   website?: string | null;
   tags?: string[];
@@ -735,6 +897,37 @@ export interface UpdateWorkspaceParams {
 
 export interface TransferWorkspaceParams {
   targetOwner: string;
+  targetSlug?: string;
+}
+
+export interface CopyWorkspaceParams {
+  targetOwner?: string;
+  targetSlug?: string;
+  name?: string;
+  description?: string | null;
+  visibility?: "public" | "private";
+  includeThreads?: boolean;
+  includeDocuments?: boolean;
+}
+
+export interface CopyWorkspaceResponse {
+  ok: boolean;
+  sourceOwnerSlug: string;
+  sourceWorkspaceSlug: string;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    ownerSlug: string;
+    visibility: "public" | "private";
+    url: string;
+  };
+  copied: {
+    memories: number;
+    relations: number;
+    threads: number;
+    documents: number;
+  };
 }
 
 // ─── Agents & Keys Domain ───
@@ -1242,7 +1435,135 @@ export interface CreateSiemDestinationParams {
   enabled?: boolean;
 }
 
-// ─── Enterprise Insights Domain ───
+// ─── Workspace & Enterprise Insights Domain ───
+
+export type CalibrationBucketId =
+  "atRisk" | "tentative" | "verified" | "reinforced" | "highTrust";
+
+export interface ConfidenceCalibrationBucket {
+  bucket: CalibrationBucketId;
+  range: string;
+  label: string;
+  minConfidence: number;
+  maxConfidence: number;
+  predictedConfidence: number;
+  observedWorkedRate: number | null;
+  workedCount: number;
+  failedCount: number;
+  sampleCount: number;
+  calibrationGap: number | null;
+}
+
+export interface ConfidenceCalibrationSummary {
+  totalSamples: number;
+  expectedCalibrationError: number | null;
+  brierScore: number | null;
+  highConfidenceWorkedRate: number | null;
+  lowConfidenceWorkedRate: number | null;
+  reliabilityLiftPct: number | null;
+  buckets: ConfidenceCalibrationBucket[];
+}
+
+export interface GovernanceShieldSummary {
+  quarantinedUserScopeCount: number;
+  provisionalCount: number;
+  demotedOrRefutedCount: number;
+  enforcedGuardCount: number;
+  approvedPromotionsCount: number;
+  pendingPromotionsCount: number;
+}
+
+export interface WorkspaceInsightsMetricTrend {
+  current: number;
+  prior: number;
+  deltaPercentage: number | null;
+  sparkline: Array<{
+    timestamp: string;
+    label: string;
+    value: number;
+  }>;
+}
+
+export interface WorkspaceInsightsSummary {
+  recalls: WorkspaceInsightsMetricTrend & {
+    totalHits: number;
+    totalMisses: number;
+    hitRate: number;
+    hitRateDelta?: number | null;
+  };
+  taskVerification: WorkspaceInsightsMetricTrend & {
+    totalWorked: number;
+    totalFailed: number;
+    workedRate: number;
+  };
+  memoryHealth: {
+    activeMemoriesCount: number;
+    standingInstructionsCount: number;
+    memoriesAtRiskCount: number;
+    avgConfidence: number;
+  };
+  latency: WorkspaceInsightsMetricTrend & {
+    avgMs: number;
+  };
+  totalRequests: number;
+  totalErrors: number;
+  successRate: number;
+  avgLatencyMs: number;
+  activeMemoriesCount: number;
+  avgConfidence: number;
+}
+
+export interface WorkspaceInsights {
+  timeframe: "24h" | "7d" | "30d";
+  summary: WorkspaceInsightsSummary;
+  calibration: ConfidenceCalibrationSummary;
+  governance: GovernanceShieldSummary;
+  operationBuckets: Array<Record<string, unknown>>;
+  outcomeBuckets: Array<Record<string, unknown>>;
+  trafficBuckets: Array<Record<string, unknown>>;
+  confidenceBands: Array<{
+    band: string;
+    range: string;
+    label: string;
+    count: number;
+    percentage: number;
+    fill: string;
+  }>;
+  agentShares: Array<Record<string, unknown>>;
+  topMemories: Array<{
+    id: string;
+    title: string;
+    confidence: number;
+    stability: number;
+    reinforcementCount: number;
+    workedCount: number;
+    failedCount: number;
+    tags: string[];
+  }>;
+  activityFeed: Array<Record<string, unknown>>;
+  memoriesRequiringAttention: Array<{
+    id: string;
+    title: string;
+    confidence: number;
+    stability: number;
+    reinforcementCount: number;
+    workedCount: number;
+    failedCount: number;
+    tags: string[];
+    reason?: string | null;
+  }>;
+  standingInstructions: Array<{
+    id: string;
+    title: string;
+    confidence: number;
+    stability: number;
+    reinforcementCount: number;
+    workedCount: number;
+    failedCount: number;
+    tags: string[];
+    reason?: string | null;
+  }>;
+}
 
 export interface EnterpriseInsights {
   timeframe: string;
@@ -1267,6 +1588,8 @@ export interface EnterpriseInsights {
     totalMemories: number;
     convergedMemories: number;
   };
+  calibration?: ConfidenceCalibrationSummary;
+  governance?: GovernanceShieldSummary;
   timeseries: Array<{
     date: string;
     recalls: number;

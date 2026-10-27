@@ -5,13 +5,13 @@ from memcell.auth import AuthManager
 
 
 def test_auth_manager_api_key():
-    auth = AuthManager(base_url="https://api.memcell.io", api_key="mc_live_123")
+    auth = AuthManager(base_url="https://memcell.ai", api_key="mc_live_123")
     header = auth.get_authorization_header()
     assert header == "Bearer mc_live_123"
 
 
 def test_auth_manager_access_token():
-    auth = AuthManager(base_url="https://api.memcell.io", access_token="jwt_abc_xyz")
+    auth = AuthManager(base_url="https://memcell.ai", access_token="jwt_abc_xyz")
     header = auth.get_authorization_header()
     assert header == "Bearer jwt_abc_xyz"
 
@@ -40,7 +40,7 @@ def test_auth_manager_m2m_caching_and_refresh():
 
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     auth = AuthManager(
-        base_url="https://api.memcell.io",
+        base_url="https://memcell.ai",
         client_id="client_xyz",
         client_secret="secret_xyz",
         scope="memory:read",
@@ -83,7 +83,7 @@ async def test_auth_manager_async_m2m():
 
     mock_async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     auth = AuthManager(
-        base_url="https://api.memcell.io",
+        base_url="https://memcell.ai",
         client_id="cid_1",
         client_secret="csec_1",
     )
@@ -120,7 +120,7 @@ async def test_auth_manager_async_m2m_deduplication():
 
     mock_async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     auth = AuthManager(
-        base_url="https://api.memcell.io",
+        base_url="https://memcell.ai",
         client_id="cid_dedup",
         client_secret="csec_dedup",
     )

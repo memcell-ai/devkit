@@ -174,6 +174,75 @@ const DEFAULT_TOOLS = [
       required: ["memory_id", "outcome"],
     },
   },
+  {
+    name: "ingest_document",
+    description:
+      "Ingest a PDF, DOCX, CSV, HTML, JSON, or Markdown document into the workspace's grounded knowledge base and optionally distill atomic memories.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Document title or filename",
+        },
+        content: {
+          type: "string",
+          description: "Plain text, Markdown, CSV, HTML, or JSON content",
+        },
+        fileBase64: {
+          type: "string",
+          description: "Base64-encoded binary payload (for PDF or DOCX uploads)",
+        },
+        filename: {
+          type: "string",
+          description: "Original filename with extension (e.g. policy.pdf, handbook.docx)",
+        },
+        mimeType: {
+          type: "string",
+          description: "Optional MIME type hint",
+        },
+        distill: {
+          type: "boolean",
+          description:
+            "Whether to distill atomic workspace memories from the document (default true)",
+        },
+      },
+    },
+  },
+  {
+    name: "search_documents",
+    description:
+      "Search grounded workspace document chunks (PDF, DOCX, CSV, HTML, JSON, Markdown) using hybrid semantic and full-text retrieval.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Natural-language search query",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum chunks to return (default 5, max 20)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_insights",
+    description:
+      "Inspect workspace telemetry, empirical confidence calibration curve (predicted confidence vs observed worked rate, ECE, and Brier score), and governance shield metrics (enforced guards, quarantined user-scope memories, and demoted items).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        timeframe: {
+          type: "string",
+          enum: ["24h", "7d", "30d"],
+          description: "Telemetry window (default 24h)",
+        },
+      },
+    },
+  },
 ];
 
 export async function mcp(targetDir?: string, agentName?: string): Promise<number> {

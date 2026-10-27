@@ -1,0 +1,30 @@
+{
+  "name": "@memcell/benchmarks",
+  "version": "1.0.0",
+  "description": "Reproducible Apache-2.0 Operational Memory & Governance Benchmark comparing MemCell against append-only Markdown, naive vector stores, and single-vendor memory silos.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "bench": "tsc -p tsconfig.json && node dist/cli.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@memcell/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

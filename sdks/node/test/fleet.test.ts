@@ -112,7 +112,7 @@ describe("Fleet Management, Audit, Insights & Teams SDK", () => {
     expect(cefLog).toContain("fleet.agent_kill_switch_activated");
   });
 
-  it("retrieves enterprise cognitive insights and the 5 core KPIs", async () => {
+  it("retrieves organization and workspace insights with calibration and governance telemetry", async () => {
     const mockFetch = vi.fn(async (url: string | URL | Request) => {
       const u = String(url);
       if (u.includes("/api/v1/organizations/acme/insights")) {
@@ -136,7 +136,97 @@ describe("Fleet Management, Audit, Insights & Teams SDK", () => {
               totalMemories: 120,
               convergedMemories: 87,
             },
+            calibration: {
+              totalSamples: 40,
+              expectedCalibrationError: 0.023,
+              brierScore: 0.068,
+              highConfidenceWorkedRate: 96.4,
+              lowConfidenceWorkedRate: 50.0,
+              reliabilityLiftPct: 46.4,
+              buckets: [],
+            },
+            governance: {
+              quarantinedUserScopeCount: 3,
+              provisionalCount: 5,
+              demotedOrRefutedCount: 2,
+              enforcedGuardCount: 14,
+              approvedPromotionsCount: 8,
+              pendingPromotionsCount: 1,
+            },
             timeseries: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (u.includes("/api/v1/acme/ops/insights")) {
+        return new Response(
+          JSON.stringify({
+            timeframe: "24h",
+            summary: {
+              recalls: {
+                current: 24,
+                prior: 18,
+                deltaPercentage: 33.3,
+                sparkline: [],
+                totalHits: 22,
+                totalMisses: 2,
+                hitRate: 91.7,
+              },
+              taskVerification: {
+                current: 20,
+                prior: 15,
+                deltaPercentage: 33.3,
+                sparkline: [],
+                totalWorked: 19,
+                totalFailed: 1,
+                workedRate: 95.0,
+              },
+              memoryHealth: {
+                activeMemoriesCount: 34,
+                standingInstructionsCount: 6,
+                memoriesAtRiskCount: 1,
+                avgConfidence: 0.88,
+              },
+              latency: {
+                current: 11,
+                prior: 13,
+                deltaPercentage: -15.4,
+                sparkline: [],
+                avgMs: 11,
+              },
+              totalRequests: 60,
+              totalErrors: 0,
+              successRate: 100,
+              avgLatencyMs: 11,
+              activeMemoriesCount: 34,
+              avgConfidence: 0.88,
+            },
+            calibration: {
+              totalSamples: 20,
+              expectedCalibrationError: 0.021,
+              brierScore: 0.054,
+              highConfidenceWorkedRate: 95.0,
+              lowConfidenceWorkedRate: 50.0,
+              reliabilityLiftPct: 45.0,
+              buckets: [],
+            },
+            governance: {
+              quarantinedUserScopeCount: 2,
+              provisionalCount: 1,
+              demotedOrRefutedCount: 1,
+              enforcedGuardCount: 6,
+              approvedPromotionsCount: 3,
+              pendingPromotionsCount: 0,
+            },
+            operationBuckets: [],
+            outcomeBuckets: [],
+            trafficBuckets: [],
+            confidenceBands: [],
+            agentShares: [],
+            topMemories: [],
+            activityFeed: [],
+            memoriesRequiringAttention: [],
+            standingInstructions: [],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -151,6 +241,13 @@ describe("Fleet Management, Audit, Insights & Teams SDK", () => {
     expect(insights.kpis.deadEndAvoidanceRate).toBe(98.5);
     expect(insights.kpis.latencyMs.p50).toBe(14);
     expect(insights.metrics.totalRecalls).toBe(40);
+    expect(insights.calibration?.expectedCalibrationError).toBe(0.023);
+    expect(insights.governance?.enforcedGuardCount).toBe(14);
+
+    const wsInsights = await memcell.scope("acme/ops").insights("24h");
+    expect(wsInsights.summary.taskVerification.workedRate).toBe(95.0);
+    expect(wsInsights.calibration.expectedCalibrationError).toBe(0.021);
+    expect(wsInsights.governance.quarantinedUserScopeCount).toBe(2);
   });
 
   it("manages organization teams and members", async () => {

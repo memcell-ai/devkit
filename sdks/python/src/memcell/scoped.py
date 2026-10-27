@@ -13,8 +13,11 @@ from .models import (
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
     DeleteMemoryResponse,
-    EnterpriseInsights,
+    DocumentDetailResponse,
+    DocumentItem,
+    DocumentSearchResponse,
     FeedbackResponse,
+    IngestDocumentResponse,
     JobEvent,
     ListCollaboratorsResponse,
     MemoryHistoryResponse,
@@ -32,8 +35,12 @@ from .models import (
     ReportResponse,
     ScopedExecutionContext,
     ScopeItem,
+    ThreadDetailResponse,
+    ThreadItem,
     WorkspaceActivityItem,
+    WorkspaceInsights,
 )
+from .sources import ScopedWorkspaceSourcesAsync, ScopedWorkspaceSourcesSync
 from .webhooks import ScopedWorkspaceWebhooksAsync, ScopedWorkspaceWebhooksSync
 
 T = TypeVar("T")
@@ -228,6 +235,53 @@ class _ScopedPromotionsSync:
         return self._client.promotions.reject(self._namespace, promotion_id, reason=reason)
 
 
+class _ScopedThreadsSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(self, **kwargs: Any) -> PaginatedResult[ThreadItem]:
+        return self._client.threads.list(self._namespace, **kwargs)
+
+    def get(self, thread_id: str) -> ThreadDetailResponse:
+        return self._client.threads.get(self._namespace, thread_id)
+
+    def update(self, thread_id: str, **kwargs: Any) -> ThreadItem:
+        return self._client.threads.update(self._namespace, thread_id, **kwargs)
+
+    def delete(self, thread_id: str) -> dict[str, Any]:
+        return self._client.threads.delete(self._namespace, thread_id)
+
+
+class _ScopedDocumentsSync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def list(self, **kwargs: Any) -> PaginatedResult[DocumentItem]:
+        return self._client.documents.list(self._namespace, **kwargs)
+
+    def get(self, document_id: str) -> DocumentDetailResponse:
+        return self._client.documents.get(self._namespace, document_id)
+
+    def ingest(
+        self,
+        *,
+        title: str | None = None,
+        content: str | None = None,
+        **kwargs: Any,
+    ) -> IngestDocumentResponse:
+        return self._client.documents.ingest(
+            self._namespace, title=title, content=content, **kwargs
+        )
+
+    def search(self, query: str, limit: int = 5) -> DocumentSearchResponse:
+        return self._client.documents.search(self._namespace, query, limit=limit)
+
+    def delete(self, document_id: str) -> dict[str, Any]:
+        return self._client.documents.delete(self._namespace, document_id)
+
+
 class _ScopedMemoriesAsync:
     def __init__(self, client: Any, namespace: str, default_subject: str | None = None) -> None:
         self._client = client
@@ -411,6 +465,53 @@ class _ScopedPromotionsAsync:
         return await self._client.promotions.reject(self._namespace, promotion_id, reason=reason)
 
 
+class _ScopedThreadsAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(self, **kwargs: Any) -> PaginatedResult[ThreadItem]:
+        return await self._client.threads.list(self._namespace, **kwargs)
+
+    async def get(self, thread_id: str) -> ThreadDetailResponse:
+        return await self._client.threads.get(self._namespace, thread_id)
+
+    async def update(self, thread_id: str, **kwargs: Any) -> ThreadItem:
+        return await self._client.threads.update(self._namespace, thread_id, **kwargs)
+
+    async def delete(self, thread_id: str) -> dict[str, Any]:
+        return await self._client.threads.delete(self._namespace, thread_id)
+
+
+class _ScopedDocumentsAsync:
+    def __init__(self, client: Any, namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    async def list(self, **kwargs: Any) -> PaginatedResult[DocumentItem]:
+        return await self._client.documents.list(self._namespace, **kwargs)
+
+    async def get(self, document_id: str) -> DocumentDetailResponse:
+        return await self._client.documents.get(self._namespace, document_id)
+
+    async def ingest(
+        self,
+        *,
+        title: str | None = None,
+        content: str | None = None,
+        **kwargs: Any,
+    ) -> IngestDocumentResponse:
+        return await self._client.documents.ingest(
+            self._namespace, title=title, content=content, **kwargs
+        )
+
+    async def search(self, query: str, limit: int = 5) -> DocumentSearchResponse:
+        return await self._client.documents.search(self._namespace, query, limit=limit)
+
+    async def delete(self, document_id: str) -> dict[str, Any]:
+        return await self._client.documents.delete(self._namespace, document_id)
+
+
 class ScopedMemCell:
     """Synchronous memory handle scoped to a specific workspace namespace and default subject."""
 
@@ -425,6 +526,9 @@ class ScopedMemCell:
         self.default_subject = subject
 
         self.memories = _ScopedMemoriesSync(client, namespace, subject)
+        self.threads = _ScopedThreadsSync(client, namespace)
+        self.documents = _ScopedDocumentsSync(client, namespace)
+        self.sources = ScopedWorkspaceSourcesSync(client.sources, namespace)
         self.agents = _ScopedAgentsSync(client, namespace)
         self.collaborators = _ScopedCollaboratorsSync(client, namespace)
         self.scopes = _ScopedScopesSync(client, namespace)
@@ -434,7 +538,7 @@ class ScopedMemCell:
     def activity(self, **kwargs: Any) -> PaginatedResult[WorkspaceActivityItem]:
         return self._client.workspaces.activity(self.namespace, **kwargs)
 
-    def insights(self, timeframe: str = "30d") -> EnterpriseInsights:
+    def insights(self, timeframe: str = "24h") -> WorkspaceInsights:
         return self._client.insights.get_for_workspace(self.namespace, timeframe=timeframe)
 
     def recall(
@@ -452,6 +556,7 @@ class ScopedMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        session_id: str | None = None,
         *,
         intent: str | None = None,
     ) -> RecallResponse:
@@ -471,6 +576,7 @@ class ScopedMemCell:
             allow_provisional=allow_provisional,
             metadata=metadata,
             include_metadata=include_metadata,
+            session_id=session_id,
         )
 
     def remember(
@@ -647,6 +753,9 @@ class AsyncScopedMemCell:
         self.default_subject = subject
 
         self.memories = _ScopedMemoriesAsync(client, namespace, subject)
+        self.threads = _ScopedThreadsAsync(client, namespace)
+        self.documents = _ScopedDocumentsAsync(client, namespace)
+        self.sources = ScopedWorkspaceSourcesAsync(client.sources, namespace)
         self.agents = _ScopedAgentsAsync(client, namespace)
         self.collaborators = _ScopedCollaboratorsAsync(client, namespace)
         self.scopes = _ScopedScopesAsync(client, namespace)
@@ -656,7 +765,7 @@ class AsyncScopedMemCell:
     async def activity(self, **kwargs: Any) -> PaginatedResult[WorkspaceActivityItem]:
         return await self._client.workspaces.activity(self.namespace, **kwargs)
 
-    async def insights(self, timeframe: str = "30d") -> EnterpriseInsights:
+    async def insights(self, timeframe: str = "24h") -> WorkspaceInsights:
         return await self._client.insights.get_for_workspace(self.namespace, timeframe=timeframe)
 
     async def recall(
@@ -674,6 +783,7 @@ class AsyncScopedMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        session_id: str | None = None,
         *,
         intent: str | None = None,
     ) -> RecallResponse:
@@ -693,6 +803,7 @@ class AsyncScopedMemCell:
             allow_provisional=allow_provisional,
             metadata=metadata,
             include_metadata=include_metadata,
+            session_id=session_id,
         )
 
     async def remember(

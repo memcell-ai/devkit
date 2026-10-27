@@ -52,6 +52,44 @@ function refused(instance: string, failure: Error): number {
   return 1;
 }
 
+const SUPPORTED_DOC_EXTENSIONS = [
+  ".md",
+  ".mdx",
+  ".mdc",
+  ".txt",
+  ".pdf",
+  ".docx",
+  ".csv",
+  ".tsv",
+  ".html",
+  ".htm",
+  ".json",
+];
+
+function isSupportedDocFilename(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SUPPORTED_DOC_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function isBinaryDocFilename(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".pdf") || lower.endsWith(".docx");
+}
+
+function resolveDocContentType(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (lower.endsWith(".csv")) return "text/csv";
+  if (lower.endsWith(".tsv")) return "text/tab-separated-values";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+  if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".txt")) return "text/plain";
+  return "text/markdown";
+}
+
 async function collectDocsFromDir(dirPath: string): Promise<string[]> {
   const results: string[] = [];
   try {
@@ -69,13 +107,7 @@ async function collectDocsFromDir(dirPath: string): Promise<string[]> {
         for (const f of nested) {
           if (!results.includes(f)) results.push(f);
         }
-      } else if (
-        entry.isFile() &&
-        (entry.name.endsWith(".md") ||
-          entry.name.endsWith(".mdx") ||
-          entry.name.endsWith(".mdc") ||
-          entry.name.endsWith(".txt"))
-      ) {
+      } else if (entry.isFile() && isSupportedDocFilename(entry.name)) {
         if (!results.includes(fullPath)) results.push(fullPath);
       }
     }
@@ -159,6 +191,30 @@ export async function ingestDocuments(
   }
 
   const distillMemories = flags["no-distill"] !== true;
+  const dryRun = flags["dry-run"] === true;
+
+  if (dryRun) {
+    const previewFiles = chosen.map((file) => (relative(root, file) || file).replaceAll("\\", "/"));
+    if (flags.json === true) {
+      emit(
+        JSON.stringify({ dryRun: true, workspace: targetSpace, files: previewFiles }, null, 2) +
+          "\n",
+      );
+      return 0;
+    }
+    say(
+      row(
+        0,
+        [badge("memcell"), label("ingest dry-run"), place(targetSpace)],
+        [variant(`${previewFiles.length} files`)],
+      ),
+      ...previewFiles.map((shown) =>
+        row(1, [label(shown)], [variant(resolveDocContentType(shown))]),
+      ),
+    );
+    return 0;
+  }
+
   const rows: Row[] = [row(0, [badge("memcell"), label("ingest"), place(targetSpace)])];
   let totalChunks = 0;
   let totalMemories = 0;
@@ -169,6 +225,58 @@ export async function ingestDocuments(
 
   for (const file of chosen) {
     const shown = (relative(root, file) || file).replaceAll("\\", "/");
+    const contentType = resolveDocContentType(shown);
+
+    if (isBinaryDocFilename(shown)) {
+      let rawBytes: Buffer;
+      try {
+        rawBytes = await readFile(file);
+      } catch {
+        rows.push(row(1, [bad("cannot read")], [place(shown)]));
+        continue;
+      }
+      if (rawBytes.byteLength === 0) continue;
+
+      try {
+        const res = await sdk.documents.ingest(namespace, {
+          title: shown,
+          sourcePath: shown,
+          filename: shown,
+          file: new Uint8Array(rawBytes),
+          mimeType: contentType,
+          contentType,
+          distillMemories,
+        });
+
+        landed += 1;
+        totalChunks += res.chunksCreated ?? 0;
+        totalMemories += res.distilledMemoriesCount ?? 0;
+
+        rows.push(
+          row(
+            1,
+            [good(shown)],
+            res.unchanged
+              ? [label("unchanged")]
+              : [label("chunks"), value(String(res.chunksCreated ?? 0))],
+            (res.distilledMemoriesCount ?? 0) > 0
+              ? [label("memories"), value(String(res.distilledMemoriesCount))]
+              : null,
+          ),
+        );
+      } catch (error) {
+        rows.push(
+          row(
+            1,
+            [bad("refused")],
+            [place(shown)],
+            [label(error instanceof Error ? error.message : String(error))],
+          ),
+        );
+      }
+      continue;
+    }
+
     let content: string;
     try {
       content = await readFile(file, "utf8");
@@ -183,8 +291,9 @@ export async function ingestDocuments(
       const res = await sdk.documents.ingest(namespace, {
         title: shown,
         sourcePath: shown,
+        filename: shown,
         content,
-        contentType: shown.endsWith(".json") ? "application/json" : "text/markdown",
+        contentType,
         distillMemories,
       });
 
@@ -250,7 +359,7 @@ export async function listDocuments(
       say(
         row(0, [badge("memcell"), label("document"), place(namespace)]),
         row(1, [label("no RAG documents ingested yet")]),
-        row(2, [label("ingest project docs with"), cmd("memcell ingest")]),
+        row(2, [label("ingest workspace documents with"), cmd("memcell ingest")]),
       );
       return 0;
     }

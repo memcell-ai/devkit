@@ -90,6 +90,7 @@ describe("yargs CLI parser & command dispatch", () => {
     expect(names).toContain("memory");
     expect(names).toContain("thread");
     expect(names).toContain("document");
+    expect(names).toContain("source");
     expect(names).toContain("agent");
     expect(names).toContain("org");
     expect(names).toContain("team");

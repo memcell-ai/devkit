@@ -202,7 +202,7 @@ export async function call<T>(
 }
 
 export interface Session {
-  user: { id: string; name: string; email: string; isAnonymous?: boolean };
+  user: { id: string; name: string; email: string; handle?: string; isAnonymous?: boolean };
 }
 
 /** Who this machine is, as far as the instance is concerned. */

@@ -14,7 +14,7 @@ describe("MemCell SDK (cli package export)", () => {
     it("returns Bearer with API key directly", async () => {
       const auth = new AuthManager(
         { apiKey: "mc_live_123" },
-        "https://api.memcell.io",
+        "https://memcell.ai",
       );
       const header = await auth.getAuthorizationHeader();
       expect(header).toBe("Bearer mc_live_123");
@@ -23,7 +23,7 @@ describe("MemCell SDK (cli package export)", () => {
     it("returns Bearer with accessToken directly", async () => {
       const auth = new AuthManager(
         { accessToken: "jwt_token_abc" },
-        "https://api.memcell.io",
+        "https://memcell.ai",
       );
       const header = await auth.getAuthorizationHeader();
       expect(header).toBe("Bearer jwt_token_abc");
@@ -59,7 +59,7 @@ describe("MemCell SDK (cli package export)", () => {
           clientSecret: "secret_xyz",
           scope: "memory:read",
         },
-        "https://api.memcell.io",
+        "https://memcell.ai",
         mockFetch as any,
       );
 
@@ -93,7 +93,7 @@ describe("MemCell SDK (cli package export)", () => {
 
       const auth = new AuthManager(
         { clientId: "cid", clientSecret: "csec" },
-        "https://api.memcell.io",
+        "https://memcell.ai",
         mockFetch as any,
       );
 
@@ -121,7 +121,7 @@ describe("MemCell SDK (cli package export)", () => {
 
       const auth = new AuthManager(
         { clientId: "cid", clientSecret: "csec" },
-        "https://api.memcell.io",
+        "https://memcell.ai",
         mockFetch as any,
       );
 
@@ -141,19 +141,19 @@ describe("MemCell SDK (cli package export)", () => {
   describe("MemCell Client", () => {
     it("initializes with top-level clientId and clientSecret", async () => {
       const client = new MemCell({
-        baseUrl: "https://api.memcell.io",
+        baseUrl: "https://memcell.ai",
         clientId: "cid_123",
         clientSecret: "csec_123",
         scope: "memory:read:*",
       });
-      expect(client.baseUrl).toBe("https://api.memcell.io");
+      expect(client.baseUrl).toBe("https://memcell.ai");
     });
 
     it("throws when only clientId is provided", () => {
       expect(
         () =>
           new MemCell({
-            baseUrl: "https://api.memcell.io",
+            baseUrl: "https://memcell.ai",
             clientId: "cid_123",
           }),
       ).toThrow("Both 'clientId' and 'clientSecret' are required");
@@ -163,7 +163,7 @@ describe("MemCell SDK (cli package export)", () => {
       expect(
         () =>
           new MemCell({
-            baseUrl: "https://api.memcell.io",
+            baseUrl: "https://memcell.ai",
             clientSecret: "csec_123",
           }),
       ).toThrow("Both 'clientId' and 'clientSecret' are required");
@@ -173,7 +173,7 @@ describe("MemCell SDK (cli package export)", () => {
       expect(
         () =>
           new MemCell({
-            baseUrl: "https://api.memcell.io",
+            baseUrl: "https://memcell.ai",
             token: "mc_pat_123",
             clientId: "cid_123",
             clientSecret: "csec_123",
@@ -192,8 +192,8 @@ describe("MemCell SDK (cli package export)", () => {
       try {
         process.env.MEMCELL_CLIENT_ID = "env_cid";
         process.env.MEMCELL_CLIENT_SECRET = "env_csec";
-        const client = new MemCell({ baseUrl: "https://api.memcell.io" });
-        expect(client.baseUrl).toBe("https://api.memcell.io");
+        const client = new MemCell({ baseUrl: "https://memcell.ai" });
+        expect(client.baseUrl).toBe("https://memcell.ai");
       } finally {
         if (oldId) process.env.MEMCELL_CLIENT_ID = oldId;
         else delete process.env.MEMCELL_CLIENT_ID;
@@ -234,11 +234,11 @@ describe("MemCell SDK (cli package export)", () => {
 
       const memcell = new MemCell({
         auth: { apiKey: "key_1" },
-        baseUrl: "https://custom.memcell.io///",
+        baseUrl: "https://custom.memcell.ai///",
         fetch: mockFetch as any,
       });
 
-      expect(memcell.baseUrl).toBe("https://custom.memcell.io");
+      expect(memcell.baseUrl).toBe("https://custom.memcell.ai");
 
       const res1 = await memcell.recall({
         namespace: "org/repo",
@@ -250,7 +250,7 @@ describe("MemCell SDK (cli package export)", () => {
       expect(res1.recallId).toBe("rec_123");
       expect(res1.memories).toHaveLength(1);
       expect(requests[0]?.url).toBe(
-        "https://custom.memcell.io/api/v1/org/repo/recall",
+        "https://custom.memcell.ai/api/v1/org/repo/recall",
       );
       expect(requests[0]?.body.intent).toBe("deploy procedure");
 
@@ -841,7 +841,7 @@ describe("MemCell SDK (cli package export)", () => {
         const deleteCall = recorded.find((r) => r.method === "DELETE");
         expect(deleteCall).toBeDefined();
         expect(deleteCall!.url).toBe(
-          "https://api.memcell.io/api/v1/acme/backend/memories/stmt_new",
+          "https://memcell.ai/api/v1/acme/backend/memories/stmt_new",
         );
 
         await memcell.memories.delete("acme/backend", "stmt_new", {
@@ -852,7 +852,7 @@ describe("MemCell SDK (cli package export)", () => {
         );
         expect(deleteAllCall).toBeDefined();
         expect(deleteAllCall!.url).toBe(
-          "https://api.memcell.io/api/v1/acme/backend/memories/stmt_new?allVersions=true",
+          "https://memcell.ai/api/v1/acme/backend/memories/stmt_new?allVersions=true",
         );
       });
 
@@ -1608,6 +1608,213 @@ describe("MemCell SDK (cli package export)", () => {
 
         expect(scopes[0]!.name).toBe("common");
         expect(calls.every((c) => c.includes("/acme/backend/"))).toBe(true);
+      });
+
+      it("supports threads and documents CRUD and grounded chunk search", async () => {
+        const requests: Array<{
+          url: string;
+          method: string;
+          body: Record<string, unknown> | null;
+        }> = [];
+
+        const mockFetch = vi.fn(
+          async (url: string | URL | Request, init?: RequestInit) => {
+            const u = String(url);
+            const method = init?.method ?? "GET";
+            const body = init?.body ? JSON.parse(String(init.body)) : null;
+            requests.push({ url: u, method, body });
+
+            if (
+              u.includes("/acme/backend/documents?") &&
+              u.includes("chunks=true")
+            ) {
+              return new Response(
+                JSON.stringify({
+                  chunks: [
+                    {
+                      id: "chk_1",
+                      documentId: "doc_1",
+                      documentTitle: "Gateway Spec",
+                      sourceUri: "docs/gateway.md",
+                      chunkIndex: 0,
+                      heading: "Routing",
+                      content:
+                        "All tenant traffic routes through edge workers.",
+                      score: 0.94,
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+
+            if (u.endsWith("/acme/backend/documents") && method === "POST") {
+              return new Response(
+                JSON.stringify({
+                  document: {
+                    id: "doc_1",
+                    workspaceId: "ws_1",
+                    title: body?.title,
+                    sourceUri: body?.sourceUri,
+                    sourceType: "markdown",
+                    contentHash: "sha256_abc",
+                    chunkCount: 2,
+                    content: body?.content,
+                    createdAt: "2026-10-26T00:00:00Z",
+                    updatedAt: "2026-10-26T00:00:00Z",
+                  },
+                  chunkCount: 2,
+                  deduplicated: false,
+                  distilled: {
+                    created: [
+                      {
+                        id: "mem_1",
+                        title: "Route tenant traffic through edge workers",
+                        type: "decision",
+                        confidence: 0.9,
+                      },
+                    ],
+                  },
+                }),
+                {
+                  status: 201,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+
+            if (
+              u.endsWith("/acme/backend/documents/doc_1") &&
+              method === "GET"
+            ) {
+              return new Response(
+                JSON.stringify({
+                  document: {
+                    id: "doc_1",
+                    workspaceId: "ws_1",
+                    title: "Gateway Spec",
+                    sourceUri: "docs/gateway.md",
+                    sourceType: "markdown",
+                    contentHash: "sha256_abc",
+                    chunkCount: 2,
+                    createdAt: "2026-10-26T00:00:00Z",
+                    updatedAt: "2026-10-26T00:00:00Z",
+                  },
+                  chunks: [
+                    {
+                      id: "chk_1",
+                      documentId: "doc_1",
+                      chunkIndex: 0,
+                      content:
+                        "All tenant traffic routes through edge workers.",
+                    },
+                  ],
+                  memories: [],
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+
+            if (
+              u.endsWith("/acme/backend/documents/doc_1") &&
+              method === "DELETE"
+            ) {
+              return new Response(JSON.stringify({ deleted: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            if (u.includes("/acme/backend/threads") && method === "GET") {
+              return new Response(
+                JSON.stringify({
+                  threads: [
+                    {
+                      id: "thr_1",
+                      workspaceId: "ws_1",
+                      title: "Edge Gateway Migration",
+                      status: "active",
+                      scope: "workspace",
+                      summary: "Migrating edge workers",
+                      decisions: [],
+                      nextSteps: [],
+                      entities: [],
+                      turnCount: 3,
+                      lastActiveAt: "2026-10-26T00:00:00Z",
+                      createdAt: "2026-10-26T00:00:00Z",
+                      updatedAt: "2026-10-26T00:00:00Z",
+                    },
+                  ],
+                  pagination: {
+                    page: 1,
+                    perPage: 10,
+                    total: 1,
+                    hasMore: false,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+
+            return new Response("Not Found", { status: 404 });
+          },
+        );
+
+        const memcell = new MemCell({
+          apiKey: "mc_key",
+          fetch: mockFetch as any,
+        });
+        const scoped = memcell.scope("acme/backend");
+
+        const ingested = await scoped.documents.ingest({
+          path: "docs/gateway.md",
+          title: "Gateway Spec",
+          content: "# Routing\nAll tenant traffic routes through edge workers.",
+          distillMemories: true,
+        });
+        expect(ingested.chunkCount).toBe(2);
+        expect(ingested.chunksCreated).toBe(2);
+        expect(ingested.deduplicated).toBe(false);
+        expect(ingested.unchanged).toBe(false);
+        expect(ingested.memoriesCreated).toBe(1);
+        expect(ingested.document.path).toBe("docs/gateway.md");
+        expect(ingested.document.sourcePath).toBe("docs/gateway.md");
+
+        const searchRes = await scoped.documents.search({
+          query: "edge workers",
+          limit: 3,
+        });
+        expect(searchRes.chunks).toHaveLength(1);
+        expect(searchRes.chunks[0]!.path).toBe("docs/gateway.md");
+        expect(searchRes.chunks[0]!.sourceUri).toBe("docs/gateway.md");
+        expect(
+          requests.some(
+            (r) =>
+              r.url.includes("q=edge+workers") &&
+              r.url.includes("chunks=true") &&
+              r.url.includes("limit=3"),
+          ),
+        ).toBe(true);
+
+        const detail = await scoped.documents.get("doc_1");
+        expect(detail.document.id).toBe("doc_1");
+        expect(detail.chunks).toHaveLength(1);
+
+        const delRes = await scoped.documents.delete("doc_1");
+        expect(delRes.deleted).toBe(true);
+
+        const threadList = await scoped.threads.list({ status: "active" });
+        expect(threadList.items).toHaveLength(1);
+        expect(threadList.items[0]!.scope).toBe("workspace");
       });
     });
 

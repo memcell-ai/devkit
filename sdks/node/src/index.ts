@@ -15,6 +15,7 @@ export {
 export { WorkspacesNamespace } from "./workspaces.js";
 export { ThreadsNamespace } from "./threads.js";
 export { DocumentsNamespace } from "./documents.js";
+export { SourcesNamespace } from "./sources.js";
 export { AgentsNamespace } from "./agents.js";
 export { CollaboratorsNamespace } from "./collaborators.js";
 export { UsageNamespace } from "./usage.js";
@@ -105,10 +106,28 @@ export type {
 
   // Documents (RAG)
   DocumentItem,
+  DocumentChunkItem,
   DocumentChunkSearchResult,
+  DocumentDetailResponse,
   ListDocumentsParams,
+  SearchDocumentsOptions,
   IngestDocumentParams,
   IngestDocumentResponse,
+
+  // Workspace Sources
+  SourceType,
+  SourceStatus,
+  SourceItem,
+  CreateUrlSourceParams,
+  CreateWebhookSourceParams,
+  CreateGitHubSourceParams,
+  CreateSourceParams,
+  CreateSourceResponse,
+  SyncSourceOptions,
+  SyncSourceResponse,
+  WebhookIngestDocumentInput,
+  WebhookIngestParams,
+  WebhookIngestResponse,
 
   // Workspaces
   WorkspaceItem,
@@ -200,7 +219,14 @@ export type {
   SiemDestination,
   CreateSiemDestinationParams,
 
-  // Enterprise Insights
+  // Workspace & Enterprise Insights
+  CalibrationBucketId,
+  ConfidenceCalibrationBucket,
+  ConfidenceCalibrationSummary,
+  GovernanceShieldSummary,
+  WorkspaceInsightsMetricTrend,
+  WorkspaceInsightsSummary,
+  WorkspaceInsights,
   EnterpriseInsights,
   GetInsightsParams,
 

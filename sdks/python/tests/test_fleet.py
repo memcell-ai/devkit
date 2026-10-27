@@ -197,7 +197,71 @@ def test_fleet_and_governance_sync():
                         "totalMemories": 320,
                         "convergedMemories": 280,
                     },
+                    "calibration": {
+                        "totalSamples": 150,
+                        "expectedCalibrationError": 0.022,
+                        "brierScore": 0.061,
+                        "highConfidenceWorkedRate": 96.0,
+                        "lowConfidenceWorkedRate": 52.0,
+                        "reliabilityLiftPct": 44.0,
+                        "buckets": [],
+                    },
+                    "governance": {
+                        "quarantinedUserScopeCount": 4,
+                        "provisionalCount": 3,
+                        "demotedOrRefutedCount": 2,
+                        "enforcedGuardCount": 18,
+                        "approvedPromotionsCount": 9,
+                        "pendingPromotionsCount": 1,
+                    },
                     "timeseries": [],
+                },
+            )
+
+        # GET /api/v1/acme/ops/insights
+        if method == "GET" and "/api/v1/acme/ops/insights" in u:
+            return httpx.Response(
+                200,
+                json={
+                    "timeframe": "24h",
+                    "summary": {
+                        "recalls": {"totalHits": 20, "totalMisses": 1, "hitRate": 95.2},
+                        "taskVerification": {
+                            "totalWorked": 19,
+                            "totalFailed": 1,
+                            "workedRate": 95.0,
+                        },
+                        "memoryHealth": {
+                            "activeMemoriesCount": 25,
+                            "standingInstructionsCount": 4,
+                            "memoriesAtRiskCount": 1,
+                            "avgConfidence": 0.89,
+                        },
+                        "latency": {"avgMs": 11.5},
+                        "totalRequests": 40,
+                        "totalErrors": 0,
+                        "successRate": 100.0,
+                        "avgLatencyMs": 11.5,
+                        "activeMemoriesCount": 25,
+                        "avgConfidence": 0.89,
+                    },
+                    "calibration": {
+                        "totalSamples": 20,
+                        "expectedCalibrationError": 0.019,
+                        "brierScore": 0.048,
+                        "highConfidenceWorkedRate": 95.0,
+                        "lowConfidenceWorkedRate": 50.0,
+                        "reliabilityLiftPct": 45.0,
+                        "buckets": [],
+                    },
+                    "governance": {
+                        "quarantinedUserScopeCount": 2,
+                        "provisionalCount": 1,
+                        "demotedOrRefutedCount": 1,
+                        "enforcedGuardCount": 4,
+                        "approvedPromotionsCount": 3,
+                        "pendingPromotionsCount": 0,
+                    },
                 },
             )
 
@@ -222,7 +286,7 @@ def test_fleet_and_governance_sync():
         return httpx.Response(404, json={"detail": "Not found"})
 
     transport = httpx.MockTransport(handler)
-    http = httpx.Client(transport=transport, base_url="https://api.memcell.io")
+    http = httpx.Client(transport=transport, base_url="https://memcell.ai")
     client = MemCell(api_key="test-key", http_client=http)
 
     org = client.organization("acme")
@@ -264,11 +328,20 @@ def test_fleet_and_governance_sync():
     cef_export = org.audit.export(format="cef")
     assert "CEF:0|MemCell|Platform" in cef_export
 
-    # 5. Enterprise Insights
+    # 5. Organization & Workspace Insights
     insights = org.insights.get(timeframe="30d")
     assert insights.kpis.dead_end_avoidance_rate == 98.5
     assert insights.kpis.latency_ms.p50 == 12.0
     assert insights.metrics.total_recalls == 1500
+    assert insights.calibration is not None
+    assert insights.calibration.expected_calibration_error == 0.022
+    assert insights.governance is not None
+    assert insights.governance.enforced_guard_count == 18
+
+    ws_insights = client.scope("acme/ops").insights(timeframe="24h")
+    assert ws_insights.summary.active_memories_count == 25
+    assert ws_insights.calibration.expected_calibration_error == 0.019
+    assert ws_insights.governance.quarantined_user_scope_count == 2
 
     # 6. Teams
     teams = org.teams.list()
@@ -326,10 +399,21 @@ async def test_fleet_and_governance_async():
                 },
             )
 
+        if method == "GET" and "/api/v1/acme/ops/insights" in u:
+            return httpx.Response(
+                200,
+                json={
+                    "timeframe": "24h",
+                    "summary": {"activeMemoriesCount": 14},
+                    "calibration": {"totalSamples": 10, "expectedCalibrationError": 0.025},
+                    "governance": {"enforcedGuardCount": 3},
+                },
+            )
+
         return httpx.Response(404, json={"detail": "Not found"})
 
     transport = httpx.MockTransport(handler)
-    http = httpx.AsyncClient(transport=transport, base_url="https://api.memcell.io")
+    http = httpx.AsyncClient(transport=transport, base_url="https://memcell.ai")
     client = AsyncMemCell(api_key="test-key", http_client=http)
 
     org = client.organization("acme")
@@ -340,3 +424,8 @@ async def test_fleet_and_governance_async():
 
     insights = await org.insights.get(timeframe="7d")
     assert insights.kpis.dead_end_avoidance_rate == 99.0
+
+    ws_insights = await client.scope("acme/ops").insights(timeframe="24h")
+    assert ws_insights.summary.active_memories_count == 14
+    assert ws_insights.calibration.expected_calibration_error == 0.025
+    assert ws_insights.governance.enforced_guard_count == 3

@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.memcell/memcell",
   "title": "MemCell",
-  "description": "Living memory for AI coding agents: recall before acting, report outcomes so confidence is earned.",
+  "description": "Shared, persistent memory for AI agents: recall workspace context before acting and report outcomes so confidence is earned.",
   "repository": {
-    "url": "https://github.com/memcell-ai/cli",
+    "url": "https://github.com/memcell-ai/devkit",
     "source": "github"
   },
-  "version": "1.4.0",
+  "version": "1.6.1",
   "websiteUrl": "https://memcell.ai",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "memcell",
-      "version": "1.4.0",
+      "version": "1.6.1",
       "transport": {
         "type": "stdio"
       },
@@ -22,7 +22,7 @@
         {
           "type": "positional",
           "value": "mcp",
-          "description": "the stdio face of the paired instance's /mcp door"
+          "description": "the stdio MCP server paired to your active MemCell workspace"
         }
       ]
     }
@@ -34,21 +34,11 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <agent key>. Get one with `npx memcell connect` in a project, or from https://memcell.ai/agents",
+          "description": "Bearer <agent key>. Create one with `npx memcell connect` in a workspace, or from your workspace settings on https://memcell.ai",
           "isRequired": true,
           "isSecret": true
         }
       ]
-    },
-    {
-      "type": "streamable-http",
-      "url": "https://memcell.ai/mcp/public/{memory}",
-      "variables": {
-        "memory": {
-          "description": "a public memory's slug from https://memcell.ai/commons — readable without an account",
-          "isRequired": true
-        }
-      }
     }
   ]
 }

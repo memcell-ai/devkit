@@ -101,7 +101,11 @@ export function lintSourceCode(sourceText, filePath = "inline.ts") {
 }
 
 export function lintAllSources(rootDir = ROOT) {
-  const targets = [join(rootDir, "cli", "src"), join(rootDir, "sdks", "node", "src")];
+  const targets = [
+    join(rootDir, "cli", "src"),
+    join(rootDir, "sdks", "node", "src"),
+    join(rootDir, "benchmarks", "src"),
+  ];
   const allViolations = [];
 
   for (const target of targets) {

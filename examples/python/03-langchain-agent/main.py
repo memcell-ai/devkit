@@ -39,7 +39,7 @@ def main():
     res = remember_instruction.invoke(
         {
             "claim": "All international shipments requiring customs clearance must include harmonized tariff codes (HTS)",
-            "instruction_type": "guard",
+            "instruction_type": "instruction",
         }
     )
     print("Tool Output [remember]:", res)

@@ -1,17 +1,17 @@
 {
   "name": "@memcell/sdk",
   "version": "1.6.0",
-  "description": "Official TypeScript and Node.js SDK for MemCell persistent memory and cognitive reasoning engine",
+  "description": "Official TypeScript and Node.js SDK for the MemCell persistent memory engine",
   "keywords": [
     "memcell",
     "memory",
     "ai-agent",
     "llm",
     "agentic",
-    "cognitive-memory",
+    "agent-memory",
     "sdk"
   ],
-  "homepage": "https://memcell.io",
+  "homepage": "https://memcell.ai",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/memcell-ai/devkit.git",
@@ -31,6 +31,26 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./integrations": {
+      "types": "./dist/integrations/index.d.ts",
+      "import": "./dist/integrations/index.js",
+      "default": "./dist/integrations/index.js"
+    },
+    "./vercel": {
+      "types": "./dist/integrations/vercel.d.ts",
+      "import": "./dist/integrations/vercel.js",
+      "default": "./dist/integrations/vercel.js"
+    },
+    "./openai": {
+      "types": "./dist/integrations/openai.d.ts",
+      "import": "./dist/integrations/openai.js",
+      "default": "./dist/integrations/openai.js"
+    },
+    "./langgraph": {
+      "types": "./dist/integrations/langgraph.d.ts",
+      "import": "./dist/integrations/langgraph.js",
+      "default": "./dist/integrations/langgraph.js"
     },
     "./package.json": "./package.json"
   },

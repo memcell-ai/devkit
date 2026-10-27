@@ -1,5 +1,6 @@
 import {
   collaboratorCommand,
+  insightsCommand,
   pauseCommand,
   resumeCommand,
   scopeCommand,
@@ -7,6 +8,7 @@ import {
   sweepCommand,
 } from "../admin/index.js";
 import {
+  copyWorkspace,
   deleteWorkspace,
   getWorkspace,
   getWorkspaceActivity,
@@ -106,7 +108,7 @@ const useWorkspaceCmd: CliCommand<{ slug: string }> = {
   handler: runCommand(async (argv) => useWorkspace(argv._instance!, argv.slug)),
 };
 
-const transferWorkspaceCmd: CliCommand<{ slug: string; to?: string }> = {
+const transferWorkspaceCmd: CliCommand<{ slug: string; to?: string; "new-slug"?: string }> = {
   command: "transfer <slug>",
   describe: "Transfer workspace ownership to another user or organization",
   builder: (yargs) =>
@@ -118,10 +120,64 @@ const transferWorkspaceCmd: CliCommand<{ slug: string; to?: string }> = {
       })
       .option("to", {
         type: "string",
-        describe: "Target owner user or organization handle",
+        describe: "Target owner user or organization handle (or owner/new-slug)",
+      })
+      .option("new-slug", {
+        type: "string",
+        describe: "Optional new workspace slug under the target owner",
       }),
   handler: runCommand(async (argv) =>
     transferWorkspace(argv._instance!, argv.slug, toFlagsRecord(argv, ["slug"])),
+  ),
+};
+
+const copyWorkspaceCmd: CliCommand<{
+  slug: string;
+  target?: string;
+  to?: string;
+  name?: string;
+  visibility?: string;
+  threads?: boolean;
+  documents?: boolean;
+}> = {
+  command: ["copy <slug> [target]", "clone <slug> [target]", "fork <slug> [target]"],
+  describe: "Copy a workspace and its memories into your account or an organization",
+  builder: (yargs) =>
+    yargs
+      .positional("slug", {
+        type: "string",
+        demandOption: true,
+        describe: "Source workspace slug or [owner]/[workspace]",
+      })
+      .positional("target", {
+        type: "string",
+        describe: "Optional destination slug or [owner]/[workspace]",
+      })
+      .option("to", {
+        type: "string",
+        describe: "Destination owner handle or organization slug",
+      })
+      .option("name", {
+        type: "string",
+        describe: "Custom display name for the copied workspace",
+      })
+      .option("visibility", {
+        type: "string",
+        choices: ["private", "public"],
+        describe: "Visibility for the copied workspace",
+      })
+      .option("threads", {
+        type: "boolean",
+        default: true,
+        describe: "Include shared workspace threads",
+      })
+      .option("documents", {
+        type: "boolean",
+        default: true,
+        describe: "Include ingested documents and chunks",
+      }),
+  handler: runCommand(async (argv) =>
+    copyWorkspace(argv._instance!, argv.slug, argv.target, toFlagsRecord(argv, ["slug", "target"])),
   ),
 };
 
@@ -191,12 +247,14 @@ export const workspaceCommand: CliCommand = {
       .command(updateWorkspaceCmd)
       .command(deleteWorkspaceCmd)
       .command(useWorkspaceCmd)
+      .command(copyWorkspaceCmd)
       .command(transferWorkspaceCmd)
       .command(activityWorkspaceCmd)
       .command(purgeWorkspaceCmd)
       .command(collaboratorCommand)
       .command(scopeCommand)
       .command(statsCommand)
+      .command(insightsCommand)
       .command(sweepCommand)
       .command(pauseCommand)
       .command(resumeCommand),
