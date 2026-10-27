@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/memcell-ai/devkit/compare/python-v1.6.0...python-v1.7.0) (2026-10-27)
+
+
+### Features
+
+* add framework integrations, general sources, workspace insights calibration, and operational benchmarks ([#17](https://github.com/memcell-ai/devkit/issues/17)) ([8cb5ad2](https://github.com/memcell-ai/devkit/commit/8cb5ad2955e94e66db53bb60cf051be21785ad10))
+
 ## [1.6.0](https://github.com/memcell-ai/devkit/compare/python-v1.5.0...python-v1.6.0) (2026-10-18)
 
 
