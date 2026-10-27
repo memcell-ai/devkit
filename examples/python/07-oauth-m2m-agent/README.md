@@ -8,13 +8,13 @@ demonstrates how to connect an autonomous agent service to MemCell using OAuth 2
 
 ---
 
-3# Running this Example
+## Running this Example
 
 ```bash
 export MEMCELL_CLIENT_ID="app_..."
 export MEMCELL_CLIENT_SECRET="sec_..."
 export MEMCELL_WORKSPACE="acme/compliance"
-export MEMCELL_URL="https://api.memcell.io"
+export MEMCELL_URL="https://memcell.ai"
 
 python main.py
 ```

@@ -13,9 +13,14 @@ const listDocumentCmd: CliCommand = {
   handler: runCommand(async (argv) => listDocuments(argv._instance!, toFlagsRecord(argv))),
 };
 
-const ingestDocumentCmd: CliCommand<{ file?: string; "no-distill"?: boolean }> = {
+const ingestDocumentCmd: CliCommand<{
+  file?: string;
+  "no-distill"?: boolean;
+  "dry-run"?: boolean;
+}> = {
   command: "ingest [file]",
-  describe: "Ingest workspace documents into grounded chunks and distill memories",
+  describe:
+    "Ingest workspace documents (PDF, DOCX, CSV, HTML, JSON, Markdown) into grounded chunks and distill memories",
   builder: (yargs) =>
     yargs
       .positional("file", {
@@ -25,6 +30,10 @@ const ingestDocumentCmd: CliCommand<{ file?: string; "no-distill"?: boolean }> =
       .option("no-distill", {
         type: "boolean",
         describe: "Index document chunks for retrieval only without distilling memories",
+      })
+      .option("dry-run", {
+        type: "boolean",
+        describe: "Preview which files would be ingested without uploading",
       }),
   handler: runCommand(async (argv) =>
     ingestDocuments(argv._instance!, argv.file ? [argv.file] : [], toFlagsRecord(argv, ["file"])),
@@ -77,9 +86,14 @@ export const documentCommand: CliCommand = {
   handler: runCommand(async (argv) => listDocuments(argv._instance!, toFlagsRecord(argv))),
 };
 
-export const topLevelIngestCommand: CliCommand<{ file?: string; "no-distill"?: boolean }> = {
+export const topLevelIngestCommand: CliCommand<{
+  file?: string;
+  "no-distill"?: boolean;
+  "dry-run"?: boolean;
+}> = {
   command: "ingest [file]",
-  describe: "Ingest workspace documents into grounded chunks and distill memories",
+  describe:
+    "Ingest workspace documents (PDF, DOCX, CSV, HTML, JSON, Markdown) into grounded chunks and distill memories",
   builder: ingestDocumentCmd.builder,
   handler: ingestDocumentCmd.handler,
 };

@@ -26,6 +26,9 @@ RelationType = Literal[
 MemoryStatus = Literal["provisional", "active", "pinned", "decayed", "refuted"]
 OutcomeVerdict = Literal["worked", "failed", "avoided"]
 ThreadStatus = Literal["active", "paused", "completed"]
+ThreadScope = Literal["user", "workspace"]
+SourceType = Literal["url", "webhook", "github"]
+SourceStatus = Literal["idle", "syncing", "ready", "error"]
 
 T = TypeVar("T")
 
@@ -268,6 +271,7 @@ class ThreadItem(BaseModel):
     external_session_id: str | None = None
     title: str
     status: ThreadStatus = "active"
+    scope: ThreadScope = "user"
     summary: str = ""
     current_objective: str | None = None
     decisions: list[str] = Field(default_factory=list)
@@ -282,15 +286,73 @@ class ThreadItem(BaseModel):
     updated_at: datetime | None = None
 
 
+class ThreadDetailResponse(BaseModel):
+    thread: ThreadItem
+    turns: list[ThreadTurnItem] = Field(default_factory=list)
+    memories: list[MemoryItem] = Field(default_factory=list)
+
+
+class DocumentItem(BaseModel):
+    id: str
+    workspace_id: str = ""
+    title: str = ""
+    path: str | None = None
+    source_path: str | None = None
+    source_uri: str | None = None
+    source_type: str = "markdown"
+    content_type: str = "markdown"
+    content_hash: str = ""
+    summary: str | None = None
+    status: str | None = None
+    chunk_count: int = 0
+    size_bytes: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class DocumentChunkItem(BaseModel):
+    id: str
+    document_id: str = ""
+    chunk_index: int = 0
+    heading: str | None = None
+    content: str = ""
+    token_count: int = 0
+    created_at: datetime | None = None
+
+
 class DocumentChunkSearchResult(BaseModel):
     id: str
     document_id: str
     document_title: str
+    path: str | None = None
     source_path: str | None = None
+    source_uri: str | None = None
     chunk_index: int = 0
     heading: str | None = None
     content: str
     score: float = 0.0
+
+
+class DocumentSearchResponse(BaseModel):
+    chunks: list[DocumentChunkSearchResult] = Field(default_factory=list)
+
+
+class DocumentDetailResponse(BaseModel):
+    document: DocumentItem
+    chunks: list[DocumentChunkItem] = Field(default_factory=list)
+    memories: list[MemoryItem] = Field(default_factory=list)
+
+
+class IngestDocumentResponse(BaseModel):
+    document: DocumentItem
+    chunk_count: int = 0
+    chunks_created: int = 0
+    deduplicated: bool = False
+    unchanged: bool = False
+    distilled: dict[str, Any] | None = None
+    distilled_memories_count: int = 0
+    memories_created: int = 0
 
 
 class RecallResponse(BaseModel):
@@ -304,7 +366,7 @@ class RecallResponse(BaseModel):
     document_chunks: list[DocumentChunkSearchResult] | None = None
     matched_tags: list[str] | None = None
     guard_mode: str | None = None
-    profile: dict[str, Any] | None = None
+    profile: str | dict[str, Any] | None = None
 
 
 class RememberResponse(BaseModel):
@@ -374,7 +436,10 @@ class WorkspaceItem(BaseModel):
     id: str
     name: str
     slug: str
+    owner_slug: str | None = Field(default=None, alias="ownerSlug")
     description: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
     website: str | None = None
     tags: list[str] = Field(default_factory=list)
     visibility: str = "private"
@@ -722,7 +787,69 @@ class SiemDestination(CamelModel):
     created_at: datetime | str | None = None
 
 
-# ─── Enterprise Insights Models ───
+# ─── Workspace & Enterprise Insights Models ───
+
+
+class ConfidenceCalibrationBucket(CamelModel):
+    bucket: str
+    range: str
+    label: str
+    min_confidence: float = 0.0
+    max_confidence: float = 1.0
+    predicted_confidence: float = 0.0
+    observed_worked_rate: float | None = None
+    worked_count: int = 0
+    failed_count: int = 0
+    sample_count: int = 0
+    calibration_gap: float | None = None
+
+
+class ConfidenceCalibrationSummary(CamelModel):
+    total_samples: int = 0
+    expected_calibration_error: float | None = None
+    brier_score: float | None = None
+    high_confidence_worked_rate: float | None = None
+    low_confidence_worked_rate: float | None = None
+    reliability_lift_pct: float | None = None
+    buckets: list[ConfidenceCalibrationBucket] = Field(default_factory=list)
+
+
+class GovernanceShieldSummary(CamelModel):
+    quarantined_user_scope_count: int = 0
+    provisional_count: int = 0
+    demoted_or_refuted_count: int = 0
+    enforced_guard_count: int = 0
+    approved_promotions_count: int = 0
+    pending_promotions_count: int = 0
+
+
+class WorkspaceInsightsSummary(CamelModel):
+    recalls: dict[str, Any] = Field(default_factory=dict)
+    task_verification: dict[str, Any] = Field(default_factory=dict)
+    memory_health: dict[str, Any] = Field(default_factory=dict)
+    latency: dict[str, Any] = Field(default_factory=dict)
+    total_requests: int = 0
+    total_errors: int = 0
+    success_rate: float = 100.0
+    avg_latency_ms: float = 0.0
+    active_memories_count: int = 0
+    avg_confidence: float = 0.0
+
+
+class WorkspaceInsights(CamelModel):
+    timeframe: str = "24h"
+    summary: WorkspaceInsightsSummary = Field(default_factory=WorkspaceInsightsSummary)
+    calibration: ConfidenceCalibrationSummary = Field(default_factory=ConfidenceCalibrationSummary)
+    governance: GovernanceShieldSummary = Field(default_factory=GovernanceShieldSummary)
+    operation_buckets: list[dict[str, Any]] = Field(default_factory=list)
+    outcome_buckets: list[dict[str, Any]] = Field(default_factory=list)
+    traffic_buckets: list[dict[str, Any]] = Field(default_factory=list)
+    confidence_bands: list[dict[str, Any]] = Field(default_factory=list)
+    agent_shares: list[dict[str, Any]] = Field(default_factory=list)
+    top_memories: list[dict[str, Any]] = Field(default_factory=list)
+    activity_feed: list[dict[str, Any]] = Field(default_factory=list)
+    memories_requiring_attention: list[dict[str, Any]] = Field(default_factory=list)
+    standing_instructions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class LatencyMs(CamelModel):
@@ -754,6 +881,8 @@ class EnterpriseInsights(CamelModel):
     timeframe: str = "30d"
     kpis: EnterpriseKpis = Field(default_factory=EnterpriseKpis)
     metrics: EnterpriseMetrics = Field(default_factory=EnterpriseMetrics)
+    calibration: ConfidenceCalibrationSummary | None = None
+    governance: GovernanceShieldSummary | None = None
     timeseries: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -851,3 +980,57 @@ class OperatorStats(CamelModel):
     active_recalls_24h: int = 0
     uptime_seconds: float = 0.0
     version: str = "1.0.0"
+
+
+# ─── Workspace Sources Models (URL / Sitemap, Inbound Webhook, GitHub) ───
+
+
+class SourceItem(CamelModel):
+    id: str
+    workspace_id: str = ""
+    type: SourceType = "url"
+    name: str = ""
+    repo_full_name: str | None = None
+    default_branch: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    status: SourceStatus = "idle"
+    last_synced_sha: str | None = None
+    last_synced_at: datetime | str | None = None
+    last_error: str | None = None
+    document_count: int = 0
+    memory_count: int = 0
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class CreateSourceResponse(CamelModel):
+    source: SourceItem
+    webhook_secret: str | None = None
+    ingest_path: str | None = None
+
+
+class SyncSourceResponse(CamelModel):
+    source: SourceItem | None = None
+    status: str = "ready"
+    synced_files: int = 0
+    skipped_files: int = 0
+    total_chunks: int = 0
+    total_memories: int = 0
+    head_sha: str | None = None
+    message: str | None = None
+
+
+class WebhookIngestDocumentResult(CamelModel):
+    id: str
+    title: str = ""
+    chunk_count: int = 0
+    deduplicated: bool = False
+
+
+class WebhookIngestResponse(CamelModel):
+    status: str = "ready"
+    ingested_documents: int = 0
+    skipped_documents: int = 0
+    total_chunks: int = 0
+    total_memories: int = 0
+    documents: list[WebhookIngestDocumentResult] = Field(default_factory=list)

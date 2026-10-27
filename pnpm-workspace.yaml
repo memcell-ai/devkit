@@ -1,4 +1,5 @@
 packages:
   - "sdks/node"
   - "cli"
+  - "benchmarks"
   - "examples/node/*"

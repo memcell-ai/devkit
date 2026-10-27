@@ -54,14 +54,14 @@ export async function getRunningServer(): Promise<DaemonState | null> {
 }
 
 /**
- * Resolves or downloads the local standalone server bundle.
+ * Resolves a locally available or cached standalone server bundle first,
+ * falling back to downloading from the remote instance only when needed.
  * Fails fast with an explicit error if the bundle is missing or cannot be fetched.
  */
 async function resolveServerBundle(
   instance: string,
-  token: string,
 ): Promise<{ serverEntry: string; serverDir: string }> {
-  // 1. Explicit environment variable override
+  // 1. Explicit environment variable override (works completely offline)
   if (process.env.MEMCELL_SERVER_PATH) {
     const customPath = resolve(process.env.MEMCELL_SERVER_PATH);
     const entry = customPath.endsWith(".js") ? customPath : join(customPath, "server.js");
@@ -77,7 +77,7 @@ async function resolveServerBundle(
     return { serverEntry: entry, serverDir: dir };
   }
 
-  // 2. Local monorepo standalone build detection (for development & E2E)
+  // 2. Local standalone build detection (for development, offline bundles & E2E)
   try {
     const currentDir = process.cwd();
     const candidatePaths = [
@@ -94,10 +94,10 @@ async function resolveServerBundle(
       }
     }
   } catch {
-    // Continue to platform download
+    // Continue to cached directory check
   }
 
-  // 3. User cached server directory
+  // 3. User cached server directory (works completely offline once installed)
   const serverDir = machineFile("server");
   const serverEntry = join(serverDir, "server.js");
   const cached = await stat(serverEntry).catch(() => null);
@@ -105,7 +105,20 @@ async function resolveServerBundle(
     return { serverEntry, serverDir };
   }
 
-  // 4. Download from platform endpoint
+  // 4. Download from platform endpoint (requires authentication)
+  const credential = await credentialFor(instance);
+  if (!credential) {
+    say(
+      row(0, [badge("memcell"), warn("authentication required")]),
+      row(1, [label("Account".padEnd(11, " ")), warn("not signed in")]),
+      blank(),
+      row(0, [label("No local server bundle found. Sign in once to download it:")]),
+      row(1, [cmd("memcell login".padEnd(21, " ")), label("Sign in to your account")]),
+      row(0, [label("Or set MEMCELL_SERVER_PATH to a pre-built standalone server.js.")]),
+    );
+    throw new Error("Authentication required to download local server bundle");
+  }
+
   await mkdir(serverDir, { recursive: true });
 
   const downloadUrl = `${normalize(instance)}/api/v1/download/server?platform=${process.platform}&arch=${process.arch}&version=latest&stream=true`;
@@ -119,7 +132,7 @@ async function resolveServerBundle(
   try {
     res = await fetch(downloadUrl, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${credential.token}`,
         Accept: "application/gzip, application/octet-stream, application/json",
       },
     });
@@ -208,18 +221,6 @@ export async function startServer(
     if (options.dataDir) serviceFlags["data-dir"] = options.dataDir;
     return installService(instance, serviceFlags);
   }
-  // 1. Enforce authentication standing
-  const credential = await credentialFor(instance);
-  if (!credential) {
-    say(
-      row(0, [badge("memcell"), warn("authentication required")]),
-      row(1, [label("Account".padEnd(11, " ")), warn("not signed in")]),
-      blank(),
-      row(0, [label("To download and run the Memcell local server, please sign in:")]),
-      row(1, [cmd("memcell login".padEnd(21, " ")), label("Sign in to your account")]),
-    );
-    return 1;
-  }
 
   const configuredPort = (await number("server.port", 3000)).value;
   const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : undefined;
@@ -235,7 +236,7 @@ export async function startServer(
 
   await mkdir(storageDir, { recursive: true });
 
-  // 2. Check if server is already running
+  // 1. Check if server is already running
   const running = await getRunningServer();
   if (running) {
     say(
@@ -254,10 +255,10 @@ export async function startServer(
     return 0;
   }
 
-  // 3. Resolve server bundle (fail fast on missing release assets)
+  // 2. Resolve local/cached server bundle first; require credentials only if downloading
   let serverBundle: { serverEntry: string; serverDir: string };
   try {
-    serverBundle = await resolveServerBundle(instance, credential.token);
+    serverBundle = await resolveServerBundle(instance);
   } catch {
     return 1;
   }

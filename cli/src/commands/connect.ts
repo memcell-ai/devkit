@@ -222,14 +222,21 @@ export async function connect(
 
       const workspaceChoices: Choice[] = [
         ...candidateWorkspaces.map((w) => {
-          const fullSlug =
-            w.ownerSlug && selectedOwner && w.ownerSlug !== selectedOwner
-              ? `${w.ownerSlug}/${w.slug}`
-              : w.slug;
+          const isShared = Boolean(
+            w.ownerSlug &&
+            ((selectedOwner && w.ownerSlug !== selectedOwner) ||
+              (!selectedOwner && held?.user?.handle && w.ownerSlug !== held.user.handle)),
+          );
+          const fullSlug = w.ownerSlug ? `${w.ownerSlug}/${w.slug}` : w.slug;
+          const displayLabel = isShared ? fullSlug : w.slug;
           return {
             name: fullSlug,
-            label: fullSlug,
-            note: w.name !== w.slug ? w.name : undefined,
+            label: displayLabel,
+            note: isShared
+              ? `shared${w.name !== w.slug ? ` · ${w.name}` : ""}`
+              : w.name !== w.slug
+                ? w.name
+                : undefined,
           };
         }),
         {

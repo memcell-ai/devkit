@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime
 import json
 import os
 import random
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -29,7 +31,13 @@ from .models import (
     CreateAgentKeyResult,
     CreatedApiKeyResult,
     DeleteMemoryResponse,
+    DocumentChunkItem,
+    DocumentChunkSearchResult,
+    DocumentDetailResponse,
+    DocumentItem,
+    DocumentSearchResponse,
     FeedbackResponse,
+    IngestDocumentResponse,
     JobEvent,
     ListCollaboratorsResponse,
     MemoryHistoryItem,
@@ -59,12 +67,20 @@ from .models import (
     SSODomainLookupResult,
     SSOProviderSummary,
     SSOVerificationToken,
+    ThreadActionItem,
+    ThreadDetailResponse,
+    ThreadItem,
+    ThreadMilestoneItem,
+    ThreadScope,
+    ThreadStatus,
+    ThreadTurnItem,
     UsageQuotas,
     WorkspaceActivityItem,
     WorkspaceItem,
     WorkspaceOwner,
 )
 from .operator import AsyncOperatorNamespace, OperatorNamespace
+from .sources import AsyncWorkspaceSourcesNamespace, WorkspaceSourcesNamespace
 from .teams import AsyncOrganizationTeamsNamespace, OrganizationTeamsNamespace
 from .webhooks import AsyncWorkspaceWebhooksNamespace, WorkspaceWebhooksNamespace
 
@@ -297,6 +313,208 @@ def _parse_pending_invitation(data: dict[str, Any]) -> PendingInvitationItem:
         invited_by=data.get("invitedBy") or data.get("invited_by"),
         expires_at=data.get("expiresAt") or data.get("expires_at"),
         created_at=data.get("createdAt") or data.get("created_at"),
+    )
+
+
+def _parse_thread_action_item(data: dict[str, Any]) -> ThreadActionItem:
+    raw_type = str(data.get("type") or "tool_call")
+    action_type: Any = (
+        raw_type if raw_type in ("tool_call", "file_touch", "command", "milestone") else "tool_call"
+    )
+    return ThreadActionItem(
+        type=action_type,
+        category=data.get("category"),
+        name=str(data.get("name") or ""),
+        tool=data.get("tool"),
+        target=data.get("target"),
+        summary=str(data.get("summary") or ""),
+        input_summary=data.get("inputSummary") or data.get("input_summary"),
+        output_summary=data.get("outputSummary") or data.get("output_summary"),
+        outcome=data.get("outcome"),
+        status=data.get("status"),
+    )
+
+
+def _parse_thread_turn_item(data: dict[str, Any]) -> ThreadTurnItem:
+    raw_actions = data.get("actions") or []
+    return ThreadTurnItem(
+        id=str(data.get("id") or ""),
+        thread_id=str(data.get("threadId") or data.get("thread_id") or ""),
+        workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
+        turn_index=int(data.get("turnIndex") or data.get("turn_index") or 1),
+        summary=str(data.get("summary") or ""),
+        user_intent=data.get("userIntent") or data.get("user_intent"),
+        agent_outcome=data.get("agentOutcome") or data.get("agent_outcome"),
+        actions=[_parse_thread_action_item(a) if isinstance(a, dict) else a for a in raw_actions],
+        decisions=list(data.get("decisions") or []),
+        resources=list(data.get("resources") or []),
+        extracted_memory_ids=list(
+            data.get("extractedMemoryIds") or data.get("extracted_memory_ids") or []
+        ),
+        created_at=data.get("createdAt") or data.get("created_at"),
+    )
+
+
+def _parse_thread_item(data: dict[str, Any]) -> ThreadItem:
+    raw_milestones = data.get("milestones") or []
+    milestones = [
+        ThreadMilestoneItem(
+            phase=m.get("phase"),
+            title=m.get("title"),
+            summary=str(m.get("summary") or ""),
+            timestamp=m.get("timestamp"),
+        )
+        if isinstance(m, dict)
+        else m
+        for m in raw_milestones
+    ]
+    raw_turns = data.get("turns") or []
+    raw_status = str(data.get("status") or "active")
+    status: ThreadStatus = (
+        raw_status if raw_status in ("active", "paused", "completed") else "active"  # type: ignore[assignment]
+    )
+    raw_scope = str(data.get("scope") or "user")
+    scope: ThreadScope = raw_scope if raw_scope in ("user", "workspace") else "user"  # type: ignore[assignment]
+    return ThreadItem(
+        id=str(data.get("id") or ""),
+        workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
+        user_id=data.get("userId") or data.get("user_id"),
+        agent_id=data.get("agentId") or data.get("agent_id"),
+        external_session_id=data.get("externalSessionId") or data.get("external_session_id"),
+        title=str(data.get("title") or ""),
+        status=status,
+        scope=scope,
+        summary=str(data.get("summary") or ""),
+        current_objective=data.get("currentObjective") or data.get("current_objective"),
+        decisions=list(data.get("decisions") or []),
+        next_steps=list(data.get("nextSteps") or data.get("next_steps") or []),
+        entities=list(data.get("entities") or []),
+        milestones=milestones,
+        resources=list(data.get("resources") or []),
+        turns=[_parse_thread_turn_item(t) if isinstance(t, dict) else t for t in raw_turns],
+        turn_count=int(data.get("turnCount") or data.get("turn_count") or 1),
+        last_active_at=data.get("lastActiveAt") or data.get("last_active_at"),
+        created_at=data.get("createdAt") or data.get("created_at"),
+        updated_at=data.get("updatedAt") or data.get("updated_at"),
+    )
+
+
+def _parse_document_item(data: dict[str, Any]) -> DocumentItem:
+    source_uri = (
+        data.get("sourceUri")
+        or data.get("source_uri")
+        or data.get("sourcePath")
+        or data.get("source_path")
+        or data.get("path")
+    )
+    content_type = str(
+        data.get("contentType")
+        or data.get("content_type")
+        or data.get("sourceType")
+        or data.get("source_type")
+        or "markdown"
+    )
+    content_str = data.get("content") if isinstance(data.get("content"), str) else ""
+    raw_size = (
+        data.get("sizeBytes") if data.get("sizeBytes") is not None else data.get("size_bytes")
+    )
+    size_bytes = int(raw_size) if raw_size is not None else len(content_str)
+    return DocumentItem(
+        id=str(data.get("id") or ""),
+        workspace_id=str(data.get("workspaceId") or data.get("workspace_id") or ""),
+        title=str(data.get("title") or ""),
+        path=source_uri,
+        source_path=source_uri,
+        source_uri=source_uri,
+        source_type=str(data.get("sourceType") or data.get("source_type") or content_type),
+        content_type=content_type,
+        content_hash=str(data.get("contentHash") or data.get("content_hash") or ""),
+        summary=data.get("summary"),
+        status=data.get("status"),
+        chunk_count=int(data.get("chunkCount") or data.get("chunk_count") or 0),
+        size_bytes=size_bytes,
+        metadata=data.get("metadata") or {},
+        created_at=data.get("createdAt") or data.get("created_at"),
+        updated_at=data.get("updatedAt") or data.get("updated_at"),
+    )
+
+
+def _parse_document_chunk_item(data: dict[str, Any]) -> DocumentChunkItem:
+    return DocumentChunkItem(
+        id=str(data.get("id") or ""),
+        document_id=str(data.get("documentId") or data.get("document_id") or ""),
+        chunk_index=int(data.get("chunkIndex") or data.get("chunk_index") or 0),
+        heading=data.get("heading"),
+        content=str(data.get("content") or ""),
+        token_count=int(data.get("tokenCount") or data.get("token_count") or 0),
+        created_at=data.get("createdAt") or data.get("created_at"),
+    )
+
+
+def _parse_document_chunk_search_result(data: dict[str, Any]) -> DocumentChunkSearchResult:
+    source_uri = (
+        data.get("sourceUri")
+        or data.get("source_uri")
+        or data.get("sourcePath")
+        or data.get("source_path")
+        or data.get("path")
+    )
+    return DocumentChunkSearchResult(
+        id=str(data.get("id") or ""),
+        document_id=str(data.get("documentId") or data.get("document_id") or ""),
+        document_title=str(data.get("documentTitle") or data.get("document_title") or ""),
+        path=source_uri,
+        source_path=source_uri,
+        source_uri=source_uri,
+        chunk_index=int(data.get("chunkIndex") or data.get("chunk_index") or 0),
+        heading=data.get("heading"),
+        content=str(data.get("content") or ""),
+        score=float(data.get("score") or 0.0),
+    )
+
+
+def _parse_ingest_document_response(data: dict[str, Any]) -> IngestDocumentResponse:
+    doc = _parse_document_item(data.get("document") or {})
+    chunk_count = int(
+        data.get("chunkCount")
+        if data.get("chunkCount") is not None
+        else data.get("chunksCreated")
+        if data.get("chunksCreated") is not None
+        else doc.chunk_count
+    )
+    deduplicated = bool(
+        data.get("deduplicated")
+        if data.get("deduplicated") is not None
+        else data.get("unchanged", False)
+    )
+    raw_distilled = data.get("distilled")
+    distilled_payload: dict[str, Any] | None = None
+    created_len = 0
+    if isinstance(raw_distilled, dict):
+        created_items = [_parse_memory_item(m) for m in (raw_distilled.get("created") or [])]
+        evolved_items = [_parse_memory_item(m) for m in (raw_distilled.get("evolved") or [])]
+        created_len = len(created_items)
+        distilled_payload = {
+            "created": created_items,
+            "reinforced": raw_distilled.get("reinforced") or [],
+            "evolved": evolved_items,
+        }
+    distilled_count = int(
+        data.get("distilledMemoriesCount")
+        if data.get("distilledMemoriesCount") is not None
+        else data.get("memoriesCreated")
+        if data.get("memoriesCreated") is not None
+        else created_len
+    )
+    return IngestDocumentResponse(
+        document=doc,
+        chunk_count=chunk_count,
+        chunks_created=chunk_count,
+        deduplicated=deduplicated,
+        unchanged=deduplicated,
+        distilled=distilled_payload,
+        distilled_memories_count=distilled_count,
+        memories_created=distilled_count,
     )
 
 
@@ -877,12 +1095,47 @@ class _WorkspacesNamespaceSync:
         owner, workspace = _parse_namespace(namespace)
         self._client._request("DELETE", f"/api/v1/{owner}/{workspace}")
 
-    def transfer(self, namespace: str, target_owner: str) -> None:
+    def transfer(
+        self,
+        namespace: str,
+        target_owner: str,
+        target_slug: str | None = None,
+    ) -> None:
         owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {"targetOwner": target_owner}
+        if target_slug:
+            payload["targetSlug"] = target_slug
         self._client._request(
             "POST",
             f"/api/v1/{owner}/{workspace}/transfer",
-            json={"targetOwner": target_owner},
+            json=payload,
+        )
+
+    def copy(
+        self,
+        namespace: str,
+        target_owner: str | None = None,
+        target_slug: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        visibility: str | None = None,
+        include_threads: bool = False,
+        include_documents: bool = False,
+    ) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {
+            "targetOwner": target_owner,
+            "targetSlug": target_slug,
+            "name": name,
+            "description": description,
+            "visibility": visibility,
+            "includeThreads": include_threads,
+            "includeDocuments": include_documents,
+        }
+        return self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{workspace}/copy",
+            json={k: v for k, v in payload.items() if v is not None},
         )
 
     def activity(
@@ -1495,7 +1748,7 @@ class _ScopesNamespaceSync:
 
 
 class _SweepNamespaceSync:
-    """Sweep & autonomous consolidation APIs (ADR 0075: The Cognitive Sleep Cycle)."""
+    """Sweep & autonomous consolidation APIs (ADR 0075)."""
 
     def __init__(self, client: MemCell) -> None:
         self._client = client
@@ -2160,12 +2413,47 @@ class _WorkspacesNamespaceAsync:
         owner, workspace = _parse_namespace(namespace)
         await self._client._request("DELETE", f"/api/v1/{owner}/{workspace}")
 
-    async def transfer(self, namespace: str, target_owner: str) -> None:
+    async def transfer(
+        self,
+        namespace: str,
+        target_owner: str,
+        target_slug: str | None = None,
+    ) -> None:
         owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {"targetOwner": target_owner}
+        if target_slug:
+            payload["targetSlug"] = target_slug
         await self._client._request(
             "POST",
             f"/api/v1/{owner}/{workspace}/transfer",
-            json={"targetOwner": target_owner},
+            json=payload,
+        )
+
+    async def copy(
+        self,
+        namespace: str,
+        target_owner: str | None = None,
+        target_slug: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        visibility: str | None = None,
+        include_threads: bool = False,
+        include_documents: bool = False,
+    ) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {
+            "targetOwner": target_owner,
+            "targetSlug": target_slug,
+            "name": name,
+            "description": description,
+            "visibility": visibility,
+            "includeThreads": include_threads,
+            "includeDocuments": include_documents,
+        }
+        return await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{workspace}/copy",
+            json={k: v for k, v in payload.items() if v is not None},
         )
 
     async def activity(
@@ -2784,7 +3072,7 @@ class _ScopesNamespaceAsync:
 
 
 class _SweepNamespaceAsync:
-    """Async sweep & autonomous consolidation APIs (ADR 0075: The Cognitive Sleep Cycle)."""
+    """Async sweep & autonomous consolidation APIs (ADR 0075)."""
 
     def __init__(self, client: AsyncMemCell) -> None:
         self._client = client
@@ -2926,6 +3214,481 @@ class _PromotionsNamespaceAsync:
         }
 
 
+class _ThreadsNamespaceSync:
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def list(
+        self,
+        namespace: str,
+        *,
+        status: str | None = None,
+        scope: str | None = None,
+        entity: str | None = None,
+        q: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[ThreadItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "status": status,
+                "scope": scope,
+                "entity": entity,
+                "q": q,
+                "page": page,
+                "per_page": per_page,
+            }
+        )
+        resp = self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/threads",
+            params=params or None,
+        )
+        items = [_parse_thread_item(t) for t in (resp.get("threads") or [])]
+        return PaginatedResult[ThreadItem](
+            items=items,
+            pagination=_parse_pagination(resp.get("pagination") or {}),
+        )
+
+    def get(self, namespace: str, thread_id: str) -> ThreadDetailResponse:
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+        )
+        return ThreadDetailResponse(
+            thread=_parse_thread_item(resp.get("thread") or {}),
+            turns=[_parse_thread_turn_item(t) for t in (resp.get("turns") or [])],
+            memories=[_parse_memory_item(m) for m in (resp.get("memories") or [])],
+        )
+
+    def update(
+        self,
+        namespace: str,
+        thread_id: str,
+        *,
+        title: str | None = None,
+        status: str | None = None,
+        scope: str | None = None,
+        summary: str | None = None,
+        current_objective: str | None = None,
+        decisions: list[str] | None = None,
+        next_steps: list[str] | None = None,
+        entities: list[str] | None = None,
+        milestones: list[dict[str, Any]] | None = None,
+        resources: list[str] | None = None,
+    ) -> ThreadItem:
+        owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {}
+        if title is not None:
+            payload["title"] = title
+        if status is not None:
+            payload["status"] = status
+        if scope is not None:
+            payload["scope"] = scope
+        if summary is not None:
+            payload["summary"] = summary
+        if current_objective is not None:
+            payload["currentObjective"] = current_objective
+        if decisions is not None:
+            payload["decisions"] = decisions
+        if next_steps is not None:
+            payload["nextSteps"] = next_steps
+        if entities is not None:
+            payload["entities"] = entities
+        if milestones is not None:
+            payload["milestones"] = milestones
+        if resources is not None:
+            payload["resources"] = resources
+        resp = self._client._request(
+            "PATCH",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+            json=payload,
+        )
+        return _parse_thread_item(resp.get("thread") or resp)
+
+    def delete(self, namespace: str, thread_id: str) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+        )
+        return {"deleted": bool(resp.get("deleted", True))}
+
+
+class _ThreadsNamespaceAsync:
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def list(
+        self,
+        namespace: str,
+        *,
+        status: str | None = None,
+        scope: str | None = None,
+        entity: str | None = None,
+        q: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[ThreadItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params(
+            {
+                "status": status,
+                "scope": scope,
+                "entity": entity,
+                "q": q,
+                "page": page,
+                "per_page": per_page,
+            }
+        )
+        resp = await self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/threads",
+            params=params or None,
+        )
+        items = [_parse_thread_item(t) for t in (resp.get("threads") or [])]
+        return PaginatedResult[ThreadItem](
+            items=items,
+            pagination=_parse_pagination(resp.get("pagination") or {}),
+        )
+
+    async def get(self, namespace: str, thread_id: str) -> ThreadDetailResponse:
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+        )
+        return ThreadDetailResponse(
+            thread=_parse_thread_item(resp.get("thread") or {}),
+            turns=[_parse_thread_turn_item(t) for t in (resp.get("turns") or [])],
+            memories=[_parse_memory_item(m) for m in (resp.get("memories") or [])],
+        )
+
+    async def update(
+        self,
+        namespace: str,
+        thread_id: str,
+        *,
+        title: str | None = None,
+        status: str | None = None,
+        scope: str | None = None,
+        summary: str | None = None,
+        current_objective: str | None = None,
+        decisions: list[str] | None = None,
+        next_steps: list[str] | None = None,
+        entities: list[str] | None = None,
+        milestones: list[dict[str, Any]] | None = None,
+        resources: list[str] | None = None,
+    ) -> ThreadItem:
+        owner, workspace = _parse_namespace(namespace)
+        payload: dict[str, Any] = {}
+        if title is not None:
+            payload["title"] = title
+        if status is not None:
+            payload["status"] = status
+        if scope is not None:
+            payload["scope"] = scope
+        if summary is not None:
+            payload["summary"] = summary
+        if current_objective is not None:
+            payload["currentObjective"] = current_objective
+        if decisions is not None:
+            payload["decisions"] = decisions
+        if next_steps is not None:
+            payload["nextSteps"] = next_steps
+        if entities is not None:
+            payload["entities"] = entities
+        if milestones is not None:
+            payload["milestones"] = milestones
+        if resources is not None:
+            payload["resources"] = resources
+        resp = await self._client._request(
+            "PATCH",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+            json=payload,
+        )
+        return _parse_thread_item(resp.get("thread") or resp)
+
+    async def delete(self, namespace: str, thread_id: str) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{workspace}/threads/{thread_id}",
+        )
+        return {"deleted": bool(resp.get("deleted", True))}
+
+
+def _build_document_ingest_payload(
+    *,
+    title: str | None = None,
+    content: str | None = None,
+    file_path: str | os.PathLike[str] | None = None,
+    file_bytes: bytes | None = None,
+    file_base64: str | None = None,
+    filename: str | None = None,
+    mime_type: str | None = None,
+    path: str | None = None,
+    source_path: str | None = None,
+    source_uri: str | None = None,
+    content_type: str | None = None,
+    distill: bool | None = None,
+    distill_memories: bool | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    resolved_filename = filename
+    resolved_b64 = file_base64
+    if file_path is not None:
+        p = Path(file_path)
+        resolved_b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+        if resolved_filename is None:
+            resolved_filename = p.name
+    elif file_bytes is not None:
+        resolved_b64 = base64.b64encode(file_bytes).decode("ascii")
+
+    has_text = isinstance(content, str) and len(content) > 0
+    if not has_text and not resolved_b64:
+        raise ValueError(
+            "Provide either 'content' or binary 'file_path'/'file_bytes'/'file_base64' to ingest a document."
+        )
+
+    resolved_uri = source_uri or source_path or path or resolved_filename
+    resolved_distill = distill if distill is not None else distill_memories
+    resolved_title = title or resolved_filename or resolved_uri or "Untitled Document"
+
+    payload: dict[str, Any] = {"title": resolved_title}
+    if has_text:
+        payload["content"] = content
+    if resolved_b64:
+        payload["fileBase64"] = resolved_b64
+    if resolved_filename is not None:
+        payload["filename"] = resolved_filename
+    if mime_type is not None:
+        payload["mimeType"] = mime_type
+    if resolved_uri is not None:
+        payload["sourceUri"] = resolved_uri
+        payload["sourcePath"] = resolved_uri
+    if content_type is not None:
+        payload["contentType"] = content_type
+    if resolved_distill is not None:
+        payload["distill"] = resolved_distill
+        payload["distillMemories"] = resolved_distill
+    if metadata is not None:
+        payload["metadata"] = metadata
+    return payload
+
+
+class _DocumentsNamespaceSync:
+    def __init__(self, client: MemCell) -> None:
+        self._client = client
+
+    def list(
+        self,
+        namespace: str,
+        *,
+        q: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[DocumentItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params({"q": q, "page": page, "per_page": per_page})
+        resp = self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents",
+            params=params or None,
+        )
+        items = [_parse_document_item(d) for d in (resp.get("documents") or [])]
+        return PaginatedResult[DocumentItem](
+            items=items,
+            pagination=_parse_pagination(resp.get("pagination") or {}),
+        )
+
+    def get(self, namespace: str, document_id: str) -> DocumentDetailResponse:
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents/{document_id}",
+        )
+        return DocumentDetailResponse(
+            document=_parse_document_item(resp.get("document") or {}),
+            chunks=[_parse_document_chunk_item(c) for c in (resp.get("chunks") or [])],
+            memories=[_parse_memory_item(m) for m in (resp.get("memories") or [])],
+        )
+
+    def ingest(
+        self,
+        namespace: str,
+        *,
+        title: str | None = None,
+        content: str | None = None,
+        file_path: str | os.PathLike[str] | None = None,
+        file_bytes: bytes | None = None,
+        file_base64: str | None = None,
+        filename: str | None = None,
+        mime_type: str | None = None,
+        path: str | None = None,
+        source_path: str | None = None,
+        source_uri: str | None = None,
+        content_type: str | None = None,
+        distill: bool | None = None,
+        distill_memories: bool | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> IngestDocumentResponse:
+        owner, workspace = _parse_namespace(namespace)
+        payload = _build_document_ingest_payload(
+            title=title,
+            content=content,
+            file_path=file_path,
+            file_bytes=file_bytes,
+            file_base64=file_base64,
+            filename=filename,
+            mime_type=mime_type,
+            path=path,
+            source_path=source_path,
+            source_uri=source_uri,
+            content_type=content_type,
+            distill=distill,
+            distill_memories=distill_memories,
+            metadata=metadata,
+        )
+        resp = self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{workspace}/documents",
+            json=payload,
+        )
+        return _parse_ingest_document_response(resp)
+
+    def search(
+        self,
+        namespace: str,
+        query: str,
+        limit: int = 5,
+    ) -> DocumentSearchResponse:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params({"q": query, "chunks": True, "limit": limit})
+        resp = self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents",
+            params=params,
+        )
+        chunks = [_parse_document_chunk_search_result(c) for c in (resp.get("chunks") or [])]
+        return DocumentSearchResponse(chunks=chunks)
+
+    def delete(self, namespace: str, document_id: str) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        resp = self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{workspace}/documents/{document_id}",
+        )
+        return {"deleted": bool(resp.get("deleted", True))}
+
+
+class _DocumentsNamespaceAsync:
+    def __init__(self, client: AsyncMemCell) -> None:
+        self._client = client
+
+    async def list(
+        self,
+        namespace: str,
+        *,
+        q: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+    ) -> PaginatedResult[DocumentItem]:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params({"q": q, "page": page, "per_page": per_page})
+        resp = await self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents",
+            params=params or None,
+        )
+        items = [_parse_document_item(d) for d in (resp.get("documents") or [])]
+        return PaginatedResult[DocumentItem](
+            items=items,
+            pagination=_parse_pagination(resp.get("pagination") or {}),
+        )
+
+    async def get(self, namespace: str, document_id: str) -> DocumentDetailResponse:
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents/{document_id}",
+        )
+        return DocumentDetailResponse(
+            document=_parse_document_item(resp.get("document") or {}),
+            chunks=[_parse_document_chunk_item(c) for c in (resp.get("chunks") or [])],
+            memories=[_parse_memory_item(m) for m in (resp.get("memories") or [])],
+        )
+
+    async def ingest(
+        self,
+        namespace: str,
+        *,
+        title: str | None = None,
+        content: str | None = None,
+        file_path: str | os.PathLike[str] | None = None,
+        file_bytes: bytes | None = None,
+        file_base64: str | None = None,
+        filename: str | None = None,
+        mime_type: str | None = None,
+        path: str | None = None,
+        source_path: str | None = None,
+        source_uri: str | None = None,
+        content_type: str | None = None,
+        distill: bool | None = None,
+        distill_memories: bool | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> IngestDocumentResponse:
+        owner, workspace = _parse_namespace(namespace)
+        payload = _build_document_ingest_payload(
+            title=title,
+            content=content,
+            file_path=file_path,
+            file_bytes=file_bytes,
+            file_base64=file_base64,
+            filename=filename,
+            mime_type=mime_type,
+            path=path,
+            source_path=source_path,
+            source_uri=source_uri,
+            content_type=content_type,
+            distill=distill,
+            distill_memories=distill_memories,
+            metadata=metadata,
+        )
+        resp = await self._client._request(
+            "POST",
+            f"/api/v1/{owner}/{workspace}/documents",
+            json=payload,
+        )
+        return _parse_ingest_document_response(resp)
+
+    async def search(
+        self,
+        namespace: str,
+        query: str,
+        limit: int = 5,
+    ) -> DocumentSearchResponse:
+        owner, workspace = _parse_namespace(namespace)
+        params = _build_query_params({"q": query, "chunks": True, "limit": limit})
+        resp = await self._client._request(
+            "GET",
+            f"/api/v1/{owner}/{workspace}/documents",
+            params=params,
+        )
+        chunks = [_parse_document_chunk_search_result(c) for c in (resp.get("chunks") or [])]
+        return DocumentSearchResponse(chunks=chunks)
+
+    async def delete(self, namespace: str, document_id: str) -> dict[str, Any]:
+        owner, workspace = _parse_namespace(namespace)
+        resp = await self._client._request(
+            "DELETE",
+            f"/api/v1/{owner}/{workspace}/documents/{document_id}",
+        )
+        return {"deleted": bool(resp.get("deleted", True))}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN CLIENTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2950,7 +3713,7 @@ class MemCell:
         timeout: float = 30.0,
         http_client: httpx.Client | None = None,
     ) -> None:
-        base = base_url or os.environ.get("MEMCELL_BASE_URL", "https://api.memcell.io")
+        base = base_url or os.environ.get("MEMCELL_BASE_URL", "https://memcell.ai")
         self.base_url = base.rstrip("/")
         self.max_retries = max_retries
         self.initial_retry_delay_ms = initial_retry_delay_ms
@@ -2999,6 +3762,9 @@ class MemCell:
         self.memories = _MemoriesNamespaceSync(self)
         self.relations = self.memories.relations
         self.workspaces = _WorkspacesNamespaceSync(self)
+        self.threads = _ThreadsNamespaceSync(self)
+        self.documents = _DocumentsNamespaceSync(self)
+        self.sources = WorkspaceSourcesNamespace(self)
         self.agents = _AgentsNamespaceSync(self)
         self.collaborators = _CollaboratorsNamespaceSync(self)
         self.organizations = _OrganizationsNamespaceSync(self)
@@ -3161,6 +3927,7 @@ class MemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        session_id: str | None = None,
         *,
         intent: str | None = None,
     ) -> RecallResponse:
@@ -3169,6 +3936,7 @@ class MemCell:
         payload: dict[str, Any] = {
             "query": effective_query,
             "intent": effective_query,
+            "sessionId": session_id,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3189,11 +3957,27 @@ class MemCell:
         data = self._request("POST", path, json={k: v for k, v in payload.items() if v is not None})
         raw_memories = data.get("memories") or data.get("results") or []
         memories = [_parse_memory_item(s) for s in raw_memories]
+        matched_thread = (
+            _parse_thread_item(data["matchedThread"]) if data.get("matchedThread") else None
+        )
+        active_threads = (
+            [_parse_thread_item(t) for t in data["activeThreads"]]
+            if data.get("activeThreads") is not None
+            else None
+        )
+        document_chunks = (
+            [_parse_document_chunk_search_result(c) for c in data["documentChunks"]]
+            if data.get("documentChunks") is not None
+            else None
+        )
 
         return RecallResponse(
             recall_id=str(data.get("recallId") or data.get("momentId") or ""),
             prompt_context=data.get("promptContext", ""),
             memories=memories,
+            matched_thread=matched_thread,
+            active_threads=active_threads,
+            document_chunks=document_chunks,
             matched_tags=data.get("matchedTags"),
             guard_mode=data.get("guardMode"),
             profile=data.get("profile"),
@@ -3276,12 +4060,14 @@ class MemCell:
         created = [_parse_memory_item(s) for s in raw_created]
         raw_evolved = data.get("evolved") or []
         evolved = [_parse_memory_item(s) for s in raw_evolved]
+        thread = _parse_thread_item(data["thread"]) if data.get("thread") else None
 
         return RememberResponse(
             created=created,
             evolved=evolved,
             reinforced=data.get("reinforced"),
             superseded=data.get("superseded"),
+            thread=thread,
             note=data.get("note"),
         )
 
@@ -3476,7 +4262,7 @@ class AsyncMemCell:
         timeout: float = 30.0,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        base = base_url or os.environ.get("MEMCELL_BASE_URL", "https://api.memcell.io")
+        base = base_url or os.environ.get("MEMCELL_BASE_URL", "https://memcell.ai")
         self.base_url = base.rstrip("/")
         self.max_retries = max_retries
         self.initial_retry_delay_ms = initial_retry_delay_ms
@@ -3525,6 +4311,9 @@ class AsyncMemCell:
         self.memories = _MemoriesNamespaceAsync(self)
         self.relations = self.memories.relations
         self.workspaces = _WorkspacesNamespaceAsync(self)
+        self.threads = _ThreadsNamespaceAsync(self)
+        self.documents = _DocumentsNamespaceAsync(self)
+        self.sources = AsyncWorkspaceSourcesNamespace(self)
         self.agents = _AgentsNamespaceAsync(self)
         self.collaborators = _CollaboratorsNamespaceAsync(self)
         self.organizations = _OrganizationsNamespaceAsync(self)
@@ -3687,6 +4476,7 @@ class AsyncMemCell:
         allow_provisional: bool | None = None,
         metadata: dict[str, Any] | None = None,
         include_metadata: bool | list[str] | None = None,
+        session_id: str | None = None,
         *,
         intent: str | None = None,
     ) -> RecallResponse:
@@ -3695,6 +4485,7 @@ class AsyncMemCell:
         payload: dict[str, Any] = {
             "query": effective_query,
             "intent": effective_query,
+            "sessionId": session_id,
             "subject": subject,
             "type": type,
             "enforce": enforce,
@@ -3717,11 +4508,27 @@ class AsyncMemCell:
         )
         raw_memories = data.get("memories") or data.get("results") or []
         memories = [_parse_memory_item(s) for s in raw_memories]
+        matched_thread = (
+            _parse_thread_item(data["matchedThread"]) if data.get("matchedThread") else None
+        )
+        active_threads = (
+            [_parse_thread_item(t) for t in data["activeThreads"]]
+            if data.get("activeThreads") is not None
+            else None
+        )
+        document_chunks = (
+            [_parse_document_chunk_search_result(c) for c in data["documentChunks"]]
+            if data.get("documentChunks") is not None
+            else None
+        )
 
         return RecallResponse(
             recall_id=str(data.get("recallId") or data.get("momentId") or ""),
             prompt_context=data.get("promptContext", ""),
             memories=memories,
+            matched_thread=matched_thread,
+            active_threads=active_threads,
+            document_chunks=document_chunks,
             matched_tags=data.get("matchedTags"),
             guard_mode=data.get("guardMode"),
             profile=data.get("profile"),
@@ -3806,12 +4613,14 @@ class AsyncMemCell:
         created = [_parse_memory_item(s) for s in raw_created]
         raw_evolved = data.get("evolved") or []
         evolved = [_parse_memory_item(s) for s in raw_evolved]
+        thread = _parse_thread_item(data["thread"]) if data.get("thread") else None
 
         return RememberResponse(
             created=created,
             evolved=evolved,
             reinforced=data.get("reinforced"),
             superseded=data.get("superseded"),
+            thread=thread,
             note=data.get("note"),
         )
 

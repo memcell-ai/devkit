@@ -29,6 +29,7 @@ function buildThreadQuery(params?: ListThreadsParams): string {
   if (params.page !== undefined) q.set("page", String(params.page));
   if (params.perPage !== undefined) q.set("per_page", String(params.perPage));
   if (params.status) q.set("status", params.status);
+  if (params.scope) q.set("scope", params.scope);
   if (params.entity) q.set("entity", params.entity);
   if (params.q) q.set("q", params.q);
   const str = q.toString();

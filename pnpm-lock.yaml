@@ -18,6 +18,22 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@25.9.9)(vite@8.3.0(@types/node@25.9.9)(esbuild@0.28.2)(tsx@4.23.15))
 
+  benchmarks:
+    dependencies:
+      '@memcell/sdk':
+        specifier: workspace:*
+        version: link:../sdks/node
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@22.20.3)(vite@8.3.0(@types/node@22.20.3)(esbuild@0.28.2)(tsx@4.23.15))
+
   cli:
     dependencies:
       '@memcell/sdk':
@@ -134,6 +150,19 @@ importers:
         version: 5.9.3
 
   examples/node/07-oauth-m2m-agent:
+    dependencies:
+      '@memcell/sdk':
+        specifier: workspace:*
+        version: link:../../../sdks/node
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  examples/node/08-cross-vendor-governed-ops:
     dependencies:
       '@memcell/sdk':
         specifier: workspace:*

@@ -1,4 +1,10 @@
-import { deleteThread, getThread, listThreads, updateThreadStatus } from "../threads.js";
+import {
+  deleteThread,
+  getThread,
+  listThreads,
+  updateThreadScope,
+  updateThreadStatus,
+} from "../threads.js";
 import { runCommand, toFlagsRecord, type CliCommand } from "../types.js";
 
 const listThreadCmd: CliCommand = {
@@ -10,6 +16,11 @@ const listThreadCmd: CliCommand = {
         type: "string",
         choices: ["active", "paused", "completed"] as const,
         describe: "Filter by thread status",
+      })
+      .option("scope", {
+        type: "string",
+        choices: ["user", "workspace", "all"] as const,
+        describe: "Filter by thread scope (user, workspace, or all)",
       })
       .option("entity", {
         type: "string",
@@ -67,6 +78,34 @@ const resumeThreadCmd: CliCommand<{ id: string }> = {
   ),
 };
 
+const shareThreadCmd: CliCommand<{ id: string }> = {
+  command: "share <id>",
+  describe: "Share a session thread with all members of the workspace",
+  builder: (yargs) =>
+    yargs.positional("id", {
+      type: "string",
+      demandOption: true,
+      describe: "Thread ID",
+    }),
+  handler: runCommand(async (argv) =>
+    updateThreadScope(argv._instance!, argv.id, "workspace", toFlagsRecord(argv, ["id"])),
+  ),
+};
+
+const unshareThreadCmd: CliCommand<{ id: string }> = {
+  command: "unshare <id>",
+  describe: "Make a shared session thread private to you again",
+  builder: (yargs) =>
+    yargs.positional("id", {
+      type: "string",
+      demandOption: true,
+      describe: "Thread ID",
+    }),
+  handler: runCommand(async (argv) =>
+    updateThreadScope(argv._instance!, argv.id, "user", toFlagsRecord(argv, ["id"])),
+  ),
+};
+
 const deleteThreadCmd: CliCommand<{ id: string }> = {
   command: "delete <id>",
   describe: "Delete a session thread and its turn summaries",
@@ -90,6 +129,8 @@ export const threadCommand: CliCommand = {
       .command(getThreadCmd)
       .command(completeThreadCmd)
       .command(resumeThreadCmd)
+      .command(shareThreadCmd)
+      .command(unshareThreadCmd)
       .command(deleteThreadCmd),
   handler: runCommand(async (argv) => listThreads(argv._instance!, toFlagsRecord(argv))),
 };

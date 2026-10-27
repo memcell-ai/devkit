@@ -1,7 +1,12 @@
 import yargs, { type Argv } from "yargs";
 import { migrateWiring } from "./adapters/index.js";
 import { accountCommand } from "./commands/account/index.js";
-import { exportCommand, importCommand, mcpCommand } from "./commands/admin/index.js";
+import {
+  exportCommand,
+  importCommand,
+  insightsCommand,
+  mcpCommand,
+} from "./commands/admin/index.js";
 import { agentCommand } from "./commands/agent/index.js";
 import { loginCommand, logoutCommand } from "./commands/auth/index.js";
 import { configCommand } from "./commands/config/index.js";
@@ -12,6 +17,7 @@ import { recallCommand, rememberCommand, reportCommand } from "./commands/loop/i
 import { memoryCommand } from "./commands/memory/index.js";
 import { orgCommand } from "./commands/org/index.js";
 import { serverCommand } from "./commands/server/index.js";
+import { sourceCommand } from "./commands/source/index.js";
 import { teamCommand } from "./commands/team/index.js";
 import { threadCommand } from "./commands/thread/index.js";
 import {
@@ -50,6 +56,8 @@ export const YARGS_COMMANDS: CliCommand<any>[] = [
   memoryCommand,
   threadCommand,
   documentCommand,
+  sourceCommand,
+  insightsCommand,
   agentCommand,
   hookCommand,
   orgCommand,

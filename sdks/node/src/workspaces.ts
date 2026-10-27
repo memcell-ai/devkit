@@ -1,5 +1,7 @@
 import type { MemCell } from "./client.js";
 import type {
+  CopyWorkspaceParams,
+  CopyWorkspaceResponse,
   CreateWorkspaceParams,
   ListWorkspacesParams,
   ListWorkspaceActivityParams,
@@ -190,6 +192,24 @@ export class WorkspacesNamespace {
     const { owner, workspace } = parseNamespace(namespace);
     await this.client.request<{ ok: boolean }>(
       `/api/v1/${owner}/${workspace}/transfer`,
+      {
+        method: "POST",
+        body: JSON.stringify(params),
+      },
+    );
+  }
+
+  /**
+   * Copies a workspace (memories, embeddings, relations, and optional shared threads/documents)
+   * into a target owner account or organization.
+   */
+  async copy(
+    namespace: string,
+    params: CopyWorkspaceParams = {},
+  ): Promise<CopyWorkspaceResponse> {
+    const { owner, workspace } = parseNamespace(namespace);
+    return this.client.request<CopyWorkspaceResponse>(
+      `/api/v1/${owner}/${workspace}/copy`,
       {
         method: "POST",
         body: JSON.stringify(params),

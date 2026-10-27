@@ -10,6 +10,7 @@ export * from "./loop/index.js";
 export * from "./memory/index.js";
 export * from "./org/index.js";
 export * from "./server/index.js";
+export * from "./source/index.js";
 export * from "./team/index.js";
 export * from "./thread/index.js";
 export * from "./types.js";

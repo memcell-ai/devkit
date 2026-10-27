@@ -8,9 +8,12 @@ import type {
   CreateAgentParams,
   CreateMemoryParams,
   CreateRelationParams,
+  CreateSourceParams,
+  CreateSourceResponse,
   DeleteMemoryOptions,
   DeleteMemoryResponse,
   DocumentChunkSearchResult,
+  DocumentDetailResponse,
   DocumentItem,
   FeedbackParams,
   FeedbackResponse,
@@ -47,12 +50,19 @@ import type {
   ScopeOptions,
   ScopedExecutionContext,
   ScopedExecutionResult,
+  SearchDocumentsOptions,
+  SourceItem,
+  SyncSourceOptions,
+  SyncSourceResponse,
   ThreadDetailResponse,
   ThreadItem,
   UpdateAgentParams,
   UpdateMemoryParams,
   UpdateThreadParams,
   WaitForJobOptions,
+  WebhookIngestParams,
+  WebhookIngestResponse,
+  WorkspaceInsights,
   WrapExecutionOptions,
 } from "./types.js";
 import type { MemCell } from "./client.js";
@@ -216,9 +226,11 @@ export class ScopedMemCell {
   }
 
   /**
-   * Retrieves cognitive KPIs and telemetry for this workspace.
+   * Retrieves operational KPIs, empirical confidence calibration, and governance telemetry for this workspace.
    */
-  async insights(timeframe: "24h" | "7d" | "30d" = "30d") {
+  async insights(
+    timeframe: "24h" | "7d" | "30d" = "24h",
+  ): Promise<WorkspaceInsights> {
     return await this.client.insights.getForWorkspace(
       this.namespace,
       timeframe,
@@ -320,15 +332,41 @@ export class ScopedMemCell {
       params?: ListDocumentsParams,
     ): Promise<PaginatedResult<DocumentItem>> =>
       this.client.documents.list(this.namespace, params),
+    get: (documentId: string): Promise<DocumentDetailResponse> =>
+      this.client.documents.get(this.namespace, documentId),
     ingest: (params: IngestDocumentParams): Promise<IngestDocumentResponse> =>
       this.client.documents.ingest(this.namespace, params),
     search: (
-      query: string,
+      queryOrOptions: string | SearchDocumentsOptions,
       limit = 5,
     ): Promise<{ chunks: DocumentChunkSearchResult[] }> =>
-      this.client.documents.search(this.namespace, query, limit),
+      this.client.documents.search(this.namespace, queryOrOptions, limit),
     delete: (documentId: string): Promise<{ deleted: boolean }> =>
       this.client.documents.delete(this.namespace, documentId),
+  };
+
+  /**
+   * Scoped knowledge source operations (URL/sitemap, inbound webhook, GitHub) bound to this namespace.
+   */
+  readonly sources = {
+    list: (): Promise<{ sources: SourceItem[] }> =>
+      this.client.sources.list(this.namespace),
+    get: (sourceId: string): Promise<SourceItem> =>
+      this.client.sources.get(this.namespace, sourceId),
+    create: (params: CreateSourceParams): Promise<CreateSourceResponse> =>
+      this.client.sources.create(this.namespace, params),
+    sync: (
+      sourceId: string,
+      options?: SyncSourceOptions,
+    ): Promise<SyncSourceResponse> =>
+      this.client.sources.sync(this.namespace, sourceId, options),
+    ingest: (
+      sourceId: string,
+      params: WebhookIngestParams,
+    ): Promise<WebhookIngestResponse> =>
+      this.client.sources.ingest(this.namespace, sourceId, params),
+    delete: (sourceId: string): Promise<{ deleted: boolean }> =>
+      this.client.sources.delete(this.namespace, sourceId),
   };
 
   /**

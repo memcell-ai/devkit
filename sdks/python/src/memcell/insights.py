@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlencode
 
-from .models import EnterpriseInsights
+from .models import EnterpriseInsights, WorkspaceInsights
 
 
 def _build_insights_query(
@@ -24,7 +24,7 @@ def _build_insights_query(
 
 
 class OrganizationInsightsNamespace:
-    """Synchronous enterprise cognitive insights namespace."""
+    """Synchronous workspace and organization insights namespace."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -47,8 +47,8 @@ class OrganizationInsightsNamespace:
     def get_for_workspace(
         self,
         namespace: str,
-        timeframe: str = "30d",
-    ) -> EnterpriseInsights:
+        timeframe: str = "24h",
+    ) -> WorkspaceInsights:
         parts = namespace.split("/")
         if len(parts) != 2 or not parts[0] or not parts[1]:
             raise ValueError(f'Invalid namespace "{namespace}". Expected format "owner/workspace".')
@@ -57,11 +57,11 @@ class OrganizationInsightsNamespace:
             f"/api/v1/{parts[0]}/{parts[1]}/insights",
             params={"timeframe": timeframe},
         )
-        return EnterpriseInsights(**data)
+        return WorkspaceInsights(**data)
 
 
 class AsyncOrganizationInsightsNamespace:
-    """Asynchronous enterprise cognitive insights namespace."""
+    """Asynchronous workspace and organization insights namespace."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -86,8 +86,8 @@ class AsyncOrganizationInsightsNamespace:
     async def get_for_workspace(
         self,
         namespace: str,
-        timeframe: str = "30d",
-    ) -> EnterpriseInsights:
+        timeframe: str = "24h",
+    ) -> WorkspaceInsights:
         parts = namespace.split("/")
         if len(parts) != 2 or not parts[0] or not parts[1]:
             raise ValueError(f'Invalid namespace "{namespace}". Expected format "owner/workspace".')
@@ -96,7 +96,7 @@ class AsyncOrganizationInsightsNamespace:
             f"/api/v1/{parts[0]}/{parts[1]}/insights",
             params={"timeframe": timeframe},
         )
-        return EnterpriseInsights(**data)
+        return WorkspaceInsights(**data)
 
 
 class ScopedOrganizationInsightsSync:

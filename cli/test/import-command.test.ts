@@ -41,7 +41,7 @@ describe("memcell import command", () => {
     rememberedCalls.length = 0;
     mockSdk.remember.mockClear();
     mockWiredState.current = {
-      instance: "https://api.memcell.io",
+      instance: "https://memcell.ai",
       space: "test-owner/test-proj",
       key: "mem_agent_key_123",
       root: tempDir,

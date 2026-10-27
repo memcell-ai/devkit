@@ -11,7 +11,7 @@ describe("getSdkClient", () => {
 
     const mockFetch = vi.fn(async () => nativeResponse);
 
-    const client = await getSdkClient("https://api.memcell.io", {
+    const client = await getSdkClient("https://memcell.ai", {
       bearer: "test_key",
       fetch: mockFetch as any,
     });
@@ -34,7 +34,7 @@ describe("getSdkClient", () => {
       });
     });
 
-    const client = await getSdkClient("https://api.memcell.io", {
+    const client = await getSdkClient("https://memcell.ai", {
       bearer: "test_key_123",
       fetch: mockFetch as any,
     });
@@ -56,13 +56,13 @@ describe("getSdkClient", () => {
 
     const mockFetch = vi.fn(async () => nativeResponse);
 
-    const client = await getSdkClient("https://api.memcell.io", {
+    const client = await getSdkClient("https://memcell.ai", {
       bearer: "test_key",
       fetch: mockFetch as any,
     });
 
     // Verify raw fetch returned by customFetch handler
-    const rawRes = await (client as any).customFetch("https://api.memcell.io/test", {});
+    const rawRes = await (client as any).customFetch("https://memcell.ai/test", {});
     expect(rawRes.ok).toBe(true);
     expect(rawRes.status).toBe(200);
 

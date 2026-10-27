@@ -1,5 +1,9 @@
 import type { MemCell } from "./client.js";
-import type { EnterpriseInsights, GetInsightsParams } from "./types.js";
+import type {
+  EnterpriseInsights,
+  GetInsightsParams,
+  WorkspaceInsights,
+} from "./types.js";
 
 function buildInsightsQuery(params?: GetInsightsParams): string {
   if (!params) return "";
@@ -16,7 +20,7 @@ export class OrganizationInsightsNamespace {
   constructor(private readonly client: MemCell) {}
 
   /**
-   * Retrieves enterprise cognitive KPIs, token avoidance economics, and latency telemetry.
+   * Retrieves organization operational KPIs, confidence calibration, governance telemetry, and latency quantiles.
    */
   async get(
     orgSlug: string,
@@ -30,12 +34,12 @@ export class OrganizationInsightsNamespace {
   }
 
   /**
-   * Retrieves cognitive KPIs and telemetry for a specific workspace.
+   * Retrieves operational KPIs, empirical confidence calibration, and governance telemetry for a workspace.
    */
   async getForWorkspace(
     namespace: string,
-    timeframe: "24h" | "7d" | "30d" = "30d",
-  ): Promise<EnterpriseInsights> {
+    timeframe: "24h" | "7d" | "30d" = "24h",
+  ): Promise<WorkspaceInsights> {
     const parts = namespace.split("/");
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
       throw new Error(
@@ -45,7 +49,7 @@ export class OrganizationInsightsNamespace {
     const owner = encodeURIComponent(parts[0]);
     const workspace = encodeURIComponent(parts[1]);
     const query = `?timeframe=${encodeURIComponent(timeframe)}`;
-    return await this.client.request<EnterpriseInsights>(
+    return await this.client.request<WorkspaceInsights>(
       `/api/v1/${owner}/${workspace}/insights${query}`,
       { method: "GET" },
     );

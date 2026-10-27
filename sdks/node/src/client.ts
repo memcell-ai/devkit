@@ -17,6 +17,7 @@ import { OrganizationTeamsNamespace } from "./teams.js";
 import { OrganizationInsightsNamespace } from "./insights.js";
 import { ThreadsNamespace } from "./threads.js";
 import { DocumentsNamespace } from "./documents.js";
+import { SourcesNamespace } from "./sources.js";
 import {
   MemCellError,
   RateLimitError,
@@ -46,12 +47,12 @@ export class MemCell {
   private readonly customFetch?: typeof fetch;
 
   /**
-   * Memories management APIs (atomic epistemic memory units).
+   * Memories management APIs (atomic memory units).
    */
   readonly memories: MemoriesNamespace;
 
   /**
-   * Epistemic memory relations and knowledge graph APIs.
+   * Memory relations and knowledge graph APIs.
    */
   readonly relations: MemoryRelationsNamespace;
 
@@ -64,6 +65,11 @@ export class MemCell {
    * Grounded RAG document ingestion and search APIs.
    */
   readonly documents: DocumentsNamespace;
+
+  /**
+   * Workspace knowledge sources (URL/sitemap, inbound webhook, GitHub) APIs.
+   */
+  readonly sources: SourcesNamespace;
 
   /**
    * Workspace boundary management APIs.
@@ -131,7 +137,7 @@ export class MemCell {
   readonly teams: OrganizationTeamsNamespace;
 
   /**
-   * Enterprise cognitive KPIs, token avoidance economics, and latency telemetry.
+   * Enterprise operational KPIs, token avoidance economics, and latency telemetry.
    */
   get insights(): OrganizationInsightsNamespace {
     return this.organizations.insights;
@@ -146,7 +152,7 @@ export class MemCell {
     ) {
       base = process.env.MEMCELL_BASE_URL;
     }
-    let rawBase = base || "https://api.memcell.io";
+    let rawBase = base || "https://memcell.ai";
     while (rawBase.endsWith("/")) {
       rawBase = rawBase.slice(0, -1);
     }
@@ -229,6 +235,7 @@ export class MemCell {
     this.relations = this.memories.relations;
     this.threads = new ThreadsNamespace(this);
     this.documents = new DocumentsNamespace(this);
+    this.sources = new SourcesNamespace(this);
     this.workspaces = new WorkspacesNamespace(this);
     this.agents = new AgentsNamespace(this);
     this.collaborators = new CollaboratorsNamespace(this);

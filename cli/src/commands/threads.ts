@@ -46,6 +46,7 @@ export async function listThreads(
     const namespace = await resolveNamespace(sdk, target);
 
     const status = typeof flags.status === "string" ? (flags.status as any) : undefined;
+    const scope = typeof flags.scope === "string" ? (flags.scope as any) : undefined;
     const entity = typeof flags.entity === "string" ? flags.entity : undefined;
     const q = typeof flags.query === "string" ? flags.query : undefined;
     const page = typeof flags.page === "string" ? parseInt(flags.page, 10) : undefined;
@@ -53,6 +54,7 @@ export async function listThreads(
 
     const res = await sdk.threads.list(namespace, {
       status,
+      scope,
       entity,
       q,
       page: Number.isFinite(page) ? page : undefined,
@@ -83,6 +85,7 @@ export async function listThreads(
         row(
           1,
           [variant(t.status || "active")],
+          t.scope === "workspace" ? [variant("shared")] : null,
           [label(`${t.turnCount ?? 1} turns`)],
           [value(t.title)],
         ),
@@ -123,6 +126,7 @@ export async function getThread(
       row(
         1,
         [variant(t.status || "active")],
+        t.scope === "workspace" ? [variant("shared")] : [variant("private")],
         [value(`${t.turnCount ?? turns.length} turns`)],
         t.externalSessionId ? [label(`session:${t.externalSessionId}`)] : null,
         t.lastActiveAt ? [time(String(t.lastActiveAt))] : null,
@@ -208,6 +212,33 @@ export async function updateThreadStatus(
     say(
       row(0, [badge("memcell"), label("thread"), place(namespace)]),
       row(1, [good(`marked ${updated.status}`)], [idSeg(updated.id)], [label(updated.title)]),
+    );
+    return 0;
+  } catch (error) {
+    return refused(instance, error as Error);
+  }
+}
+
+export async function updateThreadScope(
+  instance: string,
+  threadId: string,
+  scope: "user" | "workspace",
+  flags: Record<string, string | true> = {},
+): Promise<number> {
+  try {
+    const sdk = await getSdkClient(instance);
+    const target = getTargetWorkspace(flags);
+    const namespace = await resolveNamespace(sdk, target);
+
+    const updated = await sdk.threads.update(namespace, threadId, { scope });
+    say(
+      row(0, [badge("memcell"), label("thread"), place(namespace)]),
+      row(
+        1,
+        [good(scope === "workspace" ? "shared with workspace" : "set to private (user)")],
+        [idSeg(updated.id)],
+        [label(updated.title)],
+      ),
     );
     return 0;
   } catch (error) {

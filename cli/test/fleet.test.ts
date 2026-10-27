@@ -234,7 +234,7 @@ describe("cli audit commands", () => {
 });
 
 describe("cli insights commands", () => {
-  it("displays enterprise cognitive telemetry and KPIs", async () => {
+  it("displays organization operational telemetry, calibration, and governance KPIs", async () => {
     answer = () => ({
       timeframe: "30d",
       kpis: {
@@ -254,11 +254,64 @@ describe("cli insights commands", () => {
         totalMemories: 320,
         convergedMemories: 280,
       },
+      calibration: {
+        totalSamples: 120,
+        expectedCalibrationError: 0.023,
+        brierScore: 0.061,
+        highConfidenceWorkedRate: 96.5,
+        lowConfidenceWorkedRate: 51.0,
+        reliabilityLiftPct: 45.5,
+        buckets: [],
+      },
+      governance: {
+        quarantinedUserScopeCount: 4,
+        provisionalCount: 3,
+        demotedOrRefutedCount: 2,
+        enforcedGuardCount: 16,
+        approvedPromotionsCount: 7,
+        pendingPromotionsCount: 1,
+      },
       timeseries: [],
     });
 
     const code = await getEnterpriseInsights(instance, { org: "acme", timeframe: "30d" });
     expect(code).toBe(0);
     expect(calls[0]?.url).toContain("/api/v1/organizations/acme/insights?timeframe=30d");
+  });
+
+  it("displays workspace insights with confidence calibration and governance shield", async () => {
+    answer = () => ({
+      timeframe: "24h",
+      summary: {
+        recalls: { totalHits: 24, totalMisses: 1, hitRate: 96.0, current: 25 },
+        taskVerification: { totalWorked: 22, totalFailed: 1, workedRate: 95.7 },
+        activeMemoriesCount: 31,
+        avgConfidence: 0.89,
+      },
+      calibration: {
+        totalSamples: 23,
+        expectedCalibrationError: 0.019,
+        brierScore: 0.049,
+        highConfidenceWorkedRate: 95.7,
+        lowConfidenceWorkedRate: 50.0,
+        reliabilityLiftPct: 45.7,
+        buckets: [],
+      },
+      governance: {
+        quarantinedUserScopeCount: 2,
+        provisionalCount: 1,
+        demotedOrRefutedCount: 1,
+        enforcedGuardCount: 5,
+        approvedPromotionsCount: 3,
+        pendingPromotionsCount: 0,
+      },
+    });
+
+    const code = await getEnterpriseInsights(instance, {
+      workspace: "acme/research",
+      timeframe: "24h",
+    });
+    expect(code).toBe(0);
+    expect(calls[0]?.url).toContain("/api/v1/acme/research/insights?timeframe=24h");
   });
 });

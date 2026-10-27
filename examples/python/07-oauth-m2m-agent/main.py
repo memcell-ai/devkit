@@ -23,8 +23,8 @@ def main():
     print(f"Connecting to: {instance} [Workspace: {namespace}]\n")
     print(f"Client ID: {client_id}\n")
 
-    # 1. Ingest an operational instruction statement
-    print("1. Ingesting operational instruction statement...")
+    # 1. Ingest an operational instruction memory
+    print("1. Ingesting operational instruction memory...")
     title = "Mandate dual-signature authorization for transaction reconciliations exceeding $100,000"
     res = client.remember(
         namespace=namespace,
@@ -36,21 +36,21 @@ def main():
         res.created[0] if res.created else (res.evolved[0] if res.evolved else None)
     )
     memory_id = memory.id if memory else ""
-    print(f"[OK] Stored statement: [{memory_id or 'created'}] {title}\n")
+    print(f"[OK] Stored memory: [{memory_id or 'created'}] {title}\n")
 
     # 2. Semantic recall with automatic token exchange & in-flight deduplication
     intent = "Reconcile quarterly high-volume liquidity disbursement of $250,000"
-    print(f"2. Recalling statements for intent: '{intent}'...")
+    print(f"2. Recalling memories for intent: '{intent}'...")
     recall = client.recall(namespace=namespace, intent=intent)
 
-    print(f"[OK] Retrieved {len(recall.memories)} relevant statement nodes.")
+    print(f"[OK] Retrieved {len(recall.memories)} relevant workspace memories.")
     print("\nSynthesized Prompt Context for LLM:")
     print("--------------------------------------------------")
     print(recall.prompt_context)
     print("--------------------------------------------------\n")
 
-    # 3. Report execution outcome to update Bayesian confidence trajectory
-    print("3. Reporting agent outcome to reinforce confidence trajectory...")
+    # 3. Report execution outcome to update empirical confidence
+    print("3. Reporting agent outcome to reinforce confidence...")
     target_id = memory_id or (recall.memories[0].id if recall.memories else None)
     client.report(
         action_taken="Escalated $250k disbursement for secondary compliance officer approval",

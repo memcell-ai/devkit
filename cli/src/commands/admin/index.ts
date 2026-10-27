@@ -464,13 +464,23 @@ export const auditCommand: CliCommand = {
 
 export const insightsCommand: CliCommand = {
   command: "insights",
-  describe: "View enterprise telemetry, savings economics, and latency KPIs",
+  describe:
+    "View workspace or organization insights, confidence calibration, and governance telemetry",
   builder: (yargs) =>
     yargs
-      .option("org", { type: "string" })
-      .option("timeframe", { type: "string" })
-      .option("team", { type: "string" }),
-  handler: runCommand(async (argv) => getEnterpriseInsights(argv._instance!, toFlagsRecord(argv))),
+      .option("org", { type: "string", describe: "Organization handle" })
+      .option("timeframe", {
+        type: "string",
+        describe: "Telemetry window (24h, 7d, 30d)",
+      })
+      .option("team", { type: "string", describe: "Filter organization insights by team ID" }),
+  handler: runCommand(async (argv) => {
+    const isOrgSubcommand = String(argv._?.[0] ?? "") === "org";
+    return getEnterpriseInsights(argv._instance!, {
+      ...toFlagsRecord(argv),
+      ...(isOrgSubcommand ? { _scope: "org" } : {}),
+    });
+  }),
 };
 
 export const operatorCommand: CliCommand = {

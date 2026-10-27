@@ -967,7 +967,7 @@ def test_sync_client_oauth_dispatch():
     client = MemCell(
         client_id="app_123",
         client_secret="sec_456",
-        base_url="https://api.memcell.io",
+        base_url="https://memcell.ai",
         http_client=mock_client,
     )
 
@@ -1009,7 +1009,7 @@ async def test_async_client_oauth_dispatch():
     async with AsyncMemCell(
         client_id="app_123",
         client_secret="sec_456",
-        base_url="https://api.memcell.io",
+        base_url="https://memcell.ai",
         http_client=mock_client,
     ) as client:
         recall = await client.recall(namespace="acme/backend", query="test oauth query")
