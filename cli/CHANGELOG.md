@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/memcell-ai/devkit/compare/cli-v1.6.1...cli-v1.7.0) (2026-10-27)
+
+
+### Features
+
+* add framework integrations, general sources, workspace insights calibration, and operational benchmarks ([#17](https://github.com/memcell-ai/devkit/issues/17)) ([8cb5ad2](https://github.com/memcell-ai/devkit/commit/8cb5ad2955e94e66db53bb60cf051be21785ad10))
+
+
+### Bug Fixes
+
+* **ci:** resolve workspace dependencies before npm publish and harden provenance check ([#19](https://github.com/memcell-ai/devkit/issues/19)) ([edfaf93](https://github.com/memcell-ai/devkit/commit/edfaf931ad4563e28e47467923b8b8575a54c1bf))
+
 ## [1.6.1](https://github.com/memcell-ai/devkit/compare/cli-v1.6.0...cli-v1.6.1) (2026-10-20)
 
 

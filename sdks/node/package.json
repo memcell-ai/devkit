@@ -1,6 +1,6 @@
 {
   "name": "@memcell/sdk",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Official TypeScript and Node.js SDK for the MemCell persistent memory engine",
   "keywords": [
     "memcell",
