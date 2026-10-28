@@ -10,6 +10,10 @@
   "homepage": "https://memcell.ai",
   "repository": "https://github.com/memcell-ai/mcp",
   "license": "Apache-2.0",
+  "documentationUrl": "https://docs.memcell.ai",
+  "supportUrl": "https://github.com/memcell-ai/community/issues",
+  "privacyPolicyUrl": "https://memcell.ai/privacy",
+  "termsOfServiceUrl": "https://memcell.ai/terms",
   "keywords": ["memory", "agents", "mcp", "recall"],
   "mcpServers": {
     "memcell": {
