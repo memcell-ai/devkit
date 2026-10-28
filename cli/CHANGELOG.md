@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/memcell-ai/devkit/compare/cli-v1.7.0...cli-v1.7.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **plugin:** make the Claude Code plugin pass directory validation ([#21](https://github.com/memcell-ai/devkit/issues/21)) ([a2d366e](https://github.com/memcell-ai/devkit/commit/a2d366e34303eb1fe25972c6fbbe6068e67f92f3))
+
 ## [1.7.0](https://github.com/memcell-ai/devkit/compare/cli-v1.6.1...cli-v1.7.0) (2026-10-27)
 
 
