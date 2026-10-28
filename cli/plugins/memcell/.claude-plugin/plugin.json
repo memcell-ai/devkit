@@ -2,7 +2,7 @@
   "name": "memcell",
   "displayName": "MemCell",
   "description": "Shared, persistent memory for AI agents. Recall what the workspace established (instructions, decisions, facts, preferences, working threads, and indexed documents) before acting, then report outcomes so confidence is earned.",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "author": {
     "name": "MemCell",
     "url": "https://github.com/memcell-ai"
@@ -14,7 +14,7 @@
   "mcpServers": {
     "memcell": {
       "command": "npx",
-      "args": ["-y", "memcell@1.7.0", "mcp"]
+      "args": ["-y", "memcell@1.7.1", "mcp"]
     }
   }
 }
