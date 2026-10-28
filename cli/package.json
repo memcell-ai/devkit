@@ -1,6 +1,6 @@
 {
   "name": "memcell",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "mcpName": "ai.memcell/memcell",
   "description": "Shared, persistent memory for any AI agent. Agents recall what your workspace established — instructions, decisions, facts, preferences, active working threads, and grounded PDF/DOCX/CSV/web documents — before they act, then report outcomes so confidence is earned rather than asserted. Connects support, operations, research, custom SDK workflows, and MCP/CLI agents.",
   "keywords": [
