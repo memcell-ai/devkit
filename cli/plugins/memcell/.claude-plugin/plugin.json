@@ -1,20 +1,20 @@
 {
   "name": "memcell",
-  "displayName": "memcell",
-  "description": "Living memory for coding agents: this project's decisions and dead ends, braided with continuously-updated memories of the libraries you use, recalled before acting and sharpened by reported outcomes.",
-  "version": "0.1.0",
+  "displayName": "MemCell",
+  "description": "Shared, persistent memory for AI agents. Recall what the workspace established (instructions, decisions, facts, preferences, working threads, and indexed documents) before acting, then report outcomes so confidence is earned.",
+  "version": "1.7.0",
   "author": {
-    "name": "memcell",
+    "name": "MemCell",
     "url": "https://github.com/memcell-ai"
   },
   "homepage": "https://memcell.ai",
-  "repository": "https://github.com/memcell-ai/cli",
+  "repository": "https://github.com/memcell-ai/mcp",
   "license": "Apache-2.0",
   "keywords": ["memory", "agents", "mcp", "recall"],
   "mcpServers": {
     "memcell": {
       "command": "npx",
-      "args": ["-y", "memcell", "mcp"]
+      "args": ["-y", "memcell@1.7.0", "mcp"]
     }
   }
 }
