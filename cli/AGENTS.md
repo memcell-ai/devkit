@@ -39,6 +39,15 @@ or reformatting the markdown, run `pnpm run sync:skill` (`pnpm run format`
 does it for you). `test/skill.test.ts` fails if the two drift — two
 different instructions under one name is worse than either.
 
+## The plugin is mirrored
+
+`plugins/memcell/` and `.claude-plugin/marketplace.json` are copied byte for
+byte into [memcell-ai/mcp](https://github.com/memcell-ai/mcp), which is the
+copy the Claude plugin directory lists. The directory refuses an `npx`
+launcher without an exact version, so `plugin.json` pins `memcell@<version>`.
+At every CLI release, raise that pin and `version` in `plugin.json` to the new
+CLI version, here and in `memcell-ai/mcp`.
+
 ## Conventions
 
 - **Conventional commits, terse.** Title plus a few functional lines at

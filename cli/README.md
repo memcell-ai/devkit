@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/memcell"><img src="https://img.shields.io/npm/v/memcell.svg?style=flat" alt="npm version" /></a>
-  <a href="https://github.com/memcell-ai/cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0" /></a>
+  <a href="https://github.com/memcell-ai/devkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node.js >= 20" /></a>
   <a href="https://memcell.ai/docs"><img src="https://img.shields.io/badge/docs-memcell.ai-blue" alt="Documentation" /></a>
 </p>
@@ -122,7 +122,7 @@ Displays memories followed, errors avoided, estimated tokens saved from prevente
 
 | Agent / Harness                       | Integration          | How It Runs                                                                                |
 | :------------------------------------ | :------------------- | :----------------------------------------------------------------------------------------- |
-| **Claude Code**                       | Hooks + MCP + Plugin | Automatic lifecycle hooks or marketplace plugin (`/plugin marketplace add memcell-ai/cli`) |
+| **Claude Code**                       | Hooks + MCP + Plugin | Automatic lifecycle hooks or marketplace plugin (`/plugin marketplace add memcell-ai/mcp`) |
 | **Cursor**                            | Hooks + MCP Bridge   | Native lifecycle hooks in `.cursor/hooks.json` and stdio bridge in `.cursor/mcp.json`      |
 | **Gemini CLI**                        | Hooks + MCP          | Session and prompt hooks via native CLI harness                                            |
 | **GitHub Copilot CLI**                | Lifecycle Hooks      | Pre-command validation hooks                                                               |
