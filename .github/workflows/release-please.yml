@@ -145,6 +145,42 @@ jobs:
           echo "memcell@$version has no provenance attestation" >&2
           exit 1
 
+  pin-plugin:
+    needs: [release-please, publish-cli]
+    if: always() && needs.publish-cli.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: raise the plugin pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd cli
+          pinned="$(node -p "require('./server.json').version")"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$pinned" = "$version" ]; then
+            echo "already pinned to $version"
+            exit 0
+          fi
+          node scripts/pin-cli.mjs "$pinned" "$version"
+          branch="chore/pin-cli-$version"
+          title="chore(plugin): pin memcell@$version after the CLI release"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add server.json plugins/memcell
+          git commit -m "$title"
+          git push -u origin "$branch"
+          gh pr create --base main --head "$branch" --title "$title" \
+            --body "Raises the plugin's \`npx\` pin, the plugin version and the \`server.json\` versions to the published CLI $version."
+          gh pr merge "$branch" --squash --delete-branch
+
   publish-python:
     needs: release-please
     if: needs.release-please.outputs.python_released == 'true'
