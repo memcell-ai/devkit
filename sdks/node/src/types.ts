@@ -78,6 +78,37 @@ export class RateLimitError extends MemCellError {
   }
 }
 
+/** Where an account at its plan's limit goes for more room. */
+export const PRICING_URL = "https://memcell.ai/pricing";
+
+/**
+ * Error thrown when a request is rejected with HTTP 402 `plan_limit`: the account
+ * has reached its plan's limit. Never retried, because only more room fixes it.
+ * `message` is the server's own; `upgradeUrl` says where to go next.
+ */
+export class PlanLimitError extends MemCellError {
+  readonly limit?: number;
+  readonly used?: number;
+  readonly plan?: string;
+  readonly upgradeUrl: string;
+
+  constructor(params: {
+    message: string;
+    limit?: number;
+    used?: number;
+    plan?: string;
+    details?: unknown;
+  }) {
+    super(params.message, 402, "plan_limit", params.details);
+    this.name = "PlanLimitError";
+    this.limit = params.limit;
+    this.used = params.used;
+    this.plan = params.plan;
+    this.upgradeUrl = PRICING_URL;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export interface MemCellConfig {
   auth?: MemCellAuth;
   apiKey?: string;
@@ -1123,42 +1154,110 @@ export interface InviteMemberParams {
 
 export type UsageTimeframe = "30d" | "90d";
 
+export interface QuotaMetric {
+  used: number;
+  /** Null when the plan has no fixed limit, as on Enterprise. */
+  limit: number | null;
+  percentage: number;
+  isNearLimit: boolean;
+  isOverLimit: boolean;
+}
+
+export interface MemoryTypeBreakdown {
+  instruction: number;
+  decision: number;
+  fact: number;
+  preference: number;
+  provisional: number;
+  enforced: number;
+}
+
+export interface UsagePlan {
+  id: string;
+  name: string;
+  status: "active" | "trialing" | "past_due" | "canceled";
+  renewsAt: string | null;
+  rateLimitPerMinute: number;
+  softLimitPercentage?: number;
+  softWarningThreshold?: number;
+  throttledRequestsCount?: number;
+  isCustomRateOverride?: boolean;
+  rateMultiplier?: number;
+  bypassRateLimits?: boolean;
+}
+
+export interface MemoryQuota extends QuotaMetric {
+  types?: MemoryTypeBreakdown;
+  isCustomOverride?: boolean;
+  customMemoryLimit?: number;
+}
+
+export interface UsageQuotas {
+  plan: UsagePlan;
+  memories: MemoryQuota;
+  unlimitedGuarantee: {
+    workspaces: true;
+    requests: true;
+  };
+}
+
+export interface UsageSummary {
+  totalIngressCalls: number;
+  recallCount: number;
+  rememberCount: number;
+  feedbackCount: number;
+  ingestCount: number;
+  errorCount: number;
+  totalMemories: number;
+  activeWorkspacesCount: number;
+  avgDailyRequests: number;
+  totalSoftWarnings: number;
+  totalThrottled: number;
+}
+
+export interface OwnerDailyTimeSeriesItem {
+  date: string;
+  label: string;
+  recall: number;
+  remember: number;
+  feedback: number;
+  ingest: number;
+  errors: number;
+  total: number;
+  softWarnings: number;
+  throttled: number;
+}
+
+export interface WorkspaceUsageItem {
+  workspaceId: string;
+  name: string;
+  slug: string;
+  visibility: "private" | "public";
+  totalRequests: number;
+  recallCount: number;
+  rememberCount: number;
+  feedbackCount: number;
+  ingestCount: number;
+  memoryCount: number;
+  sharePercentage: number;
+}
+
 export interface OwnerUsage {
   owner: {
-    type: "user" | "org";
+    id: string;
     slug: string;
     name: string;
+    type: "user" | "org";
   };
   timeframe: UsageTimeframe;
-  quotas: {
-    memories: {
-      total: number;
-      limit: number;
-      percent: number;
-      types: {
-        guard?: number;
-        instruction: number;
-        decision: number;
-        fact: number;
-        preference: number;
-        observation?: number;
-        provisional: number;
-      };
-    };
-    apiRequests: {
-      total: number;
-      limit: number;
-      percent: number;
-      windowDays: number;
-    };
+  period: {
+    start: string;
+    end: string;
   };
-  rateLimits: {
-    tier: string;
-    recallRpm: number;
-    rememberRpm: number;
-    defaultRpm: number;
-    concurrentLimit: number;
-  };
+  quotas: UsageQuotas;
+  summary: UsageSummary;
+  dailyTimeSeries: OwnerDailyTimeSeriesItem[];
+  workspaceBreakdown: WorkspaceUsageItem[];
 }
 
 // ─── Account Domain ───

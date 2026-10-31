@@ -1,5 +1,7 @@
+import { PlanLimitError, PRICING_URL } from "@memcell/sdk";
 import { credentialFor } from "./instance.js";
 import { detectActiveRuntimeModel } from "./model-detect.js";
+import { label, place, row, type Row } from "./ui.js";
 
 // The one way this package talks to a memcell. Every request carries the
 // instance's own session as a bearer token, because a terminal has no
@@ -16,14 +18,31 @@ export class MemcellError extends Error {
   }
 }
 
+/** The account has reached its plan's limit. Retrying cannot help; more room can. */
+export class MemcellPlanLimitError extends MemcellError {
+  readonly upgradeUrl = PRICING_URL;
+
+  constructor(message: string, body: unknown) {
+    super(message, 402, body);
+    this.name = "MemcellPlanLimitError";
+  }
+}
+
+/** The line under a refusal at a plan's limit, for either way a command calls an instance. */
+export function upgradeHint(failure: unknown): Row | null {
+  return failure instanceof MemcellPlanLimitError || failure instanceof PlanLimitError
+    ? row(1, [label("upgrade"), place(failure.upgradeUrl)])
+    : null;
+}
+
 interface CallOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   /** Skip the stored session — the device grant's own calls are unauthenticated. */
   anonymous?: boolean;
   /** Call as this credential instead of the machine's login session. A
-   *  connected directory holds a pair key that already names its space, so a
-   *  space-scoped verb run there needs no login at all. */
+   *  connected directory holds a pair key that already names its workspace, so a
+   *  workspace-scoped verb run there needs no login at all. */
   bearer?: string;
   signal?: AbortSignal;
   /** Milliseconds before the call gives up. A caller with its own deadline
@@ -179,6 +198,10 @@ export async function call<T>(
         (isJson
           ? `${response.status} from ${path}`
           : `${instance} answered ${response.status}, not memcell — check the address.`);
+
+      if (response.status === 402 && detail?.error === "plan_limit") {
+        throw new MemcellPlanLimitError(message, parsed);
+      }
 
       throw new MemcellError(message, response.status, parsed);
     }

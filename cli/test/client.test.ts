@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { call, MemcellError } from "../src/client.js";
+import { PlanLimitError } from "@memcell/sdk";
+import { call, MemcellError, MemcellPlanLimitError, upgradeHint } from "../src/client.js";
+import { render } from "../src/ui.js";
 
 // What the HTTP client does when the answer is not the happy one.
 //
@@ -150,5 +152,57 @@ describe("rate limiting & 429 backoff retry in call()", () => {
     expect(error).toBeInstanceOf(MemcellError);
     expect((error as MemcellError).status).toBe(429);
     expect((error as MemcellError).message).toContain("Rate limit exceeded on door 'remember'");
+  });
+});
+
+describe("a plan's limit in call()", () => {
+  const refuse = (body: unknown) => {
+    let callCount = 0;
+    vi.stubGlobal("fetch", async () => {
+      callCount++;
+      return new Response(JSON.stringify(body), {
+        status: 402,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    return () => callCount;
+  };
+
+  it("throws MemcellPlanLimitError with the server's message and never retries", async () => {
+    const message = "Memory limit reached (10,000 memories). Recall still works.";
+    const body = { error: "plan_limit", message };
+    const calls = refuse(body);
+
+    const error = await call(BASE, "/api/v1/remember", { method: "POST" }).catch((e) => e);
+
+    expect(calls()).toBe(1);
+    expect(error).toBeInstanceOf(MemcellPlanLimitError);
+    expect(error).toBeInstanceOf(MemcellError);
+    expect((error as MemcellPlanLimitError).status).toBe(402);
+    expect((error as MemcellPlanLimitError).message).toBe(message);
+    expect((error as MemcellPlanLimitError).body).toEqual(body);
+    expect((error as MemcellPlanLimitError).upgradeUrl).toBe("https://memcell.ai/pricing");
+  });
+
+  it("keeps a 402 with another code a plain MemcellError", async () => {
+    refuse({ error: "something_else", message: "Not a plan limit." });
+
+    const error = await call(BASE, "/api/v1/remember", { method: "POST" }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(MemcellError);
+    expect(error).not.toBeInstanceOf(MemcellPlanLimitError);
+  });
+
+  it("names the pricing page under a refusal from call() or from the SDK", () => {
+    const fromCall = new MemcellPlanLimitError("At the limit.", null);
+    const fromSdk = new PlanLimitError({ message: "At the limit." });
+
+    expect(render([upgradeHint(fromCall)])).toContain("https://memcell.ai/pricing");
+    expect(render([upgradeHint(fromSdk)])).toContain("https://memcell.ai/pricing");
+  });
+
+  it("adds nothing under any other refusal", () => {
+    expect(upgradeHint(new MemcellError("Nope.", 403, null))).toBeNull();
+    expect(upgradeHint(new Error("Nope."))).toBeNull();
   });
 });

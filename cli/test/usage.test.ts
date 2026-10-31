@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const home = await mkdtemp(join(tmpdir(), "memcell-usage-home-"));
-const projectDir = await mkdtemp(join(tmpdir(), "memcell-usage-dir-"));
+const workspaceDir = await mkdtemp(join(tmpdir(), "memcell-usage-dir-"));
 
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof import("node:os")>()),
@@ -36,6 +36,29 @@ const { set } = await import("../src/config.js");
 const instance = "http://memcell.test";
 const cwd = process.cwd;
 
+function serverUsage(slug: string, name: string, memories: Record<string, unknown>) {
+  return {
+    owner: { id: "org_1", slug, name, type: "org" },
+    timeframe: "30d",
+    period: { start: "2026-10-01T00:00:00.000Z", end: "2026-10-30T12:00:00.000Z" },
+    quotas: {
+      plan: {
+        id: name.toLowerCase(),
+        name,
+        status: "active",
+        renewsAt: null,
+        rateLimitPerMinute: 120,
+        isCustomRateOverride: false,
+      },
+      memories: { isNearLimit: false, isOverLimit: false, percentage: 0, ...memories },
+      unlimitedGuarantee: { workspaces: true, requests: true },
+    },
+    summary: { totalIngressCalls: 35000 },
+    dailyTimeSeries: [],
+    workspaceBreakdown: [],
+  };
+}
+
 beforeAll(async () => {
   await saveCredential({
     instance,
@@ -49,31 +72,24 @@ beforeAll(async () => {
 
 beforeEach(() => {
   calls.length = 0;
-  process.cwd = () => projectDir;
+  process.cwd = () => workspaceDir;
 });
 
 describe("usage get", () => {
   it("fetches resource usage for explicit owner", async () => {
-    answer = () => ({
-      owner: { slug: "acme", type: "organization" },
-      timeframe: "30d",
-      quotas: {
-        memories: {
-          total: 1250,
-          limit: 10000,
-          types: { instruction: 800, preference: 450 },
+    answer = () =>
+      serverUsage("acme", "Pro", {
+        used: 1250,
+        limit: 500000,
+        types: {
+          instruction: 700,
+          decision: 100,
+          fact: 300,
+          preference: 100,
+          provisional: 30,
+          enforced: 20,
         },
-        apiRequests: {
-          total: 35000,
-          limit: 100000,
-        },
-      },
-      rateLimits: {
-        tier: "growth",
-        recallRpm: 1200,
-        rememberRpm: 600,
-      },
-    });
+      });
 
     const printed: string[] = [];
     const log = console.log;
@@ -91,21 +107,39 @@ describe("usage get", () => {
     expect(out).toContain("acme");
     expect(out).toContain("memories:");
     expect(out).toContain("1,250");
-    expect(out).toContain("10,000");
-    expect(out).toContain("tier:");
-    expect(out).toContain("growth");
+    expect(out).toContain("500,000");
+    expect(out).toContain("plan:");
+    expect(out).toContain("Pro");
+    expect(out).toContain("enforced 20");
+    expect(out).toContain("35,000");
+    expect(out).toContain("unlimited");
+    expect(out).toContain("120/min");
+  });
+
+  it("shows no meter for an Enterprise limit, which arrives as null", async () => {
+    answer = () => serverUsage("acme", "Enterprise", { used: 90000, limit: null });
+
+    const printed: string[] = [];
+    const log = console.log;
+    console.log = (line: string) => printed.push(line);
+    try {
+      expect(await getUsage(instance, "acme")).toBe(0);
+    } finally {
+      console.log = log;
+    }
+
+    const out = printed.join("\n");
+    expect(out).toContain("Enterprise");
+    expect(out).toContain("90,000");
+    expect(out).toContain("no fixed limit");
+    expect(out).not.toContain("null");
+    expect(out).not.toContain("/ ");
   });
 
   it("fetches resource usage using active organization context", async () => {
     await set("organization", "cyberdyne", "global");
 
-    answer = () => ({
-      owner: { slug: "cyberdyne", type: "organization" },
-      quotas: {
-        memories: { total: 50, limit: 1000 },
-        apiRequests: { total: 200, limit: 5000 },
-      },
-    });
+    answer = () => serverUsage("cyberdyne", "Free", { used: 50, limit: 10000 });
 
     const printed: string[] = [];
     const log = console.log;

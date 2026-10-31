@@ -59,6 +59,14 @@ except MemcellError as exc:
 
 ---
 
+## Plan Limits (HTTP 402)
+
+When an account reaches its plan's limit, MemCell responds with HTTP `402` and code `plan_limit`. Both SDKs throw a typed `PlanLimitError` and do not retry, because waiting will not help. Saving a new memory is refused at the memory limit, and recall keeps working, so an agent can carry on with everything it already knows.
+
+`message` is the server's own explanation, and `upgradeUrl` (`upgrade_url` in Python) points to https://memcell.ai/pricing. Treat this as a reason to tell a person, not a reason to back off and try again.
+
+---
+
 ## Fail-Open vs. Fail-Closed Design in Agent Loops
 
 When integrating MemCell into autonomous agent loops, decide whether your agent should fail-open or fail-closed if memory recall is unreachable:

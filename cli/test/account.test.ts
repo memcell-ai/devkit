@@ -12,6 +12,7 @@ vi.mock("node:os", async (original) => ({
 
 const calls: { url: string; method?: string; body?: Record<string, unknown> }[] = [];
 let answer: () => unknown = () => ({});
+let answerStatus = 200;
 
 vi.stubGlobal(
   "fetch",
@@ -24,7 +25,11 @@ vi.stubGlobal(
       method: init.method,
       body: init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined,
     });
-    return { ok: true, status: 200, text: async () => JSON.stringify(answer()) };
+    return {
+      ok: answerStatus < 400,
+      status: answerStatus,
+      text: async () => JSON.stringify(answer()),
+    };
   },
 );
 
@@ -56,6 +61,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   calls.length = 0;
+  answerStatus = 200;
 });
 
 describe("account profile", () => {
@@ -176,6 +182,26 @@ describe("account key create", () => {
     expect(out).toContain("created API key");
     expect(out).toContain("CI Pipeline");
     expect(out).toContain("mc_key_secret_token_value_abc");
+  });
+
+  it("shows the server's message and where to upgrade at the plan's key limit", async () => {
+    const message =
+      "Active API key limit reached (3 of 3 keys). Revoke an existing key or upgrade your plan to create more.";
+    answerStatus = 402;
+    answer = () => ({ error: "plan_limit", message, limit: 3, used: 3, plan: "free" });
+
+    const printed: string[] = [];
+    const log = console.log;
+    console.log = (line: string) => printed.push(line);
+    try {
+      expect(await createApiKey(instance, "One Too Many")).toBe(1);
+    } finally {
+      console.log = log;
+    }
+
+    const out = printed.join("\n");
+    expect(out).toContain(message);
+    expect(out).toContain("https://memcell.ai/pricing");
   });
 });
 
