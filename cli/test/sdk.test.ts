@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { MemCell, ScopedMemCell, AuthManager, MemCellError, RateLimitError } from "../src/index.js";
+import {
+  MemCell,
+  ScopedMemCell,
+  AuthManager,
+  MemCellError,
+  PlanLimitError,
+  RateLimitError,
+} from "../src/index.js";
 
 describe("MemCell SDK (cli package export)", () => {
   describe("AuthManager", () => {
@@ -459,6 +466,37 @@ describe("MemCell SDK (cli package export)", () => {
       expect(rlError.retryAfter).toBe(15);
       expect(rlError.status).toBe(429);
       expect(rlError.message).toContain("Rate limit exceeded on door 'remember'");
+    });
+
+    it("throws typed PlanLimitError on 402 plan_limit without retrying", async () => {
+      const mockFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            error: "plan_limit",
+            message: "Memory limit reached (10,000 memories). Recall still works.",
+          }),
+          {
+            status: 402,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      });
+
+      const memcell = new MemCell({
+        auth: { apiKey: "mc_key" },
+        fetch: mockFetch as any,
+      });
+
+      const caughtError = await memcell
+        .remember({ title: "One memory too many" })
+        .catch((err: unknown) => err);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(caughtError).toBeInstanceOf(PlanLimitError);
+      const planError = caughtError as PlanLimitError;
+      expect(planError.status).toBe(402);
+      expect(planError.message).toBe("Memory limit reached (10,000 memories). Recall still works.");
+      expect(planError.upgradeUrl).toBe("https://memcell.ai/pricing");
     });
 
     it("throws typed MemCellError on non-429 API errors", async () => {

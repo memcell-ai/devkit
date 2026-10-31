@@ -21,6 +21,7 @@ import { SourcesNamespace } from "./sources.js";
 import {
   MemCellError,
   RateLimitError,
+  PlanLimitError,
   type FeedbackParams,
   type FeedbackResponse,
   type JobEvent,
@@ -810,6 +811,9 @@ export class MemCell {
           error?: string | { message?: string };
           message?: string;
           error_description?: string;
+          limit?: number;
+          used?: number;
+          plan?: string;
         } | null;
 
         const message =
@@ -827,6 +831,16 @@ export class MemCell {
             : typeof errorJson?.error === "object"
               ? "api_error"
               : `HTTP_${response.status}`;
+
+        if (response.status === 402 && code === "plan_limit") {
+          throw new PlanLimitError({
+            message,
+            limit: errorJson?.limit,
+            used: errorJson?.used,
+            plan: errorJson?.plan,
+            details: errorJson,
+          });
+        }
 
         throw new MemCellError(
           `MemCell API Error (${response.status}): ${message}`,

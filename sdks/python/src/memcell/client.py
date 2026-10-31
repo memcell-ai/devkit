@@ -15,7 +15,7 @@ import httpx
 
 from .audit import AsyncOrganizationAuditNamespace, OrganizationAuditNamespace
 from .auth import AuthManager
-from .exceptions import MemCellError, RateLimitError
+from .exceptions import MemCellError, PlanLimitError, RateLimitError
 from .fleet import AsyncOrganizationFleetNamespace, OrganizationFleetNamespace
 from .insights import AsyncOrganizationInsightsNamespace, OrganizationInsightsNamespace
 from .invitations import AsyncInvitationsNamespace, InvitationsNamespace
@@ -25,7 +25,6 @@ from .models import (
     AdoptMemoryResponse,
     AgentItem,
     ApiKeyItem,
-    ApiRequestQuotas,
     CollaboratorItem,
     ConsolidateSweepResponse,
     CreateAgentKeyResult,
@@ -44,12 +43,10 @@ from .models import (
     MemoryHistoryResponse,
     MemoryItem,
     MemoryPromotionRequest,
-    MemoryQuotas,
     MemoryRelationItem,
     MemoryRelationsResponse,
     MemoryStarResponse,
     MemoryType,
-    MemoryTypeQuotas,
     OrganizationItem,
     OrganizationSSOResult,
     OrgInvitationItem,
@@ -74,7 +71,6 @@ from .models import (
     ThreadScope,
     ThreadStatus,
     ThreadTurnItem,
-    UsageQuotas,
     WorkspaceActivityItem,
     WorkspaceItem,
     WorkspaceOwner,
@@ -544,40 +540,7 @@ def _parse_org_invitation(data: dict[str, Any]) -> OrgInvitationItem:
 
 
 def _parse_owner_usage(data: dict[str, Any]) -> OwnerUsage:
-    quotas_data = data.get("quotas", {})
-    mems_data = quotas_data.get("memories", {})
-    types_data = mems_data.get("types", {})
-    reqs_data = quotas_data.get("apiRequests", {}) or quotas_data.get("api_requests", {})
-
-    types_quota = MemoryTypeQuotas(
-        guard=int(types_data["guard"])
-        if "guard" in types_data and types_data["guard"] is not None
-        else None,
-        instruction=int(types_data.get("instruction", 0)),
-        decision=int(types_data.get("decision", 0)),
-        fact=int(types_data.get("fact", 0)),
-        preference=int(types_data.get("preference", 0)),
-        observation=int(types_data.get("observation", 0)),
-        provisional=int(types_data.get("provisional", 0)),
-    )
-    mems_quota = MemoryQuotas(
-        total=int(mems_data.get("total", 0)),
-        limit=int(mems_data.get("limit", 0)),
-        percent=float(mems_data.get("percent", 0.0)),
-        types=types_quota,
-    )
-    reqs_quota = ApiRequestQuotas(
-        total=int(reqs_data.get("total", 0)),
-        limit=int(reqs_data.get("limit", 0)),
-        percent=float(reqs_data.get("percent", 0.0)),
-        window_days=int(reqs_data.get("windowDays") or reqs_data.get("window_days") or 30),
-    )
-    return OwnerUsage(
-        owner=data.get("owner") or {},
-        timeframe=str(data.get("timeframe", "30d")),
-        quotas=UsageQuotas(memories=mems_quota, api_requests=reqs_quota),
-        rate_limits=data.get("rateLimits") or data.get("rate_limits") or {},
-    )
+    return OwnerUsage.model_validate(data)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3887,6 +3850,14 @@ class MemCell:
                     if isinstance(err_json.get("error"), str)
                     else f"HTTP_{response.status_code}"
                 )
+                if response.status_code == 402 and code == "plan_limit":
+                    raise PlanLimitError(
+                        message=message,
+                        limit=err_json.get("limit"),
+                        used=err_json.get("used"),
+                        plan=err_json.get("plan"),
+                        details=err_json,
+                    )
                 raise MemCellError(
                     f"MemCell API Error ({response.status_code}): {message}",
                     status_code=response.status_code,
@@ -4436,6 +4407,14 @@ class AsyncMemCell:
                     if isinstance(err_json.get("error"), str)
                     else f"HTTP_{response.status_code}"
                 )
+                if response.status_code == 402 and code == "plan_limit":
+                    raise PlanLimitError(
+                        message=message,
+                        limit=err_json.get("limit"),
+                        used=err_json.get("used"),
+                        plan=err_json.get("plan"),
+                        details=err_json,
+                    )
                 raise MemCellError(
                     f"MemCell API Error ({response.status_code}): {message}",
                     status_code=response.status_code,

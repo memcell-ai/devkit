@@ -169,7 +169,7 @@ The SDK provides direct, typed access to all MemCell platform resources:
 
 ### Usage & Quotas (`memory.usage`)
 
-- `get(owner, { timeframe })`: Retrieve memory type breakdown and API quotas.
+- `get(owner, { timeframe })`: Retrieve the owner's plan, memories used against its limit, memory type breakdown, and request activity.
 
 ### Account (`memory.account`)
 
@@ -209,6 +209,27 @@ const memory = new MemCell({
     console.warn("Approaching rate limit:", warning.limit);
   },
 });
+```
+
+### Plan Limits
+
+When an account reaches its plan's limit, the server answers HTTP 402 with code `plan_limit` and the SDK throws a typed `PlanLimitError`. It is never retried, because only more room fixes it. At the memory limit, saving a new memory is refused and recall keeps working:
+
+```typescript
+import { PlanLimitError } from "@memcell/sdk";
+
+try {
+  await memory.remember({
+    title: "Escalate refunds above $500 to a supervisor",
+  });
+} catch (err) {
+  if (err instanceof PlanLimitError) {
+    console.error(err.message); // the server's own explanation
+    console.error(`More room: ${err.upgradeUrl}`); // https://memcell.ai/pricing
+  } else {
+    throw err;
+  }
+}
 ```
 
 ---

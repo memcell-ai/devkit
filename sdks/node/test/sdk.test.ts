@@ -7,6 +7,8 @@ import {
   AuthManager,
   MemCellError,
   RateLimitError,
+  PlanLimitError,
+  PRICING_URL,
 } from "../src/index.js";
 
 describe("MemCell SDK (cli package export)", () => {
@@ -648,6 +650,108 @@ describe("MemCell SDK (cli package export)", () => {
       expect(rlError.message).toContain(
         "Rate limit exceeded on door 'remember'",
       );
+    });
+
+    it("throws typed PlanLimitError on 402 plan_limit, keeps the server's message, and never retries", async () => {
+      const serverMessage =
+        "Active API key limit reached (3 of 3 keys). Revoke an existing key or upgrade your plan to create more.";
+      const mockFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            error: "plan_limit",
+            message: serverMessage,
+            limit: 3,
+            used: 3,
+            plan: "free",
+          }),
+          {
+            status: 402,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      });
+
+      const memcell = new MemCell({
+        auth: { apiKey: "mc_key" },
+        fetch: mockFetch as any,
+      });
+
+      const caughtError = await memcell
+        .remember({ title: "One memory too many" })
+        .catch((err: unknown) => err);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(caughtError).toBeInstanceOf(PlanLimitError);
+      expect(caughtError).toBeInstanceOf(MemCellError);
+      const planError = caughtError as PlanLimitError;
+      expect(planError.name).toBe("PlanLimitError");
+      expect(planError.status).toBe(402);
+      expect(planError.code).toBe("plan_limit");
+      expect(planError.message).toBe(serverMessage);
+      expect(planError.limit).toBe(3);
+      expect(planError.used).toBe(3);
+      expect(planError.plan).toBe("free");
+      expect(planError.upgradeUrl).toBe("https://memcell.ai/pricing");
+      expect(planError.upgradeUrl).toBe(PRICING_URL);
+    });
+
+    it("carries a memory limit refusal, which names no counts, the same way", async () => {
+      const mockFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            error: "plan_limit",
+            message:
+              "Memory limit reached (10,000 memories). Recall still works.",
+          }),
+          {
+            status: 402,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      });
+
+      const memcell = new MemCell({
+        auth: { apiKey: "mc_key" },
+        fetch: mockFetch as any,
+      });
+
+      const caughtError = await memcell
+        .remember({ title: "One memory too many" })
+        .catch((err: unknown) => err);
+
+      expect(caughtError).toBeInstanceOf(PlanLimitError);
+      const planError = caughtError as PlanLimitError;
+      expect(planError.limit).toBeUndefined();
+      expect(planError.used).toBeUndefined();
+      expect(planError.plan).toBeUndefined();
+    });
+
+    it("keeps a 402 with another code a plain MemCellError", async () => {
+      const mockFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            error: "something_else",
+            message: "Not a plan limit.",
+          }),
+          {
+            status: 402,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      });
+
+      const memcell = new MemCell({
+        auth: { apiKey: "mc_key" },
+        fetch: mockFetch as any,
+      });
+
+      const caughtError = await memcell
+        .remember({ title: "Refused for another reason" })
+        .catch((err: unknown) => err);
+
+      expect(caughtError).toBeInstanceOf(MemCellError);
+      expect(caughtError).not.toBeInstanceOf(PlanLimitError);
+      expect((caughtError as MemCellError).code).toBe("something_else");
     });
 
     it("throws typed MemCellError on non-429 API errors", async () => {
@@ -1397,52 +1501,130 @@ describe("MemCell SDK (cli package export)", () => {
     });
 
     describe("Usage Resource", () => {
-      it("retrieves usage with canonical memory type quotas", async () => {
-        const mockFetch = vi.fn(async (url: string | URL | Request) => {
-          expect(String(url)).toContain("/api/v1/acme/usage?timeframe=30d");
-          return new Response(
-            JSON.stringify({
-              owner: { type: "org", slug: "acme", name: "Acme Corp" },
-              timeframe: "30d",
-              quotas: {
-                memories: {
-                  total: 100,
-                  limit: 1000,
-                  percent: 10,
-                  types: {
-                    instruction: 40,
-                    fact: 30,
-                    preference: 20,
-                    observation: 10,
-                    provisional: 5,
-                  },
-                },
-                apiRequests: {
-                  total: 500,
-                  limit: 10000,
-                  percent: 5,
-                  windowDays: 30,
-                },
-              },
-              rateLimits: {
-                tier: "pro",
-                recallRpm: 600,
-                rememberRpm: 300,
-                defaultRpm: 300,
-                concurrentLimit: 20,
-              },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+      const serverUsage = {
+        owner: { id: "org_1", slug: "acme", name: "Acme Corp", type: "org" },
+        timeframe: "30d",
+        period: {
+          start: "2026-10-01T00:00:00.000Z",
+          end: "2026-10-30T12:00:00.000Z",
+        },
+        quotas: {
+          plan: {
+            id: "team",
+            name: "Team",
+            status: "active",
+            renewsAt: "2026-11-01T00:00:00.000Z",
+            rateLimitPerMinute: 120,
+            softLimitPercentage: 80,
+            softWarningThreshold: 96,
+            throttledRequestsCount: 0,
+            isCustomRateOverride: false,
+          },
+          memories: {
+            used: 100,
+            limit: 500000,
+            percentage: 0,
+            isNearLimit: false,
+            isOverLimit: false,
+            types: {
+              instruction: 40,
+              decision: 15,
+              fact: 30,
+              preference: 10,
+              provisional: 3,
+              enforced: 2,
+            },
+            isCustomOverride: false,
+          },
+          unlimitedGuarantee: { workspaces: true, requests: true },
+        },
+        summary: {
+          totalIngressCalls: 500,
+          recallCount: 300,
+          rememberCount: 150,
+          feedbackCount: 40,
+          ingestCount: 10,
+          errorCount: 1,
+          totalMemories: 100,
+          activeWorkspacesCount: 2,
+          avgDailyRequests: 17,
+          totalSoftWarnings: 0,
+          totalThrottled: 0,
+        },
+        dailyTimeSeries: [
+          {
+            date: "2026-10-30",
+            label: "Oct 30",
+            recall: 300,
+            remember: 150,
+            feedback: 40,
+            ingest: 10,
+            errors: 1,
+            total: 500,
+            softWarnings: 0,
+            throttled: 0,
+          },
+        ],
+        workspaceBreakdown: [
+          {
+            workspaceId: "ws_1",
+            name: "Operations",
+            slug: "operations",
+            visibility: "private",
+            totalRequests: 500,
+            recallCount: 300,
+            rememberCount: 150,
+            feedbackCount: 40,
+            ingestCount: 10,
+            memoryCount: 100,
+            sharePercentage: 100,
+          },
+        ],
+      };
+
+      const usageClient = (body: unknown) =>
+        new MemCell({
+          apiKey: "mc_key",
+          fetch: vi.fn(async (url: string | URL | Request) => {
+            expect(String(url)).toContain("/api/v1/acme/usage?timeframe=30d");
+            return new Response(JSON.stringify(body), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }) as any,
         });
 
-        const memcell = new MemCell({
-          apiKey: "mc_key",
-          fetch: mockFetch as any,
+      it("retrieves usage in the shape the server sends", async () => {
+        const usage = await usageClient(serverUsage).usage.get("acme", {
+          timeframe: "30d",
         });
-        const usage = await memcell.usage.get("acme", { timeframe: "30d" });
-        expect(usage.quotas.memories.types.instruction).toBe(40);
-        expect(usage.quotas.memories.types.fact).toBe(30);
+
+        expect(usage.quotas.plan.name).toBe("Team");
+        expect(usage.quotas.plan.rateLimitPerMinute).toBe(120);
+        expect(usage.quotas.memories.used).toBe(100);
+        expect(usage.quotas.memories.limit).toBe(500000);
+        expect(usage.quotas.memories.types?.enforced).toBe(2);
+        expect(usage.quotas.unlimitedGuarantee.requests).toBe(true);
+        expect(usage.summary.totalIngressCalls).toBe(500);
+        expect(usage.dailyTimeSeries[0]?.softWarnings).toBe(0);
+        expect(usage.workspaceBreakdown[0]?.slug).toBe("operations");
+      });
+
+      it("reports an Enterprise memory limit as null, as it arrives over JSON", async () => {
+        const usage = await usageClient({
+          ...serverUsage,
+          quotas: {
+            ...serverUsage.quotas,
+            plan: {
+              ...serverUsage.quotas.plan,
+              id: "enterprise",
+              name: "Enterprise",
+            },
+            memories: { ...serverUsage.quotas.memories, limit: null },
+          },
+        }).usage.get("acme", { timeframe: "30d" });
+
+        expect(usage.quotas.memories.limit).toBeNull();
       });
     });
 

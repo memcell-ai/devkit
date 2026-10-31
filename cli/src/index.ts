@@ -1,7 +1,7 @@
 // The library face of the package: a harness that would rather call the
 // loop in-process than shell out imports from here.
 
-export { call, MemcellError, whoami, type Session } from "./client.js";
+export { call, MemcellError, MemcellPlanLimitError, whoami, type Session } from "./client.js";
 export {
   ensureGitignore,
   findWorkspace,

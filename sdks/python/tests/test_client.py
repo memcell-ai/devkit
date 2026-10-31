@@ -1,8 +1,10 @@
 import json
 import re
+from typing import Any
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from memcell import AsyncMemCell, MemCell
 
@@ -648,47 +650,129 @@ def test_organizations_expanded_sync():
     assert invites[0].email == "charlie@acme.com"
 
 
-def test_usage_resource_sync():
+SERVER_USAGE = {
+    "owner": {"id": "org_1", "slug": "acme", "name": "Acme Corp", "type": "org"},
+    "timeframe": "30d",
+    "period": {"start": "2026-10-01T00:00:00.000Z", "end": "2026-10-30T12:00:00.000Z"},
+    "quotas": {
+        "plan": {
+            "id": "team",
+            "name": "Team",
+            "status": "active",
+            "renewsAt": "2026-11-01T00:00:00.000Z",
+            "rateLimitPerMinute": 120,
+            "softLimitPercentage": 80,
+            "softWarningThreshold": 96,
+            "throttledRequestsCount": 0,
+            "isCustomRateOverride": False,
+        },
+        "memories": {
+            "used": 100,
+            "limit": 500000,
+            "percentage": 0,
+            "isNearLimit": False,
+            "isOverLimit": False,
+            "types": {
+                "instruction": 40,
+                "decision": 15,
+                "fact": 30,
+                "preference": 10,
+                "provisional": 3,
+                "enforced": 2,
+            },
+            "isCustomOverride": False,
+        },
+        "unlimitedGuarantee": {"workspaces": True, "requests": True},
+    },
+    "summary": {
+        "totalIngressCalls": 500,
+        "recallCount": 300,
+        "rememberCount": 150,
+        "feedbackCount": 40,
+        "ingestCount": 10,
+        "errorCount": 1,
+        "totalMemories": 100,
+        "activeWorkspacesCount": 2,
+        "avgDailyRequests": 17,
+        "totalSoftWarnings": 0,
+        "totalThrottled": 0,
+    },
+    "dailyTimeSeries": [
+        {
+            "date": "2026-10-30",
+            "label": "Oct 30",
+            "recall": 300,
+            "remember": 150,
+            "feedback": 40,
+            "ingest": 10,
+            "errors": 1,
+            "total": 500,
+            "softWarnings": 0,
+            "throttled": 0,
+        }
+    ],
+    "workspaceBreakdown": [
+        {
+            "workspaceId": "ws_1",
+            "name": "Operations",
+            "slug": "operations",
+            "visibility": "private",
+            "totalRequests": 500,
+            "recallCount": 300,
+            "rememberCount": 150,
+            "feedbackCount": 40,
+            "ingestCount": 10,
+            "memoryCount": 100,
+            "sharePercentage": 100,
+        }
+    ],
+}
+
+
+def _usage_client(body: dict[str, Any]) -> MemCell:
     def handler(request: httpx.Request) -> httpx.Response:
         assert "/api/v1/acme/usage?timeframe=30d" in str(request.url)
-        return httpx.Response(
-            200,
-            json={
-                "owner": {"type": "org", "slug": "acme", "name": "Acme Corp"},
-                "timeframe": "30d",
-                "quotas": {
-                    "memories": {
-                        "total": 100,
-                        "limit": 1000,
-                        "percent": 10,
-                        "types": {
-                            "instruction": 40,
-                            "fact": 30,
-                            "preference": 20,
-                            "observation": 10,
-                            "provisional": 5,
-                        },
-                    },
-                    "apiRequests": {"total": 500, "limit": 10000, "percent": 5, "windowDays": 30},
-                },
-                "rateLimits": {
-                    "tier": "pro",
-                    "recallRpm": 600,
-                    "rememberRpm": 300,
-                    "defaultRpm": 300,
-                    "concurrentLimit": 20,
-                },
-            },
-        )
+        return httpx.Response(200, json=body)
 
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
-    memcell = MemCell(api_key="mc_key", http_client=mock_client)
+    return MemCell(api_key="mc_key", http_client=mock_client)
 
-    usage = memcell.usage.get("acme", timeframe="30d")
-    assert usage.quotas.memories.types.instruction == 40
-    assert usage.quotas.memories.types.fact == 30
-    assert usage.quotas.memories.types.preference == 20
-    assert usage.quotas.memories.types.observation == 10
+
+def test_usage_resource_sync():
+    usage = _usage_client(SERVER_USAGE).usage.get("acme", timeframe="30d")
+
+    assert usage.owner.slug == "acme"
+    assert usage.quotas.plan.name == "Team"
+    assert usage.quotas.plan.rate_limit_per_minute == 120
+    assert usage.quotas.memories.used == 100
+    assert usage.quotas.memories.limit == 500000
+    assert usage.quotas.memories.is_near_limit is False
+    assert usage.quotas.memories.types.enforced == 2
+    assert usage.quotas.unlimited_guarantee.requests is True
+    assert usage.summary.total_ingress_calls == 500
+    assert usage.daily_time_series[0].soft_warnings == 0
+    assert usage.workspace_breakdown[0].slug == "operations"
+
+
+def test_usage_enterprise_memory_limit_arrives_as_none():
+    body = {
+        **SERVER_USAGE,
+        "quotas": {
+            **SERVER_USAGE["quotas"],
+            "memories": {**SERVER_USAGE["quotas"]["memories"], "limit": None},
+        },
+    }
+
+    usage = _usage_client(body).usage.get("acme", timeframe="30d")
+
+    assert usage.quotas.memories.limit is None
+
+
+def test_usage_fails_loudly_when_the_server_shape_changes():
+    body = {key: value for key, value in SERVER_USAGE.items() if key != "quotas"}
+
+    with pytest.raises(ValidationError):
+        _usage_client(body).usage.get("acme", timeframe="30d")
 
 
 def test_account_resource_sync():

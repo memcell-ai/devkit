@@ -51,6 +51,8 @@ export { AuthManager } from "./auth.js";
 export {
   MemCellError,
   RateLimitError,
+  PlanLimitError,
+  PRICING_URL,
   MEMORY_SCOPES,
   MEMORY_TYPES,
 } from "./types.js";
@@ -167,6 +169,14 @@ export type {
   // Usage & Telemetry
   UsageTimeframe,
   OwnerUsage,
+  QuotaMetric,
+  MemoryTypeBreakdown,
+  MemoryQuota,
+  UsagePlan,
+  UsageQuotas,
+  UsageSummary,
+  OwnerDailyTimeSeriesItem,
+  WorkspaceUsageItem,
 
   // Account
   AccountProfile,

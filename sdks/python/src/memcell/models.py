@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
 
 MemoryType = Literal["instruction", "decision", "fact", "preference"]
 MEMORY_TYPES = ("instruction", "decision", "fact", "preference")
@@ -564,40 +565,120 @@ class OrgInvitationItem(BaseModel):
 # ─── Usage Models ───
 
 
-class MemoryTypeQuotas(BaseModel):
-    guard: int | None = None
-    instruction: int = 0
-    decision: int = 0
-    fact: int = 0
-    preference: int = 0
-    observation: int = 0
-    provisional: int = 0
+class _UsageModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class MemoryQuotas(BaseModel):
-    total: int = 0
-    limit: int = 0
-    percent: float = 0.0
-    types: MemoryTypeQuotas = Field(default_factory=MemoryTypeQuotas)
+class QuotaMetric(_UsageModel):
+    used: int
+    # None when the plan has no fixed limit, as on Enterprise.
+    limit: int | None
+    percentage: float
+    is_near_limit: bool
+    is_over_limit: bool
 
 
-class ApiRequestQuotas(BaseModel):
-    total: int = 0
-    limit: int = 0
-    percent: float = 0.0
-    window_days: int = 30
+class MemoryTypeBreakdown(_UsageModel):
+    instruction: int
+    decision: int
+    fact: int
+    preference: int
+    provisional: int
+    enforced: int
 
 
-class UsageQuotas(BaseModel):
-    memories: MemoryQuotas = Field(default_factory=MemoryQuotas)
-    api_requests: ApiRequestQuotas = Field(default_factory=ApiRequestQuotas)
+class UsagePlan(_UsageModel):
+    id: str
+    name: str
+    status: Literal["active", "trialing", "past_due", "canceled"]
+    renews_at: datetime | None
+    rate_limit_per_minute: int
+    soft_limit_percentage: float | None = None
+    soft_warning_threshold: int | None = None
+    throttled_requests_count: int | None = None
+    is_custom_rate_override: bool | None = None
+    rate_multiplier: float | None = None
+    bypass_rate_limits: bool | None = None
 
 
-class OwnerUsage(BaseModel):
-    owner: dict[str, Any]
-    timeframe: str = "30d"
-    quotas: UsageQuotas = Field(default_factory=UsageQuotas)
-    rate_limits: dict[str, Any] = Field(default_factory=dict)
+class MemoryQuota(QuotaMetric):
+    types: MemoryTypeBreakdown | None = None
+    is_custom_override: bool | None = None
+    custom_memory_limit: int | None = None
+
+
+class UnlimitedGuarantee(_UsageModel):
+    workspaces: Literal[True]
+    requests: Literal[True]
+
+
+class UsageQuotas(_UsageModel):
+    plan: UsagePlan
+    memories: MemoryQuota
+    unlimited_guarantee: UnlimitedGuarantee
+
+
+class UsageSummary(_UsageModel):
+    total_ingress_calls: int
+    recall_count: int
+    remember_count: int
+    feedback_count: int
+    ingest_count: int
+    error_count: int
+    total_memories: int
+    active_workspaces_count: int
+    avg_daily_requests: int
+    total_soft_warnings: int
+    total_throttled: int
+
+
+class OwnerDailyTimeSeriesItem(_UsageModel):
+    date: str
+    label: str
+    recall: int
+    remember: int
+    feedback: int
+    ingest: int
+    errors: int
+    total: int
+    soft_warnings: int
+    throttled: int
+
+
+class WorkspaceUsageItem(_UsageModel):
+    workspace_id: str
+    name: str
+    slug: str
+    visibility: Literal["private", "public"]
+    total_requests: int
+    recall_count: int
+    remember_count: int
+    feedback_count: int
+    ingest_count: int
+    memory_count: int
+    share_percentage: float
+
+
+class UsageOwner(_UsageModel):
+    id: str
+    slug: str
+    name: str
+    type: Literal["user", "org"]
+
+
+class UsagePeriod(_UsageModel):
+    start: datetime
+    end: datetime
+
+
+class OwnerUsage(_UsageModel):
+    owner: UsageOwner
+    timeframe: Literal["30d", "90d"]
+    period: UsagePeriod
+    quotas: UsageQuotas
+    summary: UsageSummary
+    daily_time_series: list[OwnerDailyTimeSeriesItem]
+    workspace_breakdown: list[WorkspaceUsageItem]
 
 
 # ─── Account Models ───

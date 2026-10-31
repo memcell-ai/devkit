@@ -68,67 +68,49 @@ export async function getUsage(
 
     const data = await sdk.usage.get(owner, { timeframe });
 
-    const rawMem = (data.quotas as any)?.memories;
-    const memTotal = Number(rawMem?.used ?? rawMem?.total ?? 0);
-    const memLimit = typeof rawMem?.limit === "number" ? rawMem.limit : 0;
-    const memTypes = rawMem?.types;
-
-    const apiRequestsRaw = (data.quotas as any)?.apiRequests;
-    const apiRequestsTotal = Number(
-      apiRequestsRaw?.total ??
-        apiRequestsRaw?.used ??
-        (data as any).summary?.totalIngressCalls ??
-        0,
-    );
-    const apiRequestsLimit = apiRequestsRaw?.limit ?? 0;
+    const { plan, memories } = data.quotas;
 
     say(
       row(
         0,
-        [badge("memcell"), label("usage"), place(data.owner?.slug || owner)],
-        data.timeframe ? [variant(data.timeframe)] : null,
-        data.rateLimits?.tier ? [label("tier:"), good(data.rateLimits.tier)] : null,
+        [badge("memcell"), label("usage"), place(data.owner.slug)],
+        [variant(data.timeframe)],
+        [label("plan:"), good(plan.name)],
       ),
       row(
         1,
-        [label("memories:")],
-        [value(memTotal.toLocaleString())],
-        memLimit > 0
-          ? [label("/"), value(memLimit.toLocaleString()), meter(memTotal, memLimit)]
-          : null,
-      ),
-      ...(memTypes
-        ? [
-            row(
-              2,
-              [label("by type:")],
-              ...Object.entries(memTypes).map(([t, count]) => [
-                variant(t),
-                label(Number(count).toLocaleString()),
+        [
+          label("memories:"),
+          value(memories.used.toLocaleString()),
+          ...(memories.limit === null
+            ? []
+            : [
+                label("/"),
+                value(memories.limit.toLocaleString()),
+                meter(memories.used, memories.limit),
               ]),
-            ),
-          ]
-        : []),
-      row(
-        1,
-        [label("api requests:")],
-        [value(apiRequestsTotal.toLocaleString())],
-        apiRequestsLimit > 0
-          ? [
-              label("/"),
-              value(apiRequestsLimit.toLocaleString()),
-              meter(apiRequestsTotal, apiRequestsLimit),
-            ]
-          : null,
+        ],
+        memories.limit === null ? [label("no fixed limit")] : null,
       ),
-      data.rateLimits
+      memories.types
         ? row(
             2,
-            [label("rate limits:")],
-            [variant(`${data.rateLimits.recallRpm} recall/min`)],
-            [variant(`${data.rateLimits.rememberRpm} remember/min`)],
+            [label("by type:")],
+            ...Object.entries(memories.types).map(([type, count]) => [
+              variant(type),
+              label(count.toLocaleString()),
+            ]),
           )
         : null,
+      row(
+        1,
+        [label("requests:"), value(data.summary.totalIngressCalls.toLocaleString())],
+        [label("unlimited")],
+      ),
+      row(2, [
+        label("rate limit:"),
+        variant(plan.bypassRateLimits ? "bypassed" : `${plan.rateLimitPerMinute}/min`),
+      ]),
     );
     return 0;
   } catch (error) {

@@ -1,5 +1,5 @@
 import { MemCellError } from "@memcell/sdk";
-import { MemcellError, call } from "../client.js";
+import { MemcellError, call, upgradeHint } from "../client.js";
 import { resolveNamespace } from "../namespace.js";
 import { getSdkClient } from "../sdk-client.js";
 import {
@@ -36,6 +36,7 @@ function refused(instance: string, failure: Error): number {
   say(
     row(0, [badge("memcell"), place(instance)]),
     row(1, [warn("refused")], [label(failure.message)]),
+    upgradeHint(failure),
   );
   return 1;
 }

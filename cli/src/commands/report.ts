@@ -1,5 +1,5 @@
 import { MemCellError } from "@memcell/sdk";
-import { MemcellError } from "../client.js";
+import { MemcellError, upgradeHint } from "../client.js";
 import { credentialFor, resolveInstance } from "../instance.js";
 import { resolveNamespace } from "../namespace.js";
 import { getSdkClient } from "../sdk-client.js";
@@ -110,6 +110,7 @@ export async function report(
       say(
         row(0, [badge("memcell"), label("report")]),
         row(1, [bad("refused")], [label(error.message)]),
+        upgradeHint(error),
       );
       return 1;
     }

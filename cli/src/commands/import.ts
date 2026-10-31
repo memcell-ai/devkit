@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { MemCellError } from "@memcell/sdk";
 
-import { MemcellError } from "../client.js";
+import { MemcellError, upgradeHint } from "../client.js";
 import { getSdkClient } from "../sdk-client.js";
 import {
   badge,
@@ -372,6 +372,8 @@ export async function importFiles(
             : String(error);
       summaryFiles.push({ file: shown, status: "refused", error: message });
       rows.push(row(1, [bad("refused")], [place(shown)], [label(message)]));
+      const hint = upgradeHint(error);
+      if (hint) rows.push(hint);
     } finally {
       clearInterval(breathe);
       clearLine();

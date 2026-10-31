@@ -159,7 +159,7 @@ The SDK provides direct, typed access to all MemCell platform resources across b
 
 ### Usage & Quotas (`memory.usage`)
 
-- `get(owner, timeframe="30d")`: Retrieve memory type breakdown and API quotas.
+- `get(owner, timeframe="30d")`: Retrieve the owner's plan, memories used against its limit, memory type breakdown, and request activity.
 
 ### Account (`memory.account`)
 
@@ -221,6 +221,20 @@ memory = AsyncMemCell(
         f"Approaching rate limit: {warning.limit}"
     ),
 )
+```
+
+### Plan Limits
+
+When an account reaches its plan's limit, the server answers HTTP 402 with code `plan_limit` and the SDK raises a typed `PlanLimitError`. It is never retried, because only more room fixes it. At the memory limit, saving a new memory is refused and recall keeps working:
+
+```python
+from memcell import PlanLimitError
+
+try:
+    memory.remember(title="Escalate refunds above $500 to a supervisor")
+except PlanLimitError as err:
+    print(err.message)  # the server's own explanation
+    print(f"More room: {err.upgrade_url}")  # https://memcell.ai/pricing
 ```
 
 ---
