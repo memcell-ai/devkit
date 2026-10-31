@@ -45,8 +45,9 @@ different instructions under one name is worse than either.
 byte into [memcell-ai/mcp](https://github.com/memcell-ai/mcp), which is the
 copy the Claude plugin directory lists. The directory refuses an `npx`
 launcher without an exact version, so `plugin.json` pins `memcell@<version>`.
-At every CLI release, raise that pin and `version` in `plugin.json` to the new
-CLI version, here and in `memcell-ai/mcp`.
+Nobody raises that pin by hand: `pin-plugin` in the release workflow does it
+here after the CLI publishes, and `follow-cli` in `memcell-ai/mcp` does it
+there within the hour, then publishes to the MCP Registry.
 
 ## Conventions
 
