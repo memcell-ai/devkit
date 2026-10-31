@@ -153,7 +153,7 @@ AsyncMemcellClient = AsyncMemCell
 Memory = MemCell
 AsyncMemory = AsyncMemCell
 
-__version__ = "1.7.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "MEMORY_SCOPES",

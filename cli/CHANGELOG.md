@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/memcell-ai/devkit/compare/cli-v1.7.1...cli-v2.0.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** usage types match what the server returns ([#27](https://github.com/memcell-ai/devkit/issues/27))
+
+### Bug Fixes
+
+* **sdk:** usage types match what the server returns ([#27](https://github.com/memcell-ai/devkit/issues/27)) ([5ffdd4d](https://github.com/memcell-ai/devkit/commit/5ffdd4d1debec94ecfcf8e8dfbdd1f0300db0974))
+
 ## [1.7.1](https://github.com/memcell-ai/devkit/compare/cli-v1.7.0...cli-v1.7.1) (2026-10-28)
 
 
