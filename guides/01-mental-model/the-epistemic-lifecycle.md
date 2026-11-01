@@ -47,8 +47,8 @@ Every memory exists in one of five distinct states:
 
 ### 4. `decayed`
 
-- **What it is**: Knowledge that has not been recalled or reinforced over an extended temporal window, or whose relevance has waned as the workspace evolved.
-- **Recall behavior**: Weighted down or excluded when higher-confidence recent memories are available.
+- **What it is**: A fact that has gone unused for too long, or any memory whose confidence fell below `0.40` after failed outcomes. Instructions, decisions, and preferences do not decay with time.
+- **Recall behavior**: Excluded from recall.
 
 ### 5. `refuted`
 
