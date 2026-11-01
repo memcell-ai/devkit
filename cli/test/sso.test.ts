@@ -38,7 +38,7 @@ vi.stubGlobal(
 
 // Mock deviceGrant so login doesn't attempt browser spawn or polling in test
 vi.mock("../src/grant.js", () => ({
-  deviceGrant: vi.fn(async () => true),
+  deviceGrant: vi.fn(async () => ({ id: "u-1", name: "Alice", email: "alice@example.com" })),
 }));
 
 const { login } = await import("../src/commands/login.js");
@@ -81,7 +81,7 @@ describe("enterprise SSO & IdP federation commands", () => {
         return {};
       };
 
-      const code = await login(instance, { sso: "acme.corp", force: true });
+      const code = await login(instance, { sso: "acme.corp" });
       expect(code).toBe(0);
       expect(calls.some((c) => c.url.includes("/api/v1/auth/sso/lookup?domain=acme.corp"))).toBe(
         true,

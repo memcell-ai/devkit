@@ -1,6 +1,7 @@
 import { MemCellError } from "@memcell/sdk";
+import { nameSavedSession } from "../accounts.js";
 import { upgradeHint } from "../client.js";
-import { credentialFor } from "../instance.js";
+import { accountsOn, credentialFor, folderAccount, makeActive } from "../instance.js";
 import { getSdkClient } from "../sdk-client.js";
 import {
   badge,
@@ -31,6 +32,61 @@ function refused(instance: string, failure: Error): number {
     upgradeHint(failure),
   );
   return 1;
+}
+
+export async function listAccounts(instance: string): Promise<number> {
+  await nameSavedSession(instance);
+  const accounts = await accountsOn(instance);
+  if (accounts.length === 0) {
+    needsSession(instance);
+    return 0;
+  }
+
+  const inUse = await credentialFor(instance);
+  const owner = await folderAccount(instance);
+  say(
+    row(0, [badge("memcell"), place(instance)]),
+    ...accounts.map((account) =>
+      row(
+        1,
+        [
+          account.userId === inUse?.userId
+            ? good(account.email ?? account.name ?? "unnamed")
+            : label(account.email ?? account.name ?? "unnamed"),
+        ],
+        account.active ? [variant("active")] : null,
+        account.userId === owner?.userId ? [variant("this folder")] : null,
+      ),
+    ),
+  );
+  return 0;
+}
+
+export async function useAccount(instance: string, wanted: string): Promise<number> {
+  await nameSavedSession(instance);
+  const account = await makeActive(instance, wanted);
+  if (!account) {
+    say(
+      row(0, [badge("memcell"), place(instance)]),
+      row(
+        1,
+        [warn(`${wanted} is not signed in here`)],
+        [label("add it with"), cmd("memcell login")],
+      ),
+    );
+    return 1;
+  }
+
+  const name = account.email ?? account.name ?? wanted;
+  const owner = await folderAccount(instance);
+  const stays = owner && owner.userId !== account.userId;
+  say(
+    row(0, [badge("memcell"), place(instance)]),
+    row(1, [good("using")], [value(name)]),
+    stays && row(2, [label("this folder stays with"), value(owner.email ?? "its own account")]),
+    stays && row(2, [label("move it with"), cmd(`memcell connect --account ${name}`)]),
+  );
+  return 0;
 }
 
 export async function getProfile(instance: string): Promise<number> {

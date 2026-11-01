@@ -5,6 +5,7 @@ export interface GlobalArgs {
   url?: string;
   workspace?: string;
   owner?: string;
+  account?: string;
   json?: boolean;
   _instance?: string;
   _from?: string;

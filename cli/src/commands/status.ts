@@ -1,7 +1,13 @@
 import { dirname } from "node:path";
 import { MemcellError, agentStanding, whoami } from "../client.js";
 import { agentKeyForProject, listConnectedProjects } from "../keyring.js";
-import { credentialFor, DEFAULT_INSTANCE, knownInstances } from "../instance.js";
+import {
+  accountsOn,
+  credentialFor,
+  DEFAULT_INSTANCE,
+  folderAccount,
+  knownInstances,
+} from "../instance.js";
 import { findWorkspace } from "../workspace.js";
 import { badge, blank, cmd, good, label, place, row, say, value, warn } from "../ui.js";
 import { getRunningServer } from "./server.js";
@@ -34,10 +40,14 @@ export async function status(instance: string, _from: string): Promise<number> {
 
   if (!credential) {
     const others = (await knownInstances()).filter((known) => known !== instance);
+    const owner = await folderAccount(instance);
     say(
       row(0, [badge("memcell"), place(instance)], [instanceScope]),
       serverRow,
-      row(1, [label("Status".padEnd(11, " ")), warn("not signed in")]),
+      row(1, [
+        label("Status".padEnd(11, " ")),
+        warn(owner?.email ? `not signed in as ${owner.email}` : "not signed in"),
+      ]),
       found ? row(1, [label("Workspace".padEnd(11, " ")), value(projectDisplay!)]) : null,
       found
         ? row(1, [label("Directory".padEnd(11, " ")), place(found.root)])
@@ -72,6 +82,15 @@ export async function status(instance: string, _from: string): Promise<number> {
 
     const who = session.user.isAnonymous ? "Anonymous" : session.user.name;
     const accountDisplay = session.user.isAnonymous ? "Anonymous" : `${who} (Personal)`;
+    const signedIn = (await accountsOn(instance)).length;
+    const accountsRow =
+      signedIn > 1
+        ? row(
+            1,
+            [label("Accounts".padEnd(11, " ")), value(`${signedIn} signed in`)],
+            [cmd("memcell account list")],
+          )
+        : null;
 
     if (found) {
       const keyRow = await hookKey(
@@ -83,6 +102,7 @@ export async function status(instance: string, _from: string): Promise<number> {
       say(
         row(0, [badge("memcell"), place(instance)], [instanceScope]),
         row(1, [label("Account".padEnd(11, " ")), value(accountDisplay)]),
+        accountsRow,
         serverRow,
         row(1, [label("Workspace".padEnd(11, " ")), value(projectDisplay!)]),
         found.project.paused
@@ -103,6 +123,7 @@ export async function status(instance: string, _from: string): Promise<number> {
     say(
       row(0, [badge("memcell"), place(instance)], [instanceScope]),
       row(1, [label("Account".padEnd(11, " ")), value(accountDisplay)]),
+      accountsRow,
       serverRow,
       row(1, [label("Workspace".padEnd(11, " ")), warn("not connected in this directory")]),
       row(1, [label("Directory".padEnd(11, " ")), place(process.cwd())]),

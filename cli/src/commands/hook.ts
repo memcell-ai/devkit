@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 import { adapterFor, allAdapters, removeHooks } from "../adapters/index.js";
 import type { Adapter, Wiring } from "../adapters/shared.js";
+import { unbindFolder } from "../instance.js";
 import { agentKeyForProject, forgetAgentKey } from "../keyring.js";
 import { runMoment } from "../loop/hook.js";
 import { isMoment, MOMENTS } from "../loop/moments.js";
@@ -110,6 +111,7 @@ export async function hookRemove(): Promise<number> {
   // pointer to it goes.
   const held = await agentKeyForProject(project.instance, here);
   if (held) await forgetAgentKey(held.instance, held.keyId);
+  await unbindFolder(project.instance, here);
   await removeWorkspace(at);
 
   say(

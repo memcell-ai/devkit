@@ -1,4 +1,5 @@
 import yargs, { type Argv } from "yargs";
+import { nameSavedSession } from "./accounts.js";
 import { migrateWiring } from "./adapters/index.js";
 import { accountCommand } from "./commands/account/index.js";
 import {
@@ -31,7 +32,7 @@ import {
 import { webhookCommand } from "./commands/webhook/index.js";
 import { workspaceCommand } from "./commands/workspace/index.js";
 import { resolveContext } from "./context.js";
-import { badInstance, whereInstance } from "./instance.js";
+import { accountsOn, actAs, badInstance, namedAccount, whereInstance } from "./instance.js";
 import { badge, row, say, warn } from "./ui.js";
 import { findWorkspace } from "./workspace.js";
 
@@ -105,12 +106,17 @@ export function createCli(argv: string[], version: string): Argv<GlobalArgs> {
       global: true,
       describe: "Target user or organization handle",
     })
+    .option("account", {
+      type: "string",
+      global: true,
+      describe: "Email of the signed-in account to act as (env: MEMCELL_ACCOUNT)",
+    })
     .option("json", {
       type: "boolean",
       global: true,
       describe: "Output results as JSON",
     })
-    .group(["url", "workspace", "owner", "json", "help", "version"], "Global Options:")
+    .group(["url", "workspace", "owner", "account", "json", "help", "version"], "Global Options:")
     .middleware(async (args) => {
       const urlFlag = typeof args.url === "string" ? args.url : undefined;
       const { instance, from } = await whereInstance(urlFlag);
@@ -120,6 +126,20 @@ export function createCli(argv: string[], version: string): Argv<GlobalArgs> {
       if (wrong && cmdPath[0] !== "hook") {
         setExitCode(1);
         throw new CliAbortError(1, wrong);
+      }
+
+      actAs(typeof args.account === "string" ? args.account : undefined);
+      const wanted = namedAccount();
+      if (wanted && cmdPath[0] !== "hook" && cmdPath[0] !== "login") {
+        await nameSavedSession(instance);
+        const lowered = wanted.toLowerCase();
+        const held = (await accountsOn(instance)).some(
+          (account) => account.userId === wanted || account.email?.toLowerCase() === lowered,
+        );
+        if (!held) {
+          setExitCode(1);
+          throw new CliAbortError(1, `${wanted} is not signed in here · run memcell login`);
+        }
       }
 
       const found = await findWorkspace().catch(() => null);

@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import { basename } from "node:path";
 
-import { call, type MemcellError } from "./client.js";
+import { claimFolders, nameSavedSession } from "./accounts.js";
+import { call, whoIs, type MemcellError, type Session } from "./client.js";
 import { saveCredential } from "./instance.js";
 import { bad, cmd, label, place, row, say, value, variant, warn, badge } from "./ui.js";
 
@@ -89,15 +90,39 @@ function openBrowser(url: string, instance: string): boolean {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Adds the approved account to this machine beside any already here. The
+ * account is asked for rather than assumed: the browser that approved may have
+ * been signed in as anybody.
+ */
+async function keepSession(instance: string, token: string): Promise<Session["user"] | null> {
+  const session = await whoIs(instance, token).catch(() => null);
+  if (!session) {
+    say(row(1, [warn("refused")], [label("the instance did not say who signed in")]));
+    return null;
+  }
+  await nameSavedSession(instance);
+  await saveCredential({
+    instance,
+    token,
+    obtainedAt: new Date().toISOString(),
+    userId: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+  });
+  await claimFolders(instance);
+  return session.user;
+}
+
+/**
  * Run the grant to a saved credential. Prints the code, the page, and every
- * ending in the terminal's own voice; the caller only needs the outcome.
+ * ending in the terminal's own voice; the caller only needs who signed in.
  * `retry` is what to tell somebody to run again on an expired code — the
  * command they are actually in.
  */
 export async function deviceGrant(
   instance: string,
   options: { noBrowser?: boolean; retry: string },
-): Promise<boolean> {
+): Promise<Session["user"] | null> {
   const clientId = resolveClientId();
   let grant: Grant;
   try {
@@ -111,7 +136,7 @@ export async function deviceGrant(
       row(0, [badge("memcell"), place(instance)]),
       row(1, [bad("unreachable")], [label((error as MemcellError).message)]),
     );
-    return false;
+    return null;
   }
 
   // Headless boxes, CI, and anyone who would rather paste the link than
@@ -130,9 +155,10 @@ export async function deviceGrant(
           : "open that page on any device (phone included) and enter the code",
       ),
     ]),
-    // The code belongs to whichever browser opens it first, so say which
-    // one to finish in rather than letting a second window fail obscurely.
+    // The code belongs to the first account that answers it, so say which
+    // window to finish in rather than letting a second one fail obscurely.
     opened && row(2, [label("finish in the window that opened")]),
+    opened && row(2, [label("to sign in as someone else, choose it on that page")]),
   );
 
   // Clamped, because these two numbers come from the instance and drive a
@@ -149,7 +175,7 @@ export async function deviceGrant(
     await wait(interval);
     if (Date.now() > deadline) {
       say(row(1, [warn("the code expired")], [label("run"), cmd(options.retry), label("again")]));
-      return false;
+      return null;
     }
 
     try {
@@ -163,12 +189,7 @@ export async function deviceGrant(
         },
       });
 
-      await saveCredential({
-        instance,
-        token: token.access_token,
-        obtainedAt: new Date().toISOString(),
-      });
-      return true;
+      return await keepSession(instance, token.access_token);
     } catch (error) {
       const failure = error as MemcellError;
       const code = (failure.body as { error?: string } | null)?.error;
@@ -181,14 +202,14 @@ export async function deviceGrant(
       }
       if (code === "access_denied") {
         say(row(1, [warn("denied in the browser")], [label("nothing was connected")]));
-        return false;
+        return null;
       }
       if (code === "expired_token") {
         say(row(1, [warn("the code expired")], [label("run"), cmd(options.retry), label("again")]));
-        return false;
+        return null;
       }
       say(row(1, [warn("refused")], [label(failure.message)]));
-      return false;
+      return null;
     }
   }
 }

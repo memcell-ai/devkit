@@ -7,13 +7,18 @@ import { UnreadableConfig } from "../adapters/shared.js";
 import { installSkill } from "../adapters/skill.js";
 import { adapterFor, healWiringCollisions } from "../adapters/index.js";
 import { currentAgent, detected } from "../agents.js";
-import { call, MemcellError, whoami } from "../client.js";
+import { nameSavedSession } from "../accounts.js";
+import { call, MemcellError, whoami, type Session } from "../client.js";
 import { deviceGrant } from "../grant.js";
 import {
+  accountsOn,
+  actAs,
   badInstance,
+  bindFolder,
   credentialFor,
   DEFAULT_INSTANCE,
   knownInstances,
+  namedAccount,
   normalize,
 } from "../instance.js";
 import { pruneProjectKeys, saveAgentKey } from "../keyring.js";
@@ -37,12 +42,10 @@ import {
 
 // `memcell connect` — a cold terminal to a wired project, one command.
 //
-// Bare, it is terminal-first: if this machine holds no session, the device
-// grant runs right here (code, browser, approve — anonymous counts), and
-// then the key is minted against the approver's active space. With
-// `--pair <id>` it is the terminal's half of the browser flow instead: the
-// connect page made a pairing as whoever was in the browser, and holding
-// the ticket is standing enough. Both paths end in the same wiring.
+// It is terminal-first: if this machine holds no session, the device grant
+// runs right here (code, browser, approve — anonymous counts), and then the
+// key is minted against the approver's active space. The folder then belongs
+// to that account, whoever else signs in on this machine later.
 
 interface Exchanged {
   key: string;
@@ -55,10 +58,43 @@ interface Exchanged {
   agents?: Record<string, { key: string; keyId: string; agentId: string; agentName: string }>;
 }
 
+/** Who this run connects as, signing somebody in if nobody can. Whoever approves
+ *  is who the rest of the run acts as, even in a folder that was someone else's. */
+async function connectingAs(
+  instance: string,
+  noBrowser?: boolean,
+): Promise<Session["user"] | null> {
+  const held = (await credentialFor(instance)) ? await whoami(instance).catch(() => null) : null;
+  if (held) return held.user;
+
+  const user = await deviceGrant(instance, { noBrowser, retry: "memcell connect" });
+  if (user) actAs(user.id);
+  return user;
+}
+
+/** With several accounts here, which one this folder is for is the person's call. */
+async function pickAccount(instance: string, current: Session["user"]): Promise<boolean> {
+  if (namedAccount()) return true;
+  await nameSavedSession(instance);
+  const accounts = await accountsOn(instance);
+  if (accounts.length < 2) return true;
+
+  const picked = await choose(
+    "Connect as:",
+    accounts.map((account) => ({
+      name: account.userId ?? current.id,
+      label: account.email ?? account.name ?? current.email,
+    })),
+    accounts.findIndex((account) => account.userId === current.id),
+  );
+  if (!picked) return false;
+  actAs(picked);
+  return true;
+}
+
 export async function connect(
   instance: string,
   options: {
-    pair?: string;
     workspace?: string;
     project?: string;
     space?: string;
@@ -67,12 +103,10 @@ export async function connect(
     from: string;
   },
 ): Promise<number> {
-  const pair = options.pair?.trim();
   const existing = await findWorkspace(process.cwd()).catch(() => null);
   let targetWorkspace = (options.workspace || options.project || options.space)?.trim();
 
-  const isInteractive =
-    !pair && !options.workspace && !options.project && !options.space && CAN_ASK();
+  const isInteractive = !options.workspace && !options.project && !options.space && CAN_ASK();
 
   if (isInteractive) {
     let action: string | null = null;
@@ -167,19 +201,16 @@ export async function connect(
 
     // Owner & Workspace selection
     if (!targetWorkspace) {
-      let held = (await credentialFor(instance)) ? await whoami(instance).catch(() => null) : null;
-      if (!held) {
+      if (!(await credentialFor(instance))) {
         say(
           row(0, [badge("memcell"), place(instance)]),
           row(1, [label("signing in to this instance...")]),
         );
-        const granted = await deviceGrant(instance, {
-          noBrowser: options.noBrowser,
-          retry: "memcell connect",
-        });
-        if (!granted) return 1;
-        held = await whoami(instance).catch(() => null);
       }
+      const current = await connectingAs(instance, options.noBrowser);
+      if (!current) return 1;
+      if (!(await pickAccount(instance, current))) return 0;
+      const held = await whoami(instance).catch(() => null);
 
       // Query organizations
       const orgsRes = await call<{
@@ -351,43 +382,23 @@ export async function connect(
     machine: hostname(),
   };
 
+  const account = await connectingAs(instance, options.noBrowser);
+  if (!account) return 1;
+
   let exchanged: Exchanged;
   try {
-    if (pair) {
-      exchanged = await call<Exchanged>(instance, "/api/v1/pair/claim", {
-        method: "POST",
-        body: {
-          pair,
-          ...identity,
-          workspace: targetWorkspace || undefined,
-          project: targetWorkspace || undefined,
-          space: targetWorkspace || undefined,
-        },
-      });
-    } else {
-      const held = (await credentialFor(instance))
-        ? await whoami(instance).catch(() => null)
-        : null;
-      if (!held) {
-        const granted = await deviceGrant(instance, {
-          noBrowser: options.noBrowser,
-          retry: "memcell connect",
-        });
-        if (!granted) return 1;
-      }
-      exchanged = await call<Exchanged>(instance, "/api/v1/connect", {
-        method: "POST",
-        body: {
-          ...identity,
-          workspace: targetWorkspace || undefined,
-          preferredWorkspace: here,
-          project: targetWorkspace || undefined,
-          preferredProject: here,
-          space: targetWorkspace || undefined,
-          preferredSpace: here,
-        },
-      });
-    }
+    exchanged = await call<Exchanged>(instance, "/api/v1/connect", {
+      method: "POST",
+      body: {
+        ...identity,
+        workspace: targetWorkspace || undefined,
+        preferredWorkspace: here,
+        project: targetWorkspace || undefined,
+        preferredProject: here,
+        space: targetWorkspace || undefined,
+        preferredSpace: here,
+      },
+    });
   } catch (error) {
     const failure = error as MemcellError;
     const body = failure.body as {
@@ -415,9 +426,23 @@ export async function connect(
       return 1;
     }
 
+    // A workspace somebody else's account can see reads as missing from this
+    // one, so the likely cause is who is signed in, not the workspace.
+    const mightBeAccount = failure.status === 403 || failure.status === 404;
+    const others = mightBeAccount
+      ? (await accountsOn(instance)).filter((other) => other.userId !== account.id)
+      : [];
     say(
       row(0, [badge("memcell"), place(instance)]),
       row(1, [warn("could not connect")], [label(failure.message)]),
+      mightBeAccount && row(2, [label("signed in as"), value(account.email)]),
+      ...others.map((other) =>
+        row(2, [
+          label("try"),
+          cmd(`memcell connect ${targetWorkspace ?? ""} --account ${other.email}`),
+        ]),
+      ),
+      mightBeAccount && row(2, [label("add another account with"), cmd("memcell login")]),
     );
     return 1;
   }
@@ -447,7 +472,8 @@ export async function connect(
     },
     workspaceDirRoot,
   );
-  await pruneProjectKeys(instance, workspaceDirRoot, undefined, linked.id);
+  await nameSavedSession(instance);
+  await pruneProjectKeys(instance, workspaceDirRoot, undefined, linked.id, account.id);
   await saveAgentKey({
     instance,
     keyId: exchanged.keyId,
@@ -460,6 +486,7 @@ export async function connect(
     space: linked.slug,
     agentId: exchanged.agentId,
     agent: activeAgent,
+    userId: account.id,
   });
 
   if (exchanged.agents) {
@@ -477,9 +504,11 @@ export async function connect(
         space: linked.slug,
         agentId: sub.agentId,
         agent: name,
+        userId: account.id,
       });
     }
   }
+  await bindFolder(instance, workspaceDirRoot, { userId: account.id, email: account.email });
 
   const wired: string[] = [];
   const refused: string[] = [];
@@ -523,6 +552,7 @@ export async function connect(
 
   say(
     row(0, [badge("memcell"), good(`Connected to ${workspaceDisplay}`)]),
+    !account.isAnonymous && row(1, [label("Account".padEnd(11, " ")), value(account.email)]),
     row(1, [label("Directory".padEnd(11, " ")), place(dirname(at))]),
     wired.length > 0
       ? row(1, [label("Agents".padEnd(11, " ")), value(wired.join(", "))])

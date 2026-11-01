@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +17,102 @@ vi.mock("node:os", async (original) => ({
 
 const { agentKeyForProject, agentKeys, pruneProjectKeys, saveAgentKey } =
   await import("../src/keyring.js");
+const { bindFolder, saveCredential } = await import("../src/instance.js");
+
+describe("two people connected to one workspace on one machine", () => {
+  const instance = "http://people.test";
+  const workspace = "ws-shared";
+
+  async function wiredFolder(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "memcell-keyring-people-"));
+    await mkdir(join(dir, ".memcell"));
+    await writeFile(
+      join(dir, ".memcell", "config.toml"),
+      `[instance]\nurl = "${instance}"\n\n[workspace]\nid = "${workspace}"\nslug = "shared"\n`,
+    );
+    return dir;
+  }
+
+  const connect = async (dir: string, userId: string, keyId: string) => {
+    await pruneProjectKeys(instance, dir, undefined, workspace, userId);
+    await saveAgentKey({
+      instance,
+      keyId,
+      key: `mc_${keyId}`,
+      project: dir,
+      projectId: workspace,
+      projectSlug: "shared",
+      agent: "claude",
+      userId,
+    });
+    await bindFolder(instance, dir, { userId });
+  };
+
+  const signIn = (userId: string) =>
+    saveCredential({ instance, token: `token-${userId}`, obtainedAt: "2026-11-01T00:00Z", userId });
+
+  it("keeps each folder on its own person's key", async () => {
+    const [folderA, folderB] = [await wiredFolder(), await wiredFolder()];
+    await signIn("u-one");
+    await connect(folderA, "u-one", "key-one");
+    await signIn("u-two");
+    await connect(folderB, "u-two", "key-two");
+
+    expect((await agentKeyForProject(instance, folderA, "claude"))?.keyId).toBe("key-one");
+    expect((await agentKeyForProject(instance, folderB, "claude"))?.keyId).toBe("key-two");
+  });
+
+  it("finds a folder's own key when it is looked up by workspace too", async () => {
+    const [folderA, folderB] = [await wiredFolder(), await wiredFolder()];
+    await signIn("u-one");
+    await connect(folderA, "u-one", "key-three");
+    await signIn("u-two");
+    await connect(folderB, "u-two", "key-four");
+
+    const held = await agentKeyForProject(instance, folderA, "claude", workspace);
+    expect(held?.keyId).toBe("key-three");
+  });
+
+  it("a person connecting a second folder leaves the first on their new key", async () => {
+    const [folderA, folderB, folderC] = [
+      await wiredFolder(),
+      await wiredFolder(),
+      await wiredFolder(),
+    ];
+    await signIn("u-one");
+    await connect(folderA, "u-one", "key-five");
+    await connect(folderB, "u-one", "key-seven");
+    await signIn("u-two");
+    await connect(folderC, "u-two", "key-six");
+
+    // The newest key on the machine is the other person's. It must not be what answers.
+    expect((await agentKeyForProject(instance, folderA, "claude"))?.keyId).toBe("key-seven");
+    expect((await agentKeyForProject(instance, folderC, "claude"))?.keyId).toBe("key-six");
+  });
+
+  it("refuses to guess for a folder that belongs to neither", async () => {
+    const stranger = "http://unnamed.test";
+    const dir = await mkdtemp(join(tmpdir(), "memcell-keyring-unclaimed-"));
+    await mkdir(join(dir, ".memcell"));
+    await writeFile(
+      join(dir, ".memcell", "config.toml"),
+      `[instance]\nurl = "${stranger}"\n\n[workspace]\nid = "${workspace}"\nslug = "shared"\n`,
+    );
+    for (const userId of ["u-one", "u-two"]) {
+      await saveAgentKey({
+        instance: stranger,
+        keyId: `key-${userId}`,
+        key: `mc_${userId}`,
+        project: await mkdtemp(join(tmpdir(), "memcell-keyring-theirs-")),
+        projectId: workspace,
+        agent: "claude",
+        userId,
+      });
+    }
+
+    expect(await agentKeyForProject(stranger, dir, "claude")).toBeNull();
+  });
+});
 
 describe("finding the pairing by directory", () => {
   it("matches instance + project, and the newest pairing wins", async () => {

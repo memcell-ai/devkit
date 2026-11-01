@@ -102,7 +102,7 @@ describe("workspace response unwrapping for interactive connect", () => {
       Array.isArray(c.command) ? c.command[0] : String(c.command),
     );
     expect(cmdNames).toContain("login");
-    expect(cmdNames).toContain("logout");
+    expect(cmdNames).toContain("logout [account]");
     expect(cmdNames).toContain("connect [target]");
     expect(cmdNames).toContain("disconnect");
     expect(cmdNames).toContain("status");
