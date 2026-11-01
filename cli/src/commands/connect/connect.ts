@@ -82,7 +82,7 @@ export const connectCommand: CliCommand<ConnectArgs> = {
 
     return connect(argv._instance!, {
       pair: argv.pair,
-      workspace: workspaceArg ?? argv.workspace ?? argv.project,
+      workspace: workspaceArg ?? argv.workspace,
       agent: explicitAgent,
       noBrowser: Boolean(argv["no-browser"]),
       from: argv._from ?? "default",

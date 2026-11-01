@@ -102,6 +102,22 @@ describe("yargs CLI parser & command dispatch", () => {
     expect(names).not.toContain("memories");
   });
 
+  it.each([
+    [["connect"], "no-browser"],
+    [["login"], "no-browser"],
+    [["server", "start"], "no-browser"],
+    [["memory", "seed", "https://example.com"], "no-watch"],
+    [["workspace", "copy", "acme/core", "acme/copy"], "no-threads"],
+  ])("sees %j with its --%s flag", async (command, flag) => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const parsed = await createCli([...command, `--${flag}`, "--help"], "1.5.0").parseAsync();
+      expect(parsed[flag]).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("parses global flags (--url, --workspace, --owner, --json) across commands", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {

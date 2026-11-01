@@ -81,6 +81,8 @@ export class CliAbortError extends Error {
 export function createCli(argv: string[], version: string): Argv<GlobalArgs> {
   const parser = yargs(argv)
     .scriptName("memcell")
+    // Negation would read --no-browser as browser=false and leave "no-browser" unset.
+    .parserConfiguration({ "boolean-negation": false })
     .usage("Usage: $0 <command> [options]")
     .version(version)
     .alias("v", "version")
