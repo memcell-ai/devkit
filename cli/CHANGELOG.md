@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/memcell-ai/devkit/compare/cli-v2.0.1...cli-v2.0.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **cli:** send scope names as typed and add sweep job steps ([#35](https://github.com/memcell-ai/devkit/issues/35)) ([9766888](https://github.com/memcell-ai/devkit/commit/9766888f75bdc197c20b4ff275e8563c1d712800))
+
 ## [2.0.1](https://github.com/memcell-ai/devkit/compare/cli-v2.0.0...cli-v2.0.1) (2026-11-01)
 
 
