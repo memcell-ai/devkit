@@ -1,5 +1,5 @@
 {
-  "sdks/node": "2.0.0",
-  "sdks/python": "2.0.0",
-  "cli": "2.0.0"
+  "sdks/node": "2.0.1",
+  "sdks/python": "2.0.1",
+  "cli": "2.0.1"
 }
