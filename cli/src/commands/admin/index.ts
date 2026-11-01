@@ -63,10 +63,7 @@ export const importCommand: CliCommand<{
       files: argv.files ?? [],
       url: argv.url,
       workspace:
-        argv.workspace ??
-        argv.project ??
-        argv._context?.workspace?.namespace ??
-        argv._context?.project?.namespace,
+        argv.workspace ?? argv._context?.workspace?.namespace ?? argv._context?.project?.namespace,
       owner: argv.owner ?? argv._context?.owner ?? undefined,
       dryRun: Boolean(argv["dry-run"]),
       scope: argv.scope,
@@ -96,10 +93,7 @@ export const exportCommand: CliCommand<{ format?: string; out?: string }> = {
       argv.format || "json",
       argv.out,
       argv.url,
-      argv.workspace ??
-        argv.project ??
-        argv._context?.workspace?.namespace ??
-        argv._context?.project?.namespace,
+      argv.workspace ?? argv._context?.workspace?.namespace ?? argv._context?.project?.namespace,
     ),
   ),
 };

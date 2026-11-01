@@ -4,7 +4,6 @@ import type { ResolvedContext } from "../model.js";
 export interface GlobalArgs {
   url?: string;
   workspace?: string;
-  project?: string;
   owner?: string;
   json?: boolean;
   _instance?: string;
