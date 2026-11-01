@@ -5,14 +5,35 @@ import {
   declineInvitation,
   getInvitation,
   getProfile,
+  listAccounts,
   listApiKeys,
   listTokens,
   revokeApiKey,
   revokeToken,
   updateProfile,
+  useAccount,
 } from "../account.js";
 import { resetCommand, usageCommand } from "../admin/index.js";
 import { runCommand, toFlagsRecord, type CliCommand } from "../types.js";
+
+const listAccountsCmd: CliCommand = {
+  command: ["list", "ls"],
+  describe: "List the accounts signed in on this machine",
+  builder: (yargs) => yargs,
+  handler: runCommand(async (argv) => listAccounts(argv._instance!)),
+};
+
+const useAccountCmd: CliCommand<{ account: string }> = {
+  command: "use <account>",
+  describe: "Make an account the active one on this machine",
+  builder: (yargs) =>
+    yargs.positional("account", {
+      type: "string",
+      demandOption: true,
+      describe: "Email of a signed-in account",
+    }),
+  handler: runCommand(async (argv) => useAccount(argv._instance!, argv.account)),
+};
 
 const profileAccountCmd: CliCommand = {
   command: "profile",
@@ -130,9 +151,11 @@ const invitationAccountCmd: CliCommand = {
 
 export const accountCommand: CliCommand = {
   command: "account",
-  describe: "Manage your profile, API keys, invitations, and usage",
+  describe: "Manage your accounts, profile, API keys, invitations, and usage",
   builder: (yargs) =>
     yargs
+      .command(listAccountsCmd)
+      .command(useAccountCmd)
       .command(profileAccountCmd)
       .command(updateAccountCmd)
       .command(keyAccountCmd)

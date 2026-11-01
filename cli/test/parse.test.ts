@@ -118,16 +118,45 @@ describe("yargs CLI parser & command dispatch", () => {
     }
   });
 
-  it("parses global flags (--url, --workspace, --owner, --json) across commands", async () => {
+  it("refuses an account nobody signed in as, by name, before the command runs", async () => {
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    try {
+      const code = await runYargsCli(
+        ["account", "list", "--url", "http://nobody.test", "--account", "stranger@example.com"],
+        "1.5.0",
+      );
+      expect(code).toBe(1);
+      expect(logs.join("\n")).toContain("stranger@example.com is not signed in here");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("parses global flags (--url, --workspace, --owner, --account, --json) across commands", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       const cli = createCli(
-        ["memory", "list", "--workspace", "acme/core", "--owner", "acme", "--json", "--help"],
+        [
+          "memory",
+          "list",
+          "--workspace",
+          "acme/core",
+          "--owner",
+          "acme",
+          "--account",
+          "sam@acme.example",
+          "--json",
+          "--help",
+        ],
         "1.5.0",
       );
       const parsed = await cli.parseAsync();
       expect(parsed.workspace).toBe("acme/core");
       expect(parsed.owner).toBe("acme");
+      expect(parsed.account).toBe("sam@acme.example");
       expect(parsed.json).toBe(true);
     } finally {
       spy.mockRestore();

@@ -238,6 +238,8 @@ export interface Session {
  */
 export interface AgentStanding {
   agent: string | null;
+  /** The person the key belongs to. */
+  userId?: string | null;
   space: string | null;
   standing: "ok" | "suspended" | "revoked";
   calls?: { used: number };
@@ -250,6 +252,12 @@ export async function agentStanding(instance: string, key: string): Promise<Agen
 
 export async function whoami(instance: string): Promise<Session | null> {
   const session = await call<Session | null>(instance, "/api/auth/get-session");
+  return session?.user ? session : null;
+}
+
+/** Who a particular token signs in, whichever account this run acts as. */
+export async function whoIs(instance: string, token: string): Promise<Session | null> {
+  const session = await call<Session | null>(instance, "/api/auth/get-session", { bearer: token });
   return session?.user ? session : null;
 }
 

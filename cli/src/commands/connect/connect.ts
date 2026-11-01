@@ -4,7 +4,6 @@ import { runCommand, type CliCommand } from "../types.js";
 
 export interface ConnectArgs {
   target?: string;
-  pair?: string;
   agent?: string;
   "no-browser"?: boolean;
   claude?: boolean;
@@ -30,10 +29,6 @@ export const connectCommand: CliCommand<ConnectArgs> = {
       .positional("target", {
         type: "string",
         describe: "Workspace to connect ([owner]/<slug> or <slug>)",
-      })
-      .option("pair", {
-        type: "string",
-        describe: "Pairing ticket code from the browser connect page",
       })
       .option("agent", {
         type: "string",
@@ -81,7 +76,6 @@ export const connectCommand: CliCommand<ConnectArgs> = {
     }
 
     return connect(argv._instance!, {
-      pair: argv.pair,
       workspace: workspaceArg ?? argv.workspace,
       agent: explicitAgent,
       noBrowser: Boolean(argv["no-browser"]),

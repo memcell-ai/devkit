@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { normalize } from "./instance.js";
+import { activeUserId, folderAccount, normalize } from "./instance.js";
 import { machineDir, machineFile } from "./machine.js";
 import { findWorkspace } from "./workspace.js";
 
@@ -35,6 +35,9 @@ export interface AgentKey {
   /** The specific agent program name (e.g. 'antigravity', 'claude', 'cursor')
    *  this key authenticates for. */
   agent?: string;
+  /** The person the key was minted for. Two people can hold keys for one
+   *  workspace on one machine, and neither may answer for the other. */
+  userId?: string;
 }
 
 interface Store {
@@ -48,6 +51,10 @@ const file = () => machineFile("agent-keys.json");
  *  key minted against a laptop's dev server must never be found for the
  *  hosted one. */
 const handle = (instance: string, keyId: string) => `${normalize(instance)}|${keyId}`;
+
+/** A key saved before keys recorded their person could be anybody's. */
+const samePerson = (key: AgentKey, userId?: string) =>
+  !userId || !key.userId || key.userId === userId;
 
 async function read(): Promise<Store> {
   try {
@@ -66,15 +73,17 @@ async function write(store: Store): Promise<void> {
 /**
  * Prunes prior keys for a specific project directory, id, and instance.
  *
- * When reconnecting, the server revokes/supersedes prior keys for that machine/agent.
- * Pruning matching entries ensures the keyring does not hold dead keys that cause
- * random 401s or agent disconnections.
+ * When reconnecting, the server revokes/supersedes prior keys for that person's
+ * agent in that workspace, whichever folder holds them. Pruning matching entries
+ * ensures the keyring does not hold dead keys that cause random 401s or agent
+ * disconnections. Another person's key for the same workspace stays live and stays.
  */
 export async function pruneProjectKeys(
   instance: string,
   projectDir: string,
   agentName?: string,
   projectId?: string,
+  userId?: string,
 ): Promise<number> {
   const store = await read();
   if (!store.keys) return 0;
@@ -89,7 +98,10 @@ export async function pruneProjectKeys(
   for (const [h, keyEntry] of Object.entries(store.keys)) {
     const isSameInstance = normalize(keyEntry.instance) === wanted;
     const isSameProject =
-      (projectId && keyEntry.projectId && keyEntry.projectId === projectId) ||
+      (projectId &&
+        keyEntry.projectId &&
+        keyEntry.projectId === projectId &&
+        samePerson(keyEntry, userId)) ||
       (await real(keyEntry.projectPath ?? keyEntry.project)) === at;
     const isSameAgent = agentName
       ? keyEntry.agent?.toLowerCase() === agentName.toLowerCase()
@@ -123,7 +135,7 @@ export async function saveAgentKey(entry: AgentKey): Promise<void> {
     const isSameInstance = normalize(k.instance) === targetInstance;
     const isSameProject =
       targetProjectId && k.projectId
-        ? k.projectId === targetProjectId
+        ? k.projectId === targetProjectId && samePerson(k, entry.userId)
         : (await real(k.projectPath ?? k.project)) === targetProject;
     const isSameAgent =
       targetAgent !== undefined ? k.agent?.toLowerCase() === targetAgent : k.agent === undefined;
@@ -149,11 +161,36 @@ export async function agentKeyFor(instance: string, keyId: string): Promise<Agen
   return (await read()).keys?.[handle(instance, keyId)] ?? null;
 }
 
+/** Records the person behind a key saved before keys carried one. */
+export async function stampAgentKey(key: AgentKey, userId: string): Promise<void> {
+  const store = await read();
+  const at = handle(key.instance, key.keyId);
+  const held = store.keys?.[at];
+  if (!held) return;
+  await write({ keys: { ...store.keys, [at]: { ...held, userId } } });
+}
+
+/** Keys found by their workspace rather than their folder answer only for the
+ *  folder's own person. With two people's keys on the machine and nothing saying
+ *  which folder this is, there is no answer: a wrong guess acts as someone else. */
+async function ownKeys(
+  instance: string,
+  projectDir: string | undefined,
+  held: AgentKey[],
+): Promise<AgentKey[]> {
+  const owner = projectDir
+    ? ((await folderAccount(instance, projectDir))?.userId ?? (await activeUserId(instance)))
+    : await activeUserId(instance);
+  if (owner) return held.filter((k) => samePerson(k, owner));
+  return new Set(held.map((k) => k.userId)).size > 1 ? [] : held;
+}
+
 /** The pairing for a wired DIRECTORY or PROJECT — how everything finds its
  *  identity, now that the project file carries none.
  *
- *  Matches primarily by projectId / slug, then falls back to directory
- *  hierarchy or single connected project on this machine. */
+ *  A folder's own pairing answers first. Otherwise it matches by projectId or
+ *  slug for the folder's person, then falls back to the single connected
+ *  project on this machine. */
 export async function agentKeyForProject(
   instance: string,
   projectDir?: string,
@@ -167,50 +204,55 @@ export async function agentKeyForProject(
   );
   if (entries.length === 0) return null;
 
+  const isNamedProject = (k: AgentKey) =>
+    k.projectId === projectIdOrSlug ||
+    k.projectSlug?.toLowerCase() === projectIdOrSlug?.toLowerCase() ||
+    k.space?.toLowerCase() === projectIdOrSlug?.toLowerCase();
+
   let held: AgentKey[] = [];
 
-  // 1. If explicit projectIdOrSlug provided, prioritize matching by id or slug
-  if (projectIdOrSlug) {
-    held = entries.filter(
-      (k) =>
-        k.projectId === projectIdOrSlug ||
-        k.projectSlug?.toLowerCase() === projectIdOrSlug.toLowerCase() ||
-        k.space?.toLowerCase() === projectIdOrSlug.toLowerCase(),
-    );
-  }
-
-  // 2. If projectDir provided and not matched yet, resolve via path or findProject
-  if (held.length === 0 && projectDir) {
+  // 1. This folder's own pairing: exact path or subdirectory check
+  if (projectDir) {
     const at = await real(projectDir);
-    // Exact path or subdirectory check
     for (const k of entries) {
       const keyPath = await real(k.projectPath ?? k.project);
-      if (keyPath === at || at.startsWith(keyPath + "/")) {
+      if (
+        (keyPath === at || at.startsWith(keyPath + "/")) &&
+        (!projectIdOrSlug || isNamedProject(k))
+      ) {
         held.push(k);
       }
     }
-    // If still not found, check findProject(projectDir)
-    if (held.length === 0) {
-      const found = await findWorkspace(projectDir).catch(() => null);
-      if (found) {
-        const foundId = found.project.projectId;
-        const foundSlug = found.project.project || found.project.space;
-        const foundRoot = await real(found.root);
-        for (const k of entries) {
-          const keyPath = await real(k.projectPath ?? k.project);
-          if (
-            (foundId && k.projectId === foundId) ||
-            (foundSlug && (k.projectSlug === foundSlug || k.space === foundSlug)) ||
-            keyPath === foundRoot
-          ) {
-            held.push(k);
-          }
+  }
+
+  // 2. If explicit projectIdOrSlug provided, match by id or slug
+  if (held.length === 0 && projectIdOrSlug) {
+    held = await ownKeys(instance, projectDir, entries.filter(isNamedProject));
+  }
+
+  // 3. If still not found, check findProject(projectDir)
+  if (held.length === 0 && projectDir) {
+    const found = await findWorkspace(projectDir).catch(() => null);
+    if (found) {
+      const foundId = found.project.projectId;
+      const foundSlug = found.project.project || found.project.space;
+      const foundRoot = await real(found.root);
+      const matching: AgentKey[] = [];
+      for (const k of entries) {
+        const keyPath = await real(k.projectPath ?? k.project);
+        if (
+          (foundId && k.projectId === foundId) ||
+          (foundSlug && (k.projectSlug === foundSlug || k.space === foundSlug)) ||
+          keyPath === foundRoot
+        ) {
+          matching.push(k);
         }
       }
+      held = await ownKeys(instance, projectDir, matching);
     }
   }
 
-  // 3. Fallback: Only when NO projectDir was specified (e.g. global agent invocation without a directory anchor), check if exactly one project is connected on this instance
+  // 4. Fallback: Only when NO projectDir was specified (e.g. global agent invocation without a directory anchor), check if exactly one project is connected on this instance
   if (held.length === 0 && !projectDir) {
     const uniqueProjects = new Set(
       entries.map((k) => k.projectId || k.projectSlug || k.space || k.projectPath || k.project),

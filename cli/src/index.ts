@@ -15,6 +15,7 @@ export {
   type FoundWorkspace,
 } from "./workspace.js";
 export {
+  accountsOn,
   credentialFor,
   DEFAULT_INSTANCE,
   forgetCredential,
@@ -22,6 +23,7 @@ export {
   normalize,
   resolveInstance,
   saveCredential,
+  type Account,
   type Credential,
 } from "./instance.js";
 
