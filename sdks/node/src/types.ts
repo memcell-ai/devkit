@@ -799,6 +799,12 @@ export interface JobEvent {
     | "distilling"
     | "embedding"
     | "reconciling"
+    | "clustering"
+    | "synthesizing"
+    | "fusing"
+    | "linking_edges"
+    | "surfacing_tensions"
+    | "refreshing_profile"
     | "completed"
     | "failed";
   progress: number;

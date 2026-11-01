@@ -72,7 +72,7 @@ describe("promotions command group & 4-tier scope promotion", () => {
           id: "req_1",
           memoryId: "mem_1",
           fromScope: "user",
-          toScope: "project",
+          toScope: "workspace",
           status: "pending",
           requestedBy: "usr_alice",
           reason: "Team baseline",
@@ -95,7 +95,7 @@ describe("promotions command group & 4-tier scope promotion", () => {
       memory: {
         id: "mem_1",
         title: "Always type strictly",
-        scope: "project",
+        scope: "workspace",
       },
     });
 
@@ -127,12 +127,12 @@ describe("promotions command group & 4-tier scope promotion", () => {
       memory: {
         id: "mem_1",
         title: "Always type strictly",
-        scope: "project",
+        scope: "workspace",
         version: 2,
       },
     });
 
-    const code = await promote("mem_1", "project", "Standardizing", instance);
+    const code = await promote("mem_1", "workspace", "Standardizing", instance);
     expect(code).toBe(0);
     const promoCall = calls.find((c) => c.url.includes("/memories/mem_1/promote"));
     expect(promoCall).toBeDefined();
@@ -145,7 +145,7 @@ describe("promotions command group & 4-tier scope promotion", () => {
       promotionRequest: {
         id: "req_org_1",
         memoryId: "mem_1",
-        fromScope: "project",
+        fromScope: "workspace",
         toScope: "organization",
         status: "pending",
       },
