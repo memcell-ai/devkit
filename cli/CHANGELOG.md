@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/memcell-ai/devkit/compare/cli-v2.0.2...cli-v2.0.3) (2026-11-01)
+
+
+### Bug Fixes
+
+* **cli:** honour flags named --no-* ([#39](https://github.com/memcell-ai/devkit/issues/39)) ([bc24a82](https://github.com/memcell-ai/devkit/commit/bc24a82e7be992d2d40181819819f56cd85912b9))
+
 ## [2.0.2](https://github.com/memcell-ai/devkit/compare/cli-v2.0.1...cli-v2.0.2) (2026-11-01)
 
 
