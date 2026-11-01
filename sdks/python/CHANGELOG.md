@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/memcell-ai/devkit/compare/python-v2.0.0...python-v2.0.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **cli:** send SSO providers in the API's shape and drop team roles ([#32](https://github.com/memcell-ai/devkit/issues/32)) ([9349b97](https://github.com/memcell-ai/devkit/commit/9349b9758961cf1d493b15910b6d9f5ce3ec808a))
+
 ## [2.0.0](https://github.com/memcell-ai/devkit/compare/python-v1.7.0...python-v2.0.0) (2026-10-31)
 
 
