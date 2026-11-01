@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/memcell-ai/devkit/compare/cli-v2.0.3...cli-v2.1.0) (2026-11-01)
+
+
+### Features
+
+* **cli:** hold several accounts on one machine ([#43](https://github.com/memcell-ai/devkit/issues/43)) ([664aabf](https://github.com/memcell-ai/devkit/commit/664aabf12fa32be32d9dcabd9a6600ebf1add4f3))
+
 ## [2.0.3](https://github.com/memcell-ai/devkit/compare/cli-v2.0.2...cli-v2.0.3) (2026-11-01)
 
 
