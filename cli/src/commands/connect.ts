@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { memcellOnPath } from "../adapters/shared.js";
+import { installCli, memcellOnPath } from "../adapters/shared.js";
 import { UnreadableConfig } from "../adapters/shared.js";
 import { installSkill } from "../adapters/skill.js";
 import { adapterFor, healWiringCollisions } from "../adapters/index.js";
@@ -25,20 +25,7 @@ import { pruneProjectKeys, saveAgentKey } from "../keyring.js";
 import { resolveModelForAgent } from "../model-detect.js";
 import { findGitRoot, findWorkspace, saveWorkspace, workspaceRoot } from "../workspace.js";
 import { ask, CAN_ASK, choose, type Choice } from "../select.js";
-import {
-  badge,
-  blank,
-  cmd,
-  good,
-  label,
-  place,
-  row,
-  say,
-  value,
-  variant,
-  viaNpx,
-  warn,
-} from "../ui.js";
+import { badge, blank, cmd, good, label, place, row, say, value, variant, warn } from "../ui.js";
 
 // `memcell connect` — a cold terminal to a wired project, one command.
 //
@@ -46,6 +33,32 @@ import {
 // runs right here (code, browser, approve — anonymous counts), and then the
 // key is minted against the approver's active space. The folder then belongs
 // to that account, whoever else signs in on this machine later.
+
+/**
+ * What the wiring needs in order to run. Hooks call `memcell` by name and an npx run leaves
+ * nothing behind, so a person at a terminal is offered the install here.
+ */
+async function ensureCommand(): Promise<{ onPath: boolean; installTrouble: string | null }> {
+  if (await memcellOnPath()) return { onPath: true, installTrouble: null };
+  if (!CAN_ASK()) return { onPath: false, installTrouble: null };
+
+  const answer = await choose("Your agents need the memcell command for hooks to run:", [
+    { name: "install", label: "Install it now (npm install -g memcell)" },
+    { name: "skip", label: "Skip, I will install it myself" },
+  ]);
+  if (answer !== "install") return { onPath: false, installTrouble: null };
+
+  const trouble = await installCli();
+  if (trouble) return { onPath: false, installTrouble: trouble };
+
+  const onPath = await memcellOnPath();
+  return {
+    onPath,
+    installTrouble: onPath
+      ? null
+      : "Installed, but your shell cannot find it. Add npm's global bin folder to PATH.",
+  };
+}
 
 interface Exchanged {
   key: string;
@@ -526,7 +539,7 @@ export async function connect(
       throw trouble;
     }
   }
-  const onPath = await memcellOnPath();
+  const { onPath, installTrouble } = await ensureCommand();
 
   const hasNativeHooks = wired.some((w) => w !== "mcp");
   let healedCollisions: string[] = [];
@@ -563,7 +576,7 @@ export async function connect(
     hasNativeHooks
       ? row(
           1,
-          [label("Hooks".padEnd(11, " ")), good("Installed")],
+          [label("Hooks".padEnd(11, " ")), onPath ? good("Installed") : warn("Wired, not running")],
           [label("(primary automatic memory lifecycle)")],
         )
       : row(
@@ -603,6 +616,7 @@ export async function connect(
         [label("the hooks will not fire until it is")],
         [value("npm install -g memcell")],
       ),
+    installTrouble ? row(1, [label("Install".padEnd(11, " ")), warn(installTrouble)]) : null,
     blank(),
     row(0, [label("Next:")]),
     row(1, [cmd("memcell status".padEnd(21, " ")), label("Verify agent connections and quotas")]),
@@ -612,8 +626,6 @@ export async function connect(
         cmd("memcell connect --workspace <slug>".padEnd(21, " ")),
         label("Switch connected workspace"),
       ]),
-    viaNpx() &&
-      row(1, [cmd("npm install -g memcell".padEnd(21, " ")), label("Install CLI globally")]),
   );
   return 0;
 }
