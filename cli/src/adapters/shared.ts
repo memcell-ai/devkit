@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, delimiter } from "node:path";
 
-import { isOurs, type LifecycleHook, type Moment } from "../loop/moments.js";
+import { isOurs, isThrowawayPath, type LifecycleHook, type Moment } from "../loop/moments.js";
 import type { Surface } from "./surface.js";
 import type { Incoming, Session } from "./capture.js";
 
@@ -263,18 +263,50 @@ export async function memcellOnPath(): Promise<boolean> {
     // WHERE it resolves is the whole question. Under `npx`, `memcell`
     // resolves inside the runner's own cache, so an exit code alone says
     // "found" for a path that will be pruned — and the hooks this command
-    // just wrote name `memcell`, so they die with it. That is the silent
-    // failure this check exists to prevent, and it was reporting success
-    // in exactly the case it was written for.
+    // just wrote name `memcell`, so they die with it. A hook's shell has no
+    // runner in front of its PATH, so this asks with the runner's entries
+    // gone: a real install behind them counts, and the cache copy does not.
     const isWin = process.platform === "win32";
+    const env = { ...process.env, PATH: pathWithoutRunners() };
     const p = isWin
-      ? spawn("where.exe", ["memcell"], { stdio: ["ignore", "pipe", "ignore"] })
-      : spawn("sh", ["-lc", "command -v memcell"], { stdio: ["ignore", "pipe", "ignore"] });
+      ? spawn("where.exe", ["memcell"], { stdio: ["ignore", "pipe", "ignore"], env })
+      : spawn("sh", ["-lc", "command -v memcell"], { stdio: ["ignore", "pipe", "ignore"], env });
     let where = "";
     p.stdout?.on("data", (chunk: Buffer) => {
       where += chunk.toString();
     });
     p.on("close", (code) => done(code === 0 && where.trim() !== "" && !THROWAWAY.test(where)));
     p.on("error", () => done(false));
+  });
+}
+
+/** PATH as a hook's shell has it: without the entries a runner put in front. */
+export function pathWithoutRunners(path = process.env.PATH ?? ""): string {
+  return path
+    .split(delimiter)
+    .filter((entry) => !isThrowawayPath(`${entry}/`))
+    .join(delimiter);
+}
+
+/** Installs the CLI for good. Returns what went wrong, or null when it worked. */
+export async function installCli(): Promise<string | null> {
+  const { spawn } = await import("node:child_process");
+  return new Promise((done) => {
+    const isWin = process.platform === "win32";
+    const p = spawn(isWin ? "npm.cmd" : "npm", ["install", "-g", "memcell"], {
+      stdio: ["ignore", "ignore", "pipe"],
+      env: { ...process.env, PATH: pathWithoutRunners() },
+      shell: isWin,
+    });
+    let said = "";
+    p.stderr?.on("data", (chunk: Buffer) => {
+      said += chunk.toString();
+    });
+    p.on("close", (code) => {
+      if (code === 0) return done(null);
+      const first = said.split("\n").find((line) => line.trim() !== "");
+      done(first?.trim() ?? `npm exited with code ${code}`);
+    });
+    p.on("error", (trouble) => done(trouble.message));
   });
 }
