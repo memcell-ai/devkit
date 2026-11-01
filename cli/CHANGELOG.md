@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/memcell-ai/devkit/compare/cli-v2.1.0...cli-v2.1.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **cli:** offer to install the memcell command from connect ([#46](https://github.com/memcell-ai/devkit/issues/46)) ([86c164c](https://github.com/memcell-ai/devkit/commit/86c164ca56f436154425f14ea36d221208e9a70c))
+
 ## [2.1.0](https://github.com/memcell-ai/devkit/compare/cli-v2.0.3...cli-v2.1.0) (2026-11-01)
 
 
