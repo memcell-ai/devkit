@@ -478,38 +478,45 @@ export async function configureOrgSSO(
     return 1;
   }
 
-  const type = flags.type === "oidc" ? "oidc" : "saml";
-  const domain = typeof flags.domain === "string" ? flags.domain : undefined;
-  const metadataUrl = typeof flags["metadata-url"] === "string" ? flags["metadata-url"] : undefined;
-  const metadataXml = typeof flags["metadata-xml"] === "string" ? flags["metadata-xml"] : undefined;
-  const clientId = typeof flags["client-id"] === "string" ? flags["client-id"] : undefined;
-  const clientSecret =
-    typeof flags["client-secret"] === "string" ? flags["client-secret"] : undefined;
-  const issuer = typeof flags.issuer === "string" ? flags.issuer : undefined;
-  const authorizationEndpoint =
-    typeof flags["authorization-endpoint"] === "string"
-      ? flags["authorization-endpoint"]
-      : undefined;
-  const tokenEndpoint =
-    typeof flags["token-endpoint"] === "string" ? flags["token-endpoint"] : undefined;
-  const userInfoEndpoint =
-    typeof flags["user-info-endpoint"] === "string" ? flags["user-info-endpoint"] : undefined;
-  const jwksUri = typeof flags["jwks-uri"] === "string" ? flags["jwks-uri"] : undefined;
-
-  const payload = {
-    providerId,
-    type,
-    domain,
-    metadataUrl,
-    metadataXml,
-    clientId,
-    clientSecret,
-    issuer,
-    authorizationEndpoint,
-    tokenEndpoint,
-    userInfoEndpoint,
-    jwksUri,
+  const text = (name: string) => {
+    const flag = flags[name];
+    return typeof flag === "string" ? flag : undefined;
   };
+
+  const domain = text("domain");
+  const issuer = text("issuer");
+  if (!domain || !issuer) {
+    say(row(0, [bad("missing provider details")], [label("specify --domain and --issuer")]));
+    return 1;
+  }
+
+  const metadataXml = text("metadata-xml");
+  const payload =
+    flags.type === "oidc"
+      ? {
+          providerId,
+          domain,
+          issuer,
+          protocol: "oidc" as const,
+          oidcConfig: {
+            clientId: text("client-id"),
+            clientSecret: text("client-secret"),
+            authorizationEndpoint: text("authorization-endpoint"),
+            tokenEndpoint: text("token-endpoint"),
+            jwksEndpoint: text("jwks-uri"),
+          },
+        }
+      : {
+          providerId,
+          domain,
+          issuer,
+          protocol: "saml" as const,
+          samlConfig: {
+            entryPoint: text("entry-point"),
+            cert: text("cert"),
+            idpMetadata: metadataXml ? { metadata: metadataXml } : undefined,
+          },
+        };
 
   try {
     const sdk = await getSdkClient(instance);
@@ -530,7 +537,12 @@ export async function configureOrgSSO(
 
     say(
       row(0, [badge("memcell"), label("org sso configure"), place(slug)]),
-      row(1, [good("configured provider")], [value(provider.providerId)], [variant(provider.type)]),
+      row(
+        1,
+        [good("configured provider")],
+        [value(provider.providerId)],
+        [variant(provider.protocol)],
+      ),
       provider.domain
         ? row(
             2,

@@ -142,17 +142,22 @@ describe("enterprise SSO & IdP federation commands", () => {
       expect(code).toBe(1);
     });
 
-    it("configures a SAML provider with metadata URL and domain", async () => {
+    it("requires a domain and an issuer", async () => {
+      const code = await configureOrgSSO(instance, "acme", { "provider-id": "okta" });
+
+      expect(code).toBe(1);
+      expect(calls.some((c) => c.method === "POST")).toBe(false);
+    });
+
+    it("sends a SAML provider in the shape the API takes", async () => {
       answer = () => ({
         ok: true,
         provider: {
           id: "prov_1",
           providerId: "okta",
-          type: "saml",
+          protocol: "saml",
           domain: "acme.corp",
           domainVerified: false,
-          hasSamlMetadata: true,
-          hasOidcConfig: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -162,18 +167,52 @@ describe("enterprise SSO & IdP federation commands", () => {
         "provider-id": "okta",
         type: "saml",
         domain: "acme.corp",
-        "metadata-url": "https://okta.acme.com/app/sso/saml/metadata",
+        issuer: "https://acme.okta.com",
+        "entry-point": "https://acme.okta.com/app/sso/saml",
+        cert: "idp-signing-cert",
       });
+
       expect(code).toBe(0);
       const postCall = calls.find(
         (c) => c.url.includes("/api/v1/organizations/acme/sso") && c.method === "POST",
       );
-      expect(postCall).toBeDefined();
       expect(postCall?.body).toMatchObject({
         providerId: "okta",
-        type: "saml",
+        protocol: "saml",
         domain: "acme.corp",
-        metadataUrl: "https://okta.acme.com/app/sso/saml/metadata",
+        issuer: "https://acme.okta.com",
+        samlConfig: {
+          entryPoint: "https://acme.okta.com/app/sso/saml",
+          cert: "idp-signing-cert",
+        },
+      });
+    });
+
+    it("sends an OIDC provider in the shape the API takes", async () => {
+      answer = () => ({
+        ok: true,
+        provider: { providerId: "entra-id", protocol: "oidc", domain: "acme.corp" },
+      });
+
+      const code = await configureOrgSSO(instance, "acme", {
+        "provider-id": "entra-id",
+        type: "oidc",
+        domain: "acme.corp",
+        issuer: "https://login.example.com/v2.0",
+        "client-id": "client",
+        "client-secret": "secret",
+        "jwks-uri": "https://login.example.com/keys",
+      });
+
+      expect(code).toBe(0);
+      const postCall = calls.find((c) => c.method === "POST");
+      expect(postCall?.body).toMatchObject({
+        protocol: "oidc",
+        oidcConfig: {
+          clientId: "client",
+          clientSecret: "secret",
+          jwksEndpoint: "https://login.example.com/keys",
+        },
       });
     });
   });

@@ -22,12 +22,11 @@ class TeamMembersNamespace:
         org_slug: str,
         team_id: str,
         user_id: str,
-        role: str = "member",
     ) -> None:
         self._client._request(
             "POST",
             f"/api/v1/organizations/{org_slug}/teams/{team_id}/members",
-            json={"userId": user_id, "role": role},
+            json={"userId": user_id},
         )
 
     def remove(self, org_slug: str, team_id: str, user_id: str) -> None:
@@ -55,12 +54,11 @@ class AsyncTeamMembersNamespace:
         org_slug: str,
         team_id: str,
         user_id: str,
-        role: str = "member",
     ) -> None:
         await self._client._request(
             "POST",
             f"/api/v1/organizations/{org_slug}/teams/{team_id}/members",
-            json={"userId": user_id, "role": role},
+            json={"userId": user_id},
         )
 
     async def remove(self, org_slug: str, team_id: str, user_id: str) -> None:
@@ -195,8 +193,8 @@ class _ScopedTeamMembersSync:
     def list(self, team_id: str) -> list[TeamMemberItem]:
         return self._members.list(self.org_slug, team_id)
 
-    def add(self, team_id: str, user_id: str, role: str = "member") -> None:
-        self._members.add(self.org_slug, team_id, user_id, role)
+    def add(self, team_id: str, user_id: str) -> None:
+        self._members.add(self.org_slug, team_id, user_id)
 
     def remove(self, team_id: str, user_id: str) -> None:
         self._members.remove(self.org_slug, team_id, user_id)
@@ -210,8 +208,8 @@ class _ScopedTeamMembersAsync:
     async def list(self, team_id: str) -> list[TeamMemberItem]:
         return await self._members.list(self.org_slug, team_id)
 
-    async def add(self, team_id: str, user_id: str, role: str = "member") -> None:
-        await self._members.add(self.org_slug, team_id, user_id, role)
+    async def add(self, team_id: str, user_id: str) -> None:
+        await self._members.add(self.org_slug, team_id, user_id)
 
     async def remove(self, team_id: str, user_id: str) -> None:
         await self._members.remove(self.org_slug, team_id, user_id)
