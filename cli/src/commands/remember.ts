@@ -70,8 +70,6 @@ export async function remember(
       normalizedScope = "user";
     } else if (s === "org") {
       normalizedScope = "organization";
-    } else if (s === "project") {
-      normalizedScope = "workspace";
     } else {
       normalizedScope = s;
     }

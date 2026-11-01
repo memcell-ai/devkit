@@ -242,7 +242,7 @@ export async function recall(
       type: s.type,
       enforce: Boolean(s.enforce),
       confidence: typeof s.confidence === "number" ? s.confidence : 0.5,
-      layer: s.layer || s.scope || "common",
+      layer: s.layer || s.scope || "workspace",
       vouched: Boolean(s.vouched || s.verified || s.status === "active"),
       verified: Boolean(s.verified || s.vouched || s.status === "active"),
       pinned: Boolean(s.pinned || s.isPinned || s.status === "pinned"),

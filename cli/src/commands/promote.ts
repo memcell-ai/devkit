@@ -19,9 +19,7 @@ export async function promote(
   if (!here) return 1;
 
   let normalizedScope = toScope.trim().toLowerCase();
-  if (normalizedScope === "common" || normalizedScope === "proj" || normalizedScope === "project") {
-    normalizedScope = "workspace";
-  } else if (normalizedScope === "org") {
+  if (normalizedScope === "org") {
     normalizedScope = "organization";
   }
 
