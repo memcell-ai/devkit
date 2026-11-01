@@ -9,7 +9,7 @@ ones that come back.
 
 ## What the plugin contains
 
-- **MCP server `memcell`.** Claude Code starts it with `npx -y memcell@2.0.1 mcp`.
+- **MCP server `memcell`.** Claude Code starts it with `npx -y memcell@2.0.2 mcp`.
   The first time it runs, npx downloads that exact version of the
   [`memcell` npm package](https://www.npmjs.com/package/memcell) and its
   dependencies from the npm registry. The server exposes seven tools: `recall`,

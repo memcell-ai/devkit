@@ -7,13 +7,13 @@
     "url": "https://github.com/memcell-ai/devkit",
     "source": "github"
   },
-  "version": "2.0.1",
+  "version": "2.0.2",
   "websiteUrl": "https://memcell.ai",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "memcell",
-      "version": "2.0.1",
+      "version": "2.0.2",
       "transport": {
         "type": "stdio"
       },
