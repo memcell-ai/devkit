@@ -40,6 +40,8 @@ MEMCELL_API_KEY="mc_..." MEMCELL_WORKSPACE="acme/ops" \
 
 ## Reference Results (v1.0.0 — 40 Multi-Session Probes)
 
+These come from the offline reference arms. The MemCell row is a model of MemCell written for this suite, not the running product, so it shows what the design should achieve. Use `--live` to measure a real workspace.
+
 | Architecture                    |           Overall | Grounded Recall | Repeat Avoidance | Poison Shield | Cross-Vendor | Pre-Action Guard |
 | :------------------------------ | ----------------: | --------------: | ---------------: | ------------: | -----------: | ---------------: |
 | **MemCell Governed Memory**     | **95.0%** (38/40) |           87.5% |           100.0% |        100.0% |        87.5% |           100.0% |
