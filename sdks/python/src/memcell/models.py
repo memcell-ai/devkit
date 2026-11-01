@@ -990,7 +990,6 @@ class OrgTeamDetail(CamelModel):
 class TeamMemberItem(CamelModel):
     id: str
     user_id: str
-    role: str = "member"
     name: str | None = None
     email: str | None = None
     handle: str | None = None

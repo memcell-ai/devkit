@@ -87,19 +87,14 @@ export class TeamMembersNamespace {
   }
 
   /**
-   * Adds or updates a user's membership and role in a team.
+   * Adds a user to a team.
    */
-  async add(
-    orgSlug: string,
-    teamId: string,
-    userId: string,
-    role: "manager" | "member" = "member",
-  ): Promise<void> {
+  async add(orgSlug: string, teamId: string, userId: string): Promise<void> {
     await this.client.request<{ ok: boolean }>(
       `/api/v1/organizations/${orgSlug}/teams/${teamId}/members`,
       {
         method: "POST",
-        body: JSON.stringify({ userId, role }),
+        body: JSON.stringify({ userId }),
       },
     );
   }
@@ -159,12 +154,8 @@ export class ScopedTeamMembers {
     return this.members.list(this.orgSlug, teamId);
   }
 
-  async add(
-    teamId: string,
-    userId: string,
-    role: "manager" | "member" = "member",
-  ) {
-    return this.members.add(this.orgSlug, teamId, userId, role);
+  async add(teamId: string, userId: string) {
+    return this.members.add(this.orgSlug, teamId, userId);
   }
 
   async remove(teamId: string, userId: string) {

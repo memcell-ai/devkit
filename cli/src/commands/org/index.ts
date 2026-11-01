@@ -201,14 +201,14 @@ const ssoOrgCmd: CliCommand<{ slug?: string }> = {
             .option("provider", { type: "string" })
             .option("type", { type: "string" })
             .option("domain", { type: "string" })
-            .option("metadata-url", { type: "string" })
+            .option("entry-point", { type: "string" })
+            .option("cert", { type: "string" })
             .option("metadata-xml", { type: "string" })
             .option("client-id", { type: "string" })
             .option("client-secret", { type: "string" })
             .option("issuer", { type: "string" })
             .option("authorization-endpoint", { type: "string" })
             .option("token-endpoint", { type: "string" })
-            .option("user-info-endpoint", { type: "string" })
             .option("jwks-uri", { type: "string" }),
         handler: runCommand<{ slug: string }>(async (argv) =>
           configureOrgSSO(argv._instance!, argv.slug, toFlagsRecord(argv, ["slug"])),

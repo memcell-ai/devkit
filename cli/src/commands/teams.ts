@@ -282,13 +282,9 @@ export async function listTeamMembers(
         [variant(`${members.length} member${members.length === 1 ? "" : "s"}`)],
       ),
       ...members.map((m: any) =>
-        row(
-          1,
-          [good(m.name || m.email || m.userId)],
-          [variant(m.role)],
-          m.email ? [label(m.email)] : null,
-          [idSeg(m.userId)],
-        ),
+        row(1, [good(m.name || m.email || m.userId)], m.email ? [label(m.email)] : null, [
+          idSeg(m.userId),
+        ]),
       ),
     );
     return 0;
@@ -311,15 +307,13 @@ export async function addTeamMember(
   const orgSlug = await resolveOrg(flags);
   if (!orgSlug) return missingOrg(instance);
 
-  const role = flags.role === "manager" ? "manager" : "member";
-
   try {
     const sdk = await getSdkClient(instance);
-    await sdk.forOrg(orgSlug).teams.members.add(teamId, userId, role);
+    await sdk.forOrg(orgSlug).teams.members.add(teamId, userId);
 
     say(
       row(0, [badge("memcell"), label("team member add"), place(orgSlug)]),
-      row(1, [good("added member")], [idSeg(userId)], [variant(role)]),
+      row(1, [good("added member")], [idSeg(userId)]),
     );
     return 0;
   } catch (error) {

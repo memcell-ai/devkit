@@ -1743,7 +1743,6 @@ export interface OrgTeamDetail {
 export interface TeamMemberItem {
   id: string;
   userId: string;
-  role: "manager" | "member";
   name: string | null;
   email: string;
   handle: string | null;
