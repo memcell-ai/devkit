@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/memcell-ai/devkit/compare/python-v2.0.1...python-v2.1.0) (2026-11-04)
+
+
+### Features
+
+* **cli:** invite a teammate and suggest it once ([#50](https://github.com/memcell-ai/devkit/issues/50)) ([5aa4c2d](https://github.com/memcell-ai/devkit/commit/5aa4c2d966b630de531c94118938299080c96d7f))
+
 ## [2.0.1](https://github.com/memcell-ai/devkit/compare/python-v2.0.0...python-v2.0.1) (2026-11-01)
 
 
