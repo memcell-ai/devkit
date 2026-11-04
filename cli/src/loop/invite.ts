@@ -1,7 +1,7 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { projectDir, type ProjectLogScope } from "./session.js";
+import { workspaceDir, type WorkspaceLogScope } from "./session.js";
 
 /** What a teammate gets from joining, in the words the CLI uses everywhere. */
 export const INVITE_GIVES =
@@ -14,17 +14,17 @@ export const inviteNotice = (workspacePath: string): string =>
 const MARKER = "invite-suggested";
 
 /** Whether this machine already suggested inviting someone to this workspace. Once is enough. */
-export async function suggestedInvite(scope: ProjectLogScope | undefined): Promise<boolean> {
+export async function suggestedInvite(scope: WorkspaceLogScope | undefined): Promise<boolean> {
   if (!scope) return true;
-  return access(join(projectDir(scope), MARKER)).then(
+  return access(join(workspaceDir(scope), MARKER)).then(
     () => true,
     () => false,
   );
 }
 
-export async function rememberSuggestedInvite(scope: ProjectLogScope | undefined): Promise<void> {
+export async function rememberSuggestedInvite(scope: WorkspaceLogScope | undefined): Promise<void> {
   if (!scope) return;
-  const dir = projectDir(scope);
+  const dir = workspaceDir(scope);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, MARKER), new Date().toISOString());
 }

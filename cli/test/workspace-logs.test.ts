@@ -9,37 +9,41 @@ vi.mock("node:os", async (original) => ({
   homedir: () => home,
 }));
 
-const { log, projectDir, projectLogFile } = await import("../src/loop/session.js");
+const { log, workspaceDir, workspaceLogFile } = await import("../src/loop/session.js");
 
-describe("project-scoped logging", () => {
-  it("resolves project directories under ~/.memcell/projects", () => {
-    expect(projectDir({ owner: "alice", project: "app" })).toBe(
-      join(home, ".memcell", "projects", "alice", "app"),
+describe("per-workspace logging", () => {
+  it("resolves workspace directories under ~/.memcell/workspaces", () => {
+    expect(workspaceDir({ owner: "alice", workspace: "research" })).toBe(
+      join(home, ".memcell", "workspaces", "alice", "research"),
     );
-    expect(projectDir({ space: "my-space" })).toBe(join(home, ".memcell", "projects", "my-space"));
-    expect(projectDir("bob/backend")).toBe(join(home, ".memcell", "projects", "bob", "backend"));
-    expect(projectDir()).toBe(join(home, ".memcell"));
+    expect(workspaceDir({ workspace: "research" })).toBe(
+      join(home, ".memcell", "workspaces", "research"),
+    );
+    expect(workspaceDir("bob/support")).toBe(
+      join(home, ".memcell", "workspaces", "bob", "support"),
+    );
+    expect(workspaceDir()).toBe(join(home, ".memcell"));
   });
 
-  it("resolves project log files to hook.log inside project directory", () => {
-    expect(projectLogFile({ owner: "alice", project: "app" })).toBe(
-      join(home, ".memcell", "projects", "alice", "app", "hook.log"),
+  it("resolves workspace log files to hook.log inside the workspace directory", () => {
+    expect(workspaceLogFile({ owner: "alice", workspace: "research" })).toBe(
+      join(home, ".memcell", "workspaces", "alice", "research", "hook.log"),
     );
-    expect(projectLogFile()).toBe(join(home, ".memcell", "hook.log"));
+    expect(workspaceLogFile()).toBe(join(home, ".memcell", "hook.log"));
   });
 
-  it("writes logs into isolated project directories", async () => {
-    await log("alice firing 1", { owner: "alice", project: "frontend" });
-    await log("alice firing 2", { owner: "alice", project: "frontend" });
-    await log("bob firing 1", { owner: "bob", project: "backend" });
+  it("writes logs into isolated workspace directories", async () => {
+    await log("alice firing 1", { owner: "alice", workspace: "frontend" });
+    await log("alice firing 2", { owner: "alice", workspace: "frontend" });
+    await log("bob firing 1", { owner: "bob", workspace: "backend" });
     await log("unscoped firing 1");
 
     const aliceLog = readFileSync(
-      join(home, ".memcell", "projects", "alice", "frontend", "hook.log"),
+      join(home, ".memcell", "workspaces", "alice", "frontend", "hook.log"),
       "utf8",
     );
     const bobLog = readFileSync(
-      join(home, ".memcell", "projects", "bob", "backend", "hook.log"),
+      join(home, ".memcell", "workspaces", "bob", "backend", "hook.log"),
       "utf8",
     );
     const globalLog = readFileSync(join(home, ".memcell", "hook.log"), "utf8");
@@ -57,10 +61,10 @@ describe("project-scoped logging", () => {
     expect(globalLog).not.toContain("bob firing");
   });
 
-  it("sanitizes unsafe characters in project and owner names", async () => {
-    await log("safe firing", { owner: "org../unsafe", project: "../../pwn" });
-    const resolved = projectLogFile({ owner: "org../unsafe", project: "../../pwn" });
+  it("sanitizes unsafe characters in workspace and owner names", async () => {
+    await log("safe firing", { owner: "org../unsafe", workspace: "../../pwn" });
+    const resolved = workspaceLogFile({ owner: "org../unsafe", workspace: "../../pwn" });
     expect(resolved).not.toContain("..");
-    expect(resolved.startsWith(join(home, ".memcell", "projects"))).toBe(true);
+    expect(resolved.startsWith(join(home, ".memcell", "workspaces"))).toBe(true);
   });
 });

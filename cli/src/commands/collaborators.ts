@@ -83,7 +83,7 @@ export async function listCollaborators(
             ),
           ]
         : []),
-      row(2, [label("invite one with"), cmd("memcell collaborator invite <email> --role <role>")]),
+      row(2, [label("invite one with"), cmd("memcell invite <email>")]),
     );
     return 0;
   } catch (error) {

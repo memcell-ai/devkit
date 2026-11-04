@@ -1278,6 +1278,7 @@ class _CollaboratorsNamespaceSync:
             collaborators=collabs,
             invitations=invites,
             pagination=pagination,
+            suggest_invite=resp.get("suggestInvite"),
         )
 
     def invite(self, namespace: str, identifier: str, role: str = "read") -> PendingInvitationItem:
@@ -2602,6 +2603,7 @@ class _CollaboratorsNamespaceAsync:
             collaborators=collabs,
             invitations=invites,
             pagination=pagination,
+            suggest_invite=resp.get("suggestInvite"),
         )
 
     async def invite(
@@ -3953,6 +3955,7 @@ class MemCell:
             matched_tags=data.get("matchedTags"),
             guard_mode=data.get("guardMode"),
             profile=data.get("profile"),
+            suggest_invite=data.get("suggestInvite"),
         )
 
     def remember(
@@ -4512,6 +4515,7 @@ class AsyncMemCell:
             matched_tags=data.get("matchedTags"),
             guard_mode=data.get("guardMode"),
             profile=data.get("profile"),
+            suggest_invite=data.get("suggestInvite"),
         )
 
     async def remember(

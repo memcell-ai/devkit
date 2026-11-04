@@ -204,8 +204,12 @@ export const claude: Adapter = {
     const said: string[] = [];
     const touched: string[] = [];
     const actions: ThreadAction[] = [];
+    // Claude Code also writes cost, timing and hook summary lines; only entries carrying a
+    // message are conversation.
+    let conversation = 0;
     const read = await readJsonlSlice(path, from, (raw) => {
       const entry = raw as { type?: string; message?: { role?: string; content?: unknown } };
+      if (entry.message) conversation += 1;
       const content = entry.message?.content;
       const role = entry.message?.role ?? entry.type;
       if (!content || (role !== "user" && role !== "assistant")) return;
@@ -238,7 +242,7 @@ export const claude: Adapter = {
             : "";
       if (text.trim()) said.push(`${role}: ${text.trim()}`);
     });
-    return finalizeSession(said, touched, actions, read);
+    return finalizeSession(said, touched, actions, read, conversation);
   },
 };
 

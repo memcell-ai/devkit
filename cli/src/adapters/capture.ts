@@ -37,6 +37,9 @@ export interface TranscriptDelta {
   touched: string[];
   /** Structured tool, command, and file actions captured in this slice. */
   actions?: ThreadAction[];
+  /** How many entries in this slice carried a message from the person or the agent, for a
+   *  reader that can tell them from the harness's own bookkeeping lines. */
+  conversation?: number;
   /** How far into the record this read reached, so the next turn slices
    *  only what is new. Its meaning is per-adapter (a byte offset, a line
    *  count); it is only ever compared to itself. */
@@ -69,12 +72,14 @@ export function finalizeSession(
   touched: string[],
   actions: ThreadAction[],
   read: number,
+  conversation?: number,
 ): Session {
   return {
     text: said.join("\n\n"),
     touched: touched.slice(0, TOUCHED_CAP),
     ...(actions.length > 0 ? { actions: actions.slice(0, ACTIONS_CAP) } : {}),
     read,
+    ...(conversation === undefined ? {} : { conversation }),
   };
 }
 
@@ -450,10 +455,10 @@ export function stripInjectedMemcellContext(raw: string): string {
     const trimmed = line.trim();
     const { role, body } = stripRolePrefix(trimmed);
     if (
-      body.startsWith("OPERATIONAL GUARDS & INVARIANTS (Enforce strictly") ||
+      body.startsWith("ENFORCED MEMORIES (follow strictly") ||
       body.startsWith("From this workspace's memory (") ||
       body.startsWith("ACTIVE / RESUMED SESSION THREAD (") ||
-      body.startsWith("PARALLEL WORKSPACE THREADS (Ambient Awareness Only") ||
+      body.startsWith("OTHER OPEN THREADS IN THIS WORKSPACE (background only") ||
       body.startsWith("GROUNDED WORKSPACE DOCUMENTS (RAG):") ||
       body.startsWith(
         "You have already gone against these this session — re-read them before continuing:",

@@ -440,7 +440,7 @@ export function asContext(
   if (parallelThreads.length > 0) {
     sections.push(
       [
-        "PARALLEL WORKSPACE THREADS (Ambient Awareness Only — do not mix into current task unless asked):",
+        "OTHER OPEN THREADS IN THIS WORKSPACE (background only — don't mix into the current task unless asked):",
         ...parallelThreads
           .slice(0, 4)
           .map(
@@ -467,7 +467,7 @@ export function asContext(
   if (guards.length > 0) {
     sections.push(
       [
-        "OPERATIONAL GUARDS & INVARIANTS (Enforce strictly — halt or refuse if required triggers/conditions are missing):",
+        "ENFORCED MEMORIES (follow strictly — stop and ask if a required condition is missing):",
         ...guards.map((r) => formatMemoryLine(r, "[GUARD] ")),
         "",
         "Do NOT bypass, rationalize around, or treat these guards as optional.",
@@ -1157,13 +1157,17 @@ export async function runMoment(moment: LifecycleHook, program: string): Promise
       }
     } else if (
       advanced &&
-      transcriptDelta.read - startedAt >= 1024 &&
       proseText.length === 0 &&
       mergedActions.length === 0 &&
-      mergedTouched.length === 0
+      mergedTouched.length === 0 &&
+      (transcriptDelta.conversation === undefined
+        ? transcriptDelta.read - startedAt >= 1024
+        : // A harness writes its own bookkeeping after the last reply, so the read at session
+          // end can hold nothing to learn from. A turn always adds conversation, though.
+          transcriptDelta.conversation > 0 || moment === "turn-end")
     ) {
       await logEvent(
-        `${tag} · remember · ! transcript schema drift suspected: record advanced by ${transcriptDelta.read - startedAt} (${startedAt} -> ${transcriptDelta.read}) but 0 messages or actions were parsed`,
+        `${tag} · remember · ! transcript schema drift suspected: record advanced by ${transcriptDelta.read - startedAt} (${startedAt} -> ${transcriptDelta.read}) but 0 messages or actions were parsed${transcriptDelta.conversation ? ` from ${transcriptDelta.conversation} conversation entries` : ""}`,
       );
     } else {
       await logEvent(`${tag} · remember · nothing new to hand over`);

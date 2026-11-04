@@ -525,6 +525,7 @@ class ListCollaboratorsResponse(BaseModel):
     collaborators: list[CollaboratorItem] = Field(default_factory=list)
     invitations: list[PendingInvitationItem] = Field(default_factory=list)
     pagination: PaginationMetadata
+    suggest_invite: bool | None = None
 
 
 # ─── Organizations Models ───
