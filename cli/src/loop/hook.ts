@@ -22,6 +22,7 @@ import {
   type Note,
 } from "./session.js";
 import { adapterFor } from "../adapters/index.js";
+import { inviteNotice, rememberSuggestedInvite, suggestedInvite } from "./invite.js";
 import {
   ACTIONS_CAP,
   readIntentEnvelope,
@@ -558,6 +559,8 @@ function formatActionsForDistillation(
 
 export interface HookResult {
   context?: string;
+  /** Said to the person, never to the model: only where the harness can keep the two apart. */
+  notice?: string;
   /** An instruction somebody asked to stop this act, in its own words. The command
    *  turns it into whatever refusal this harness understands — the reason is
    *  always the instruction itself, so nobody is stopped without being told why. */
@@ -832,6 +835,7 @@ export async function runMoment(moment: LifecycleHook, program: string): Promise
         guardMode?: "strict" | "advisory";
         profile?: string | null;
         note?: string;
+        suggestInvite?: boolean;
       }>(
         project.instance,
         key,
@@ -990,6 +994,19 @@ export async function runMoment(moment: LifecycleHook, program: string): Promise
         note.injectedThreadIds = [...injectedThreadSet].slice(-50);
       } else if (moment === "session-start" && answer?.note) {
         result.context = answer.note;
+      }
+      if (
+        answer?.suggestInvite &&
+        resultsForContext.length > 0 &&
+        adapterFor(program)?.notices?.includes(moment) &&
+        !(await suggestedInvite(here.project))
+      ) {
+        const workspacePath = project.owner
+          ? `${project.owner}/${project.project || project.space}`
+          : project.project || project.space;
+        result.notice = inviteNotice(workspacePath);
+        await rememberSuggestedInvite(here.project);
+        await logEvent(`${tag} · invite · suggested once for this workspace`);
       }
       if (answer) {
         await logEvent(

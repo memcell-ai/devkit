@@ -115,6 +115,59 @@ const reset = () => {
   answer = () => ({});
 };
 
+describe("suggesting a teammate", () => {
+  const remembered = () => ({
+    momentId: "m-invite",
+    results: [
+      { memoryId: "s1", text: "Refunds need sign-off.", confidence: 0.8, layer: "workspace" },
+    ],
+    suggestInvite: true,
+  });
+
+  it("says nothing on an agent that cannot keep a message from the model", async () => {
+    reset();
+    answer = remembered;
+    fed({ session_id: "inv0", cwd: project, prompt: "how do refunds work?" });
+
+    const out = await runMoment("prompt-submit", "codex");
+
+    expect(out.notice).toBeUndefined();
+  });
+
+  it("says nothing when the instance does not suggest it", async () => {
+    reset();
+    answer = () => ({ ...remembered(), suggestInvite: false });
+    fed({ session_id: "inv1", cwd: project, prompt: "how do refunds work?" });
+
+    expect((await runMoment("prompt-submit", "claude")).notice).toBeUndefined();
+  });
+
+  it("says nothing when the recall brought nothing back", async () => {
+    reset();
+    answer = () => ({ momentId: "m-empty", results: [], suggestInvite: true });
+    fed({ session_id: "inv2", cwd: project, prompt: "anything?" });
+
+    expect((await runMoment("prompt-submit", "claude")).notice).toBeUndefined();
+  });
+
+  it("suggests it once, after a useful recall, and never again for this workspace", async () => {
+    reset();
+    answer = remembered;
+    fed({ session_id: "inv3", cwd: project, prompt: "how do refunds work?" });
+    const first = await runMoment("prompt-submit", "claude");
+
+    reset();
+    answer = remembered;
+    fed({ session_id: "inv4", cwd: project, prompt: "and for enterprise?" });
+    const second = await runMoment("prompt-submit", "claude");
+
+    expect(first.notice).toBe(
+      "memcell: You're the only one in api. Invite a teammate and their agents recall what this workspace shares: memcell invite <email>",
+    );
+    expect(second.notice).toBeUndefined();
+  });
+});
+
 describe("which leg runs when", () => {
   it("recalls before the agent acts, and only then", () => {
     expect(LEGS["session-start"]).toEqual(["recall"]);

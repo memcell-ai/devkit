@@ -12,6 +12,7 @@ import { agentCommand } from "./commands/agent/index.js";
 import { loginCommand, logoutCommand } from "./commands/auth/index.js";
 import { configCommand } from "./commands/config/index.js";
 import { connectCommand, disconnectCommand, statusCommand } from "./commands/connect/index.js";
+import { inviteCommand } from "./commands/invite.js";
 import { documentCommand, topLevelIngestCommand } from "./commands/document/index.js";
 import { hookCommand } from "./commands/hook/index.js";
 import { recallCommand, rememberCommand, reportCommand } from "./commands/loop/index.js";
@@ -42,6 +43,7 @@ export const YARGS_COMMANDS: CliCommand<any>[] = [
   logoutCommand,
   connectCommand,
   disconnectCommand,
+  inviteCommand,
   statusCommand,
 
   // 2. Daily Memory Loop

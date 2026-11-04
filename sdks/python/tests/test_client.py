@@ -582,7 +582,7 @@ def test_collaborators_resource_sync():
                             "inherited": False,
                         }
                     ],
-                    "pendingInvitations": [],
+                    "invitations": [],
                     "pagination": {"page": 1, "perPage": 30, "total": 1, "hasMore": False},
                 },
             )
@@ -873,7 +873,7 @@ def test_scoped_memcell_bound_namespaces():
                 200,
                 json={
                     "collaborators": [],
-                    "pendingInvitations": [],
+                    "invitations": [],
                     "pagination": {"page": 1, "perPage": 30, "total": 0, "hasMore": False},
                 },
             )

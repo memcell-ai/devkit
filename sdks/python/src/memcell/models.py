@@ -368,6 +368,7 @@ class RecallResponse(BaseModel):
     matched_tags: list[str] | None = None
     guard_mode: str | None = None
     profile: str | dict[str, Any] | None = None
+    suggest_invite: bool | None = None
 
 
 class RememberResponse(BaseModel):
@@ -517,11 +518,12 @@ class PendingInvitationItem(BaseModel):
     invited_by: dict[str, Any] | None = None
     expires_at: datetime | None = None
     created_at: datetime | None = None
+    invitation_url: str | None = None
 
 
 class ListCollaboratorsResponse(BaseModel):
     collaborators: list[CollaboratorItem] = Field(default_factory=list)
-    pending_invitations: list[PendingInvitationItem] = Field(default_factory=list)
+    invitations: list[PendingInvitationItem] = Field(default_factory=list)
     pagination: PaginationMetadata
 
 

@@ -722,6 +722,8 @@ export interface RecallResponse {
   matchedTags?: string[];
   guardMode?: "strict" | "advisory";
   profile?: string | null;
+  /** True when you are the only person in this workspace and could invite someone. */
+  suggestInvite?: boolean;
 }
 
 export interface RememberParams {
@@ -1068,6 +1070,8 @@ export interface PendingInvitationItem {
   };
   expiresAt: string | Date;
   createdAt: string | Date;
+  /** The link the invitation email carries, returned when an invitation is created. */
+  invitationUrl?: string;
 }
 
 export interface ListCollaboratorsParams extends PaginationParams {
@@ -1078,7 +1082,7 @@ export interface ListCollaboratorsParams extends PaginationParams {
 
 export interface ListCollaboratorsResponse {
   collaborators: CollaboratorItem[];
-  pendingInvitations: PendingInvitationItem[];
+  invitations: PendingInvitationItem[];
   pagination: PaginationMetadata;
 }
 

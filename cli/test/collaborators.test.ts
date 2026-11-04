@@ -70,7 +70,7 @@ describe("collaborators list", () => {
           role: "admin",
         },
       ],
-      pendingInvitations: [
+      invitations: [
         {
           id: "inv_bob",
           email: "bob@example.com",
@@ -124,6 +124,32 @@ describe("collaborators invite", () => {
     expect(out).toContain("invited");
     expect(out).toContain("carol@example.com");
     expect(out).toContain("write");
+  });
+});
+
+describe("collaborators invite by default", () => {
+  it("invites with write access, says what they get and prints the link", async () => {
+    answer = () => ({
+      invitation: {
+        id: "inv_dana",
+        email: "dana@example.com",
+        role: "write",
+        invitationUrl: "http://memcell.test/invite/workspace/tok",
+      },
+    });
+    const printed: string[] = [];
+    const log = console.log;
+    console.log = (line: string) => printed.push(line);
+    try {
+      expect(await inviteCollaborator(instance, "dana@example.com")).toBe(0);
+    } finally {
+      console.log = log;
+    }
+
+    expect(calls[0]!.body).toEqual({ identifier: "dana@example.com", role: "write" });
+    const out = printed.join("\n");
+    expect(out).toContain("their agents recall what this workspace shares");
+    expect(out).toContain("http://memcell.test/invite/workspace/tok");
   });
 });
 

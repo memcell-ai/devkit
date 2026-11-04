@@ -60,7 +60,19 @@ export interface Adapter {
    * nothing is always safe: a wrong dialect is worse than a dropped
    * injection.
    */
-  speak(moment: LifecycleHook, context: string | null, heard: Heard): string | null;
+  speak(
+    moment: LifecycleHook,
+    context: string | null,
+    heard: Heard,
+    notice?: string | null,
+  ): string | null;
+
+  /**
+   * The moments where this harness shows a hook's message to the person and keeps it out
+   * of the model's context. A notice is only ever said here: put into the agent's context
+   * it would be the agent passing on our message, which is not what a person signed up for.
+   */
+  notices?: LifecycleHook[];
 
   /**
    * Stop the act about to happen, in this harness's own refusal, with the

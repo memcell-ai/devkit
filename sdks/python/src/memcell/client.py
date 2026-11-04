@@ -309,6 +309,7 @@ def _parse_pending_invitation(data: dict[str, Any]) -> PendingInvitationItem:
         invited_by=data.get("invitedBy") or data.get("invited_by"),
         expires_at=data.get("expiresAt") or data.get("expires_at"),
         created_at=data.get("createdAt") or data.get("created_at"),
+        invitation_url=data.get("invitationUrl"),
     )
 
 
@@ -1271,11 +1272,11 @@ class _CollaboratorsNamespaceSync:
             "GET", f"/api/v1/{owner}/{workspace}/collaborators", params=params
         )
         collabs = [_parse_collaborator_item(c) for c in resp.get("collaborators", [])]
-        invites = [_parse_pending_invitation(i) for i in resp.get("pendingInvitations", [])]
+        invites = [_parse_pending_invitation(i) for i in resp.get("invitations", [])]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return ListCollaboratorsResponse(
             collaborators=collabs,
-            pending_invitations=invites,
+            invitations=invites,
             pagination=pagination,
         )
 
@@ -2595,11 +2596,11 @@ class _CollaboratorsNamespaceAsync:
             "GET", f"/api/v1/{owner}/{workspace}/collaborators", params=params
         )
         collabs = [_parse_collaborator_item(c) for c in resp.get("collaborators", [])]
-        invites = [_parse_pending_invitation(i) for i in resp.get("pendingInvitations", [])]
+        invites = [_parse_pending_invitation(i) for i in resp.get("invitations", [])]
         pagination = _parse_pagination(resp.get("pagination", {}))
         return ListCollaboratorsResponse(
             collaborators=collabs,
-            pending_invitations=invites,
+            invitations=invites,
             pagination=pagination,
         )
 
