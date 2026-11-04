@@ -49,7 +49,7 @@ export const MACHINE_STATE: readonly { path: string; what: string; then?: string
     then: "set them again with memcell config set --global",
   },
   { path: "sessions", what: "what the hooks have seen this session" },
-  { path: "projects", what: "project-scoped logs and caches" },
+  { path: "workspaces", what: "each workspace's hook log and the notices already shown" },
   { path: "hook.log", what: "the log of every hook firing" },
   { path: "update.json", what: "cached update notification state" },
   { path: "daemon.json", what: "background local server daemon process state" },

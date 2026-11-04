@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Session } from "../src/adapters/capture.js";
 const { adapterFor } = await import("../src/adapters/index.js");
-const { cleanUserPrompt, readIntentEnvelope } = await import("../src/adapters/capture.js");
+const { cleanUserPrompt, readIntentEnvelope, stripInjectedMemcellContext } =
+  await import("../src/adapters/capture.js");
 const { isGuard, asContext } = await import("../src/loop/hook.js");
 
 const parts = process.versions.node.split(".");
@@ -1029,7 +1030,7 @@ describe("intent envelope rollup & prompt cleaning", () => {
     ).toBe(false);
   });
 
-  it("asContext places standing invariants in operational guards section ahead of soft conventions", () => {
+  it("asContext places enforced memories ahead of what the workspace already learned", () => {
     const results = [
       {
         memoryId: "s-guard-1",
@@ -1048,14 +1049,60 @@ describe("intent envelope rollup & prompt cleaning", () => {
     ];
 
     const ctx = asContext(results, "test-space", "deploy release");
-    expect(ctx).toContain("OPERATIONAL GUARDS & INVARIANTS");
+    expect(ctx).toContain("ENFORCED MEMORIES");
     expect(ctx).toContain("Releases must go through release-please.");
     expect(ctx).toContain("From this workspace's memory (test-space) — already learned here:");
     expect(ctx).toContain("Buttons use the centralized Button component.");
     // Guard must appear before soft conventions in context string
-    expect(ctx.indexOf("OPERATIONAL GUARDS & INVARIANTS")).toBeLessThan(
+    expect(ctx.indexOf("ENFORCED MEMORIES")).toBeLessThan(
       ctx.indexOf("From this workspace's memory"),
     );
+  });
+
+  it("drops the context it wrote itself when the transcript comes back, so it is never learned twice", () => {
+    const ctx = asContext(
+      [
+        {
+          memoryId: "m-enforced",
+          text: "Vendor payments over $10k need a second approver.",
+          confidence: 0.9,
+          layer: "workspace",
+          enforce: true,
+        },
+        {
+          memoryId: "m-learned",
+          text: "Invoices are due within 30 days.",
+          confidence: 0.7,
+          layer: "workspace",
+        },
+      ],
+      "acme/finance",
+      "pay the vendor",
+      {
+        activeThreads: [
+          {
+            id: "th-other",
+            title: "Quarter close",
+            status: "active",
+            summary: "Reconciling the quarter.",
+            currentObjective: "Match card spend to receipts",
+          },
+        ],
+      },
+    );
+    expect(ctx).toContain("ENFORCED MEMORIES");
+    expect(ctx).toContain("OTHER OPEN THREADS IN THIS WORKSPACE");
+
+    const stripped = stripInjectedMemcellContext(
+      `user: ${ctx}\n\nuser: Pay the Northwind invoice today.\nassistant: Paid it and filed the receipt.`,
+    );
+
+    expect(stripped).not.toContain("ENFORCED MEMORIES");
+    expect(stripped).not.toContain("second approver");
+    expect(stripped).not.toContain("OTHER OPEN THREADS");
+    expect(stripped).not.toContain("Match card spend to receipts");
+    expect(stripped).toContain("Pay the Northwind invoice today.");
+    expect(stripped).toContain("Paid it and filed the receipt.");
   });
 
   it("asContext renders multi-line Operational Specification, Applies to resources, and Thread milestones", () => {

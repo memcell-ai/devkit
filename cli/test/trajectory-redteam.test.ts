@@ -9,7 +9,7 @@ import { can, type Guard } from "../src/adapters/surface.js";
 import { saveAgentKey } from "../src/keyring.js";
 import { runMoment } from "../src/loop/hook.js";
 import { evaluatePreAct, stageMemoriesFromRecall } from "../src/loop/pre-act.js";
-import { projectLogFile, sessionCacheFor } from "../src/loop/session.js";
+import { sessionCacheFor, workspaceLogFile } from "../src/loop/session.js";
 import { saveWorkspace } from "../src/workspace.js";
 
 function mockStdin(payload: Record<string, unknown>): void {
@@ -19,7 +19,7 @@ function mockStdin(payload: Record<string, unknown>): void {
   vi.spyOn(process, "stdin", "get").mockReturnValue(stream as any);
 }
 
-describe("Practical Trajectory Replay, Behavioral Invariants & Red-Team Chaos Suite", () => {
+describe("Practical Trajectory Replay, Behavioral Guarantees & Red-Team Chaos Suite", () => {
   let tmpRoot: string;
   let homeDir: string;
   let workspaceDir: string;
@@ -66,7 +66,7 @@ describe("Practical Trajectory Replay, Behavioral Invariants & Red-Team Chaos Su
     await rm(tmpRoot, { recursive: true, force: true });
   });
 
-  describe("1. Multi-Turn Trajectory Replay & Behavioral Invariants", () => {
+  describe("1. Multi-Turn Trajectory Replay & Behavioral Guarantees", () => {
     it("replays a full 2-turn Antigravity trajectory enforcing single-recall per turn, read-only silence, zero context echo, and continuation rollup", async () => {
       const transcriptPath = join(tmpRoot, "agy-transcript.jsonl");
       const sessionId = "agy-session-101";
@@ -127,7 +127,7 @@ describe("Practical Trajectory Replay, Behavioral Invariants & Red-Team Chaos Su
         transcript_path: transcriptPath,
       });
       const startRes = await runMoment("session-start", "antigravity");
-      expect(startRes.context).toContain("OPERATIONAL GUARDS & INVARIANTS");
+      expect(startRes.context).toContain("ENFORCED MEMORIES");
       expect(startRes.context).toContain("Never modify production billing config directly");
       expect(apiCalls.filter((c) => c.url.endsWith("/api/v1/recall"))).toHaveLength(1);
 
@@ -515,7 +515,7 @@ describe("Practical Trajectory Replay, Behavioral Invariants & Red-Team Chaos Su
       });
       await runMoment("turn-end", "claude");
 
-      const logPath = projectLogFile({
+      const logPath = workspaceLogFile({
         owner: "acme",
         project: "ops-engine",
         space: "ops-engine",
@@ -523,6 +523,48 @@ describe("Practical Trajectory Replay, Behavioral Invariants & Red-Team Chaos Su
       const logContent = await readFile(logPath, "utf8");
       expect(logContent).toContain("transcript schema drift suspected: record advanced by");
       expect(logContent).toContain("but 0 messages or actions were parsed");
+    });
+
+    // Claude Code writes these after the Stop hook has already handed the turn over.
+    const bookkeeping = [
+      { type: "system", subtype: "stop_hook_summary", hookCount: 3, detail: "x".repeat(400) },
+      { type: "system", subtype: "turn_duration", durationMs: 5800, detail: "x".repeat(300) },
+      { type: "cost-state", totalCostUsd: 0.12, detail: "x".repeat(500) },
+      { type: "last-prompt", lastPrompt: "what do we tell vendors about late invoices?" },
+      { type: "cost-state", totalCostUsd: 0.12, detail: "x".repeat(500) },
+    ];
+
+    async function sessionEndOver(lines: unknown[], sessionId: string): Promise<string> {
+      const transcriptPath = join(tmpRoot, `${sessionId}.jsonl`);
+      await writeFile(transcriptPath, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+      globalThis.fetch = vi.fn(
+        async () => new Response("{}", { status: 200 }),
+      ) as unknown as typeof fetch;
+      mockStdin({ session_id: sessionId, cwd: workspaceDir, transcript_path: transcriptPath });
+      await runMoment("session-end", "claude");
+      return readFile(workspaceLogFile({ owner: "acme", workspace: "ops-engine" }), "utf8");
+    }
+
+    it("does not suspect drift when session end reads only Claude Code bookkeeping", async () => {
+      const logContent = await sessionEndOver(bookkeeping, "bookkeeping-session-404");
+
+      expect(logContent).not.toContain("schema drift");
+      expect(logContent).toContain("remember · nothing new to hand over");
+    });
+
+    it("suspects drift when session end finds messages it cannot read", async () => {
+      const unreadable = Array.from({ length: 4 }, (_, idx) => ({
+        type: "assistant",
+        message: { role: "assistant", content: { futureShape: "y".repeat(300), seq: idx } },
+      }));
+
+      const logContent = await sessionEndOver(
+        [...unreadable, ...bookkeeping],
+        "unreadable-session-505",
+      );
+
+      expect(logContent).toContain("transcript schema drift suspected");
+      expect(logContent).toContain("from 4 conversation entries");
     });
   });
 

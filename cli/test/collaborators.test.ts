@@ -94,6 +94,7 @@ describe("collaborators list", () => {
     expect(out).toContain("Alice Engineer");
     expect(out).toContain("admin");
     expect(out).toContain("bob@example.com");
+    expect(out).toContain("memcell invite <email>");
   });
 });
 

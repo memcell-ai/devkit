@@ -151,8 +151,9 @@ export async function dropSessionCache(id: string): Promise<void> {
 }
 export const dropNote = dropSessionCache;
 
-export interface ProjectLogScope {
+export interface WorkspaceLogScope {
   owner?: string;
+  workspace?: string;
   project?: string;
   space?: string;
 }
@@ -171,31 +172,31 @@ function sanitizeSegment(segment: string): string {
 }
 
 /**
- * The directory on this machine holding project-scoped files (logs, state).
+ * The directory on this machine holding one workspace's files (its hook log, notices shown).
  *
  * Examples:
- *   - scope with owner "alice", project "my-app" -> ~/.memcell/projects/alice/my-app
- *   - scope without owner, project "my-app" -> ~/.memcell/projects/my-app
- *   - undefined scope -> ~/.memcell
+ *   - owner "alice", workspace "research" -> ~/.memcell/workspaces/alice/research
+ *   - no owner, workspace "research" -> ~/.memcell/workspaces/research
+ *   - no scope -> ~/.memcell
  */
-export function projectDir(scope?: ProjectLogScope | string): string {
+export function workspaceDir(scope?: WorkspaceLogScope | string): string {
   if (!scope) return machineDir();
   if (typeof scope === "string") {
     const parts = scope.split("/").filter(Boolean).map(sanitizeSegment);
-    return parts.length > 0 ? machineFile("projects", ...parts) : machineDir();
+    return parts.length > 0 ? machineFile("workspaces", ...parts) : machineDir();
   }
   const owner = scope.owner ? sanitizeSegment(scope.owner) : undefined;
-  const name = sanitizeSegment(scope.project ?? scope.space ?? "");
+  const name = sanitizeSegment(scope.workspace ?? scope.project ?? scope.space ?? "");
   if (!name) return machineDir();
-  return owner ? machineFile("projects", owner, name) : machineFile("projects", name);
+  return owner ? machineFile("workspaces", owner, name) : machineFile("workspaces", name);
 }
 
 /**
- * The log file path for a project, or ~/.memcell/hook.log if unscoped.
+ * The log file for a workspace, or ~/.memcell/hook.log outside any workspace.
  */
-export function projectLogFile(scope?: ProjectLogScope | string): string {
+export function workspaceLogFile(scope?: WorkspaceLogScope | string): string {
   if (!scope) return machineFile("hook.log");
-  const dir = projectDir(scope);
+  const dir = workspaceDir(scope);
   return dir === machineDir() ? machineFile("hook.log") : join(dir, "hook.log");
 }
 
@@ -208,13 +209,12 @@ export function projectLogFile(scope?: ProjectLogScope | string): string {
  * "fired and found nothing" and "never fired" are the two answers a person
  * is trying to tell apart.
  *
- * When a project context is present, writes to ~/.memcell/projects/<owner>/<project>/hook.log
- * instead of dumping into a single machine-wide god file. If unwired or outside any project,
- * falls back cleanly to ~/.memcell/hook.log.
+ * Inside a workspace it writes to ~/.memcell/workspaces/<owner>/<workspace>/hook.log;
+ * outside any workspace, to ~/.memcell/hook.log.
  */
-export async function log(line: string, scope?: ProjectLogScope | string): Promise<void> {
+export async function log(line: string, scope?: WorkspaceLogScope | string): Promise<void> {
   try {
-    const file = projectLogFile(scope);
+    const file = workspaceLogFile(scope);
     await mkdir(dirname(file), { recursive: true });
     await appendFile(file, `${new Date().toISOString()}  ${line}\n`);
   } catch {

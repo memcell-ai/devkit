@@ -28,6 +28,7 @@ def test_sync_client_recall_and_remember():
                             "confidence": 0.95,
                         }
                     ],
+                    "suggestInvite": True,
                 },
             )
         if request.url.path == "/api/v1/acme/backend/remember":
@@ -58,6 +59,7 @@ def test_sync_client_recall_and_remember():
     )
     assert recall.recall_id == "rec_sync_1"
     assert recall.prompt_context == "<memcell>Context</memcell>"
+    assert recall.suggest_invite is True
     assert len(recall.memories) == 1
     assert recall.memories[0].title == "Never skip verification"
     assert recall.memories[0].type == "instruction"
@@ -584,6 +586,7 @@ def test_collaborators_resource_sync():
                     ],
                     "invitations": [],
                     "pagination": {"page": 1, "perPage": 30, "total": 1, "hasMore": False},
+                    "suggestInvite": True,
                 },
             )
         if u.endswith("/api/v1/acme/backend/collaborators") and method == "POST":
@@ -606,6 +609,7 @@ def test_collaborators_resource_sync():
     collabs = memcell.collaborators.list("acme/backend")
     assert len(collabs.collaborators) == 1
     assert collabs.collaborators[0].name == "Alice"
+    assert collabs.suggest_invite is True
 
     inv = memcell.collaborators.invite("acme/backend", identifier="bob@acme.com", role="read")
     assert inv.id == "inv_1"

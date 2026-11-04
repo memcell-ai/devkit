@@ -11,13 +11,16 @@ vi.mock("node:os", async (original) => ({
   homedir: () => home,
 }));
 
-let answer: () => unknown = () => ({});
+let answer: (url: string) => unknown = () => ({});
 
-vi.stubGlobal("fetch", async () => ({
-  ok: true,
-  status: 200,
-  text: async () => JSON.stringify(answer()),
-}));
+vi.stubGlobal(
+  "fetch",
+  async (url: string | URL) =>
+    new Response(JSON.stringify(answer(String(url))), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+);
 
 const { status } = await import("../src/commands/status.js");
 const { saveCredential } = await import("../src/instance.js");
@@ -75,6 +78,33 @@ describe("status command", () => {
     });
     const code = await status(instance, "global");
     expect(code).toBe(0);
+  });
+
+  it("suggests inviting a teammate only when the server says nobody else is here", async () => {
+    const said: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      said.push(String(line));
+    });
+    try {
+      // An organization member who is not an admin never appears in the list, so the
+      // list alone looks the same whether or not someone else is here.
+      for (const suggestInvite of [true, false]) {
+        said.length = 0;
+        answer = (url) =>
+          url.includes("/collaborators")
+            ? {
+                collaborators: [{ id: "owner-u1", userId: "u1", role: "admin" }],
+                invitations: [],
+                pagination: { page: 1, perPage: 30, total: 1, hasMore: false },
+                suggestInvite,
+              }
+            : { user: { id: "u1", name: "Alice", isAnonymous: false } };
+        expect(await status(instance, "project")).toBe(0);
+        expect(said.join("\n").includes("memcell invite <email>")).toBe(suggestInvite);
+      }
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("reports 1 when not signed in", async () => {

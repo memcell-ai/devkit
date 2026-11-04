@@ -1084,6 +1084,8 @@ export interface ListCollaboratorsResponse {
   collaborators: CollaboratorItem[];
   invitations: PendingInvitationItem[];
   pagination: PaginationMetadata;
+  /** True when you are the only person in this workspace and could invite someone. */
+  suggestInvite?: boolean;
 }
 
 export interface InviteCollaboratorParams {

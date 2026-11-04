@@ -21,15 +21,13 @@ import { getRunningServer } from "./server.js";
  * A nudge while nobody else is in this workspace and you could invite someone. It is only a
  * nudge, so when the list cannot be read status says nothing about teammates.
  */
-async function teammatesRow(instance: string, me: string, namespace: string) {
+// The server decides, with the same check behind the hint on recall: the list alone misses
+// organization members who are not admins.
+async function teammatesRow(instance: string, namespace: string) {
   try {
     const sdk = await getSdkClient(instance);
-    const { collaborators, invitations } = await sdk.collaborators.list(namespace);
-    const mine = collaborators.find((c) => c.userId === me);
-    const others = collaborators.filter((c) => c.userId !== me);
-    if (mine?.role !== "admin" || others.length > 0 || (invitations ?? []).length > 0) {
-      return null;
-    }
+    const { suggestInvite } = await sdk.collaborators.list(namespace);
+    if (!suggestInvite) return null;
     return row(
       1,
       [label("Teammates".padEnd(11, " ")), label("none yet")],
@@ -138,7 +136,7 @@ export async function status(instance: string, _from: string): Promise<number> {
           : null,
         row(1, [label("Directory".padEnd(11, " ")), place(found.root)]),
         keyRow,
-        await teammatesRow(instance, session.user.id, projectDisplay!),
+        await teammatesRow(instance, projectDisplay!),
       );
       return 0;
     }
