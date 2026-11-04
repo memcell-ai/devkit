@@ -8,6 +8,7 @@ import {
   folderAccount,
   knownInstances,
 } from "../instance.js";
+import { getSdkClient } from "../sdk-client.js";
 import { findWorkspace } from "../workspace.js";
 import { badge, blank, cmd, good, label, place, row, say, value, warn } from "../ui.js";
 import { getRunningServer } from "./server.js";
@@ -15,6 +16,29 @@ import { getRunningServer } from "./server.js";
 // What this machine knows, checked rather than recited: the stored session
 // is presented to the instance, and what comes back is what gets printed in
 // a clean, aligned, scannable format.
+
+/**
+ * A nudge while nobody else is in this workspace and you could invite someone. It is only a
+ * nudge, so when the list cannot be read status says nothing about teammates.
+ */
+async function teammatesRow(instance: string, me: string, namespace: string) {
+  try {
+    const sdk = await getSdkClient(instance);
+    const { collaborators, invitations } = await sdk.collaborators.list(namespace);
+    const mine = collaborators.find((c) => c.userId === me);
+    const others = collaborators.filter((c) => c.userId !== me);
+    if (mine?.role !== "admin" || others.length > 0 || (invitations ?? []).length > 0) {
+      return null;
+    }
+    return row(
+      1,
+      [label("Teammates".padEnd(11, " ")), label("none yet")],
+      [cmd("memcell invite <email>")],
+    );
+  } catch {
+    return null;
+  }
+}
 
 export async function status(instance: string, _from: string): Promise<number> {
   const credential = await credentialFor(instance);
@@ -114,6 +138,7 @@ export async function status(instance: string, _from: string): Promise<number> {
           : null,
         row(1, [label("Directory".padEnd(11, " ")), place(found.root)]),
         keyRow,
+        await teammatesRow(instance, session.user.id, projectDisplay!),
       );
       return 0;
     }

@@ -141,10 +141,23 @@ export const gemini: Adapter = {
   },
 
   // ── speak — additionalContext, no event name required ────────────────────
-  speak(moment: Moment, context: string | null): string | null {
-    if (!context || moment === "session-end") return null;
-    return JSON.stringify({ hookSpecificOutput: { additionalContext: context } });
+  speak(
+    moment: Moment,
+    context: string | null,
+    _heard?: unknown,
+    notice?: string | null,
+  ): string | null {
+    if (moment === "session-end") return null;
+    const told = notice && gemini.notices?.includes(moment) ? notice : null;
+    if (!context && !told) return null;
+    return JSON.stringify({
+      ...(told ? { systemMessage: told } : {}),
+      ...(context ? { hookSpecificOutput: { additionalContext: context } } : {}),
+    });
   },
+
+  // Documented as shown at the start of the session; other events do not list it.
+  notices: ["session-start"],
 
   // ── read — the JSONL transcript the hook payload names ───────────────────
   // Line 1 is session metadata; later lines are MessageRecords. Text lives

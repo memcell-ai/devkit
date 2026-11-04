@@ -1,3 +1,4 @@
+import { INVITE_GIVES } from "../loop/invite.js";
 import { MemCellError } from "@memcell/sdk";
 import { credentialFor } from "../instance.js";
 import { resolveNamespace } from "../namespace.js";
@@ -50,7 +51,7 @@ export async function listCollaborators(
     const res = await sdk.collaborators.list(namespace, { role });
 
     const members = res.collaborators || [];
-    const pending = res.pendingInvitations || [];
+    const pending = res.invitations || [];
 
     say(
       row(
@@ -100,7 +101,7 @@ export async function inviteCollaborator(
     return 1;
   }
 
-  const role = typeof flags.role === "string" ? (flags.role as any) : "read";
+  const role = typeof flags.role === "string" ? (flags.role as any) : "write";
 
   try {
     const sdk = await getSdkClient(instance);
@@ -109,8 +110,10 @@ export async function inviteCollaborator(
     const inv = await sdk.collaborators.invite(namespace, { identifier: email, role });
 
     say(
-      row(0, [badge("memcell"), label("collaborator invite"), place(namespace)]),
+      row(0, [badge("memcell"), label("invite"), place(namespace)]),
       row(1, [good("invited")], [value(email)], [label("as"), variant(role)]),
+      row(1, [label(INVITE_GIVES)]),
+      inv.invitationUrl ? row(1, [label("link".padEnd(6, " ")), place(inv.invitationUrl)]) : null,
       row(2, [idSeg(inv.id)]),
     );
     return 0;

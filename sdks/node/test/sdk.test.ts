@@ -1364,7 +1364,7 @@ describe("MemCell SDK (cli package export)", () => {
                       inherited: false,
                     },
                   ],
-                  pendingInvitations: [],
+                  invitations: [],
                   pagination: {
                     page: 1,
                     perPage: 30,
@@ -1762,7 +1762,7 @@ describe("MemCell SDK (cli package export)", () => {
             return new Response(
               JSON.stringify({
                 collaborators: [],
-                pendingInvitations: [],
+                invitations: [],
                 pagination: { page: 1, perPage: 30, total: 0, hasMore: false },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },

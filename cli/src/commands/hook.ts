@@ -79,7 +79,8 @@ export async function hook(moment: string, program: string): Promise<number> {
   // The adapter owns the dialect. An agent this build does not know gets
   // silence, never a guess — a wrong dialect is worse than a dropped
   // injection.
-  const spoken = adapter?.speak(moment, result.context ?? null, result.heard) ?? null;
+  const spoken =
+    adapter?.speak(moment, result.context ?? null, result.heard, result.notice ?? null) ?? null;
   if (spoken) process.stdout.write(spoken);
   return 0;
 }

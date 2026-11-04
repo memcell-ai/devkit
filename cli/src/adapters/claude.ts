@@ -161,15 +161,26 @@ export const claude: Adapter = {
     moment: LifecycleHook,
     context: string | null,
     heard?: { prompt?: string; transformedPrompt?: string; hookEventName?: string },
+    notice?: string | null,
   ): string | null {
-    if (!context || moment === "session-end") return null;
+    if (moment === "session-end") return null;
+    const told = notice && claude.notices?.includes(moment) ? notice : null;
+    if (!context && !told) return null;
     return JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: heard?.hookEventName ?? EVENT[moment] ?? "PreToolUse",
-        additionalContext: context,
-      },
+      ...(told ? { systemMessage: told } : {}),
+      ...(context
+        ? {
+            hookSpecificOutput: {
+              hookEventName: heard?.hookEventName ?? EVENT[moment] ?? "PreToolUse",
+              additionalContext: context,
+            },
+          }
+        : {}),
     });
   },
+
+  // A synchronous hook's top-level systemMessage is shown to the person, not the model.
+  notices: ["session-start", "prompt-submit"],
 
   // Claude Code has a richer refusal than an exit code: a permission
   // decision, with the reason shown to the model rather than to a log.
