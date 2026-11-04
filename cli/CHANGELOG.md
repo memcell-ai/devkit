@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/memcell-ai/devkit/compare/cli-v2.2.0...cli-v2.2.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **cli:** status asks the server, no false drift at session end, plain headers ([#53](https://github.com/memcell-ai/devkit/issues/53)) ([de5bcc7](https://github.com/memcell-ai/devkit/commit/de5bcc7305feeb62443e230bf0a02b21b4a7681d))
+
 ## [2.2.0](https://github.com/memcell-ai/devkit/compare/cli-v2.1.1...cli-v2.2.0) (2026-11-04)
 
 
