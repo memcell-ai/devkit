@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 from memcell import MemCell
 from memcell.integrations import create_langchain_tools, create_langgraph_nodes
@@ -37,7 +38,9 @@ def main() -> None:
     nodes = create_langgraph_nodes(ops, action="prepare_tokyo_shipment")
 
     # Step A: Pre-flight recall node populates `memory_context`, `recall_id`, `recalled_memories`
-    state = {"messages": [{"role": "user", "content": "Prepare customs paperwork for outbound shipment to Tokyo"}]}
+    state: dict[str, Any] = {
+        "messages": [{"role": "user", "content": "Prepare customs paperwork for outbound shipment to Tokyo"}]
+    }
     state.update(nodes["recall_node"](state))
     print(f"   [recall_node] Recalled {len(state['recalled_memories'])} memory(s) (recall_id={state['recall_id']})")
 
