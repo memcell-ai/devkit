@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/memcell-ai/devkit/compare/python-v2.1.1...python-v2.2.0) (2026-11-15)
+
+
+### Features
+
+* **sdk:** align v2.1 integrations, multi-agent sync, and flagship examples ([#56](https://github.com/memcell-ai/devkit/issues/56)) ([c5179d4](https://github.com/memcell-ai/devkit/commit/c5179d4cffcdfc85dfb8c01f53c29bb85ff2e191))
+
 ## [2.1.1](https://github.com/memcell-ai/devkit/compare/python-v2.1.0...python-v2.1.1) (2026-11-04)
 
 
