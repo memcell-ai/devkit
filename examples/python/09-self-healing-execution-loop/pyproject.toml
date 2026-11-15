@@ -1,0 +1,10 @@
+[project]
+name = "memcell-example-python-self-healing"
+version = "0.1.0"
+description = "Self-healing execution loop with AsyncMemCell, OpenAI Agents, and PydanticAI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "memcell",
+]
+

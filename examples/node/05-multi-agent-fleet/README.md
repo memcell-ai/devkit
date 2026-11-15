@@ -1,12 +1,21 @@
-# Multi-Agent Fleet Provisioning & Coordination (Node.js)
+# 05 — Multi-Agent Fleet: Orchestrator ↔ Subagent Memory Sync
 
-Demonstrates how to run multiple specialized autonomous agents under dedicated identities:
+## The Story
 
-1. Provisions `Market Researcher` and `Compliance Auditor` agents with `client.agents.create()`.
-2. Mints scoped agent API keys (`mc_ag_...`) with `client.agents.createKey()`.
-3. Coordinates memory creation (`status: "provisional"`) and verification (`report()`) across agents.
+In a multi-agent system, an **Orchestrator** delegates market research to a **Researcher Subagent** and verification to a **Compliance Verifier Subagent**. Passing raw 50-page transcripts between agents wastes tokens, while letting unverified subagent outputs write directly into shared memory risks poisoning the entire fleet with hallucinations.
 
----
+With MemCell:
+
+1. The **Orchestrator** provisions dedicated Agent Keys (`mc_ag_...`) and opens a shared `sessionId` and `subject`.
+2. The **Researcher Subagent** records raw findings with `status: "provisional"` alongside `touched` resources and `actions` on the shared `sessionId`. Standard fleet recalls (`allowProvisional: false`) stay protected from unverified claims.
+3. The **Verifier Subagent** recalls with `allowProvisional: true` on the same `sessionId`, inspects the synthesized `matchedThread` (touched files and milestones), links the finding with a `justifies` relation, and promotes it (`memories.promote` → `promotions.approve`) so the **Orchestrator** immediately recalls the verified fact.
+
+## SDK Capabilities Demonstrated
+
+- **Agent Identities & Scoped Keys (`client.agents.create`, `createKey`)**
+- **Provisional Quarantine (`status: "provisional"` vs `allowProvisional: true`)**
+- **Session Thread Continuity (`sessionId`, `touched`, `actions`, `matchedThread`)**
+- **Epistemic Promotion (`scoped.memories.promote` & `scoped.promotions.approve`)**
 
 ## Running this Example
 

@@ -115,17 +115,13 @@ async def adispatch_openai_tool_call(
     }
 
 
-def create_openai_agent_tools(
+def _build_plain_tool_functions(
     scoped: Any,
     *,
     default_scope: str | None = None,
     default_subject: str | None = None,
-) -> list[Any]:
-    """Create ready-to-use tools for the OpenAI Agents SDK (`agents.Agent(tools=...)`).
-
-    Automatically wraps functions with `@agents.function_tool` when `openai-agents` is installed,
-    and falls back cleanly to typed async/sync Python callables with zero extra dependencies.
-    """
+) -> list[Callable[..., Any]]:
+    """Build plain typed async/sync Python tool callables backed by MemCell."""
     use_async = is_async_scoped(scoped)
 
     if use_async:
@@ -191,89 +187,106 @@ def create_openai_agent_tools(
             )
             return json.dumps(res)
 
-        funcs: list[Callable[..., Any]] = [
+        return [
             recall_memory,
             remember_memory,
             report_outcome,
             search_documents,
         ]
-    else:
 
-        def recall_memory_sync(query: str, type: str | None = None, limit: int = 5) -> str:
-            """Recall verified workspace memories, instructions, and grounded document chunks."""
-            res = execute_tool_sync(
-                scoped,
-                "recall_memory",
-                {"query": query, "type": type, "limit": limit},
-                default_scope=default_scope,
-                default_subject=default_subject,
-            )
-            return json.dumps(res)
+    def recall_memory_sync(query: str, type: str | None = None, limit: int = 5) -> str:
+        """Recall verified workspace memories, instructions, and grounded document chunks."""
+        res = execute_tool_sync(
+            scoped,
+            "recall_memory",
+            {"query": query, "type": type, "limit": limit},
+            default_scope=default_scope,
+            default_subject=default_subject,
+        )
+        return json.dumps(res)
 
-        recall_memory_sync.__name__ = "recall_memory"
+    recall_memory_sync.__name__ = "recall_memory"
 
-        def remember_memory_sync(
-            title: str,
-            content: str | None = None,
-            type: str = "fact",
-            enforce: bool = False,
-        ) -> str:
-            """Save a verified instruction, decision, fact, or preference to workspace memory."""
-            res = execute_tool_sync(
-                scoped,
-                "remember_memory",
-                {"title": title, "content": content, "type": type, "enforce": enforce},
-                default_scope=default_scope,
-                default_subject=default_subject,
-            )
-            return json.dumps(res)
+    def remember_memory_sync(
+        title: str,
+        content: str | None = None,
+        type: str = "fact",
+        enforce: bool = False,
+    ) -> str:
+        """Save a verified instruction, decision, fact, or preference to workspace memory."""
+        res = execute_tool_sync(
+            scoped,
+            "remember_memory",
+            {"title": title, "content": content, "type": type, "enforce": enforce},
+            default_scope=default_scope,
+            default_subject=default_subject,
+        )
+        return json.dumps(res)
 
-        remember_memory_sync.__name__ = "remember_memory"
+    remember_memory_sync.__name__ = "remember_memory"
 
-        def report_outcome_sync(
-            outcome: str,
-            recall_id: str | None = None,
-            memory_id: str | None = None,
-            action_taken: str = "agent_turn",
-            reason: str | None = None,
-        ) -> str:
-            """Report whether recalled workspace memory worked, failed, or was avoided."""
-            res = execute_tool_sync(
-                scoped,
-                "report_outcome",
-                {
-                    "outcome": outcome,
-                    "recall_id": recall_id,
-                    "memory_id": memory_id,
-                    "action_taken": action_taken,
-                    "reason": reason,
-                },
-                default_scope=default_scope,
-                default_subject=default_subject,
-            )
-            return json.dumps(res)
+    def report_outcome_sync(
+        outcome: str,
+        recall_id: str | None = None,
+        memory_id: str | None = None,
+        action_taken: str = "agent_turn",
+        reason: str | None = None,
+    ) -> str:
+        """Report whether recalled workspace memory worked, failed, or was avoided."""
+        res = execute_tool_sync(
+            scoped,
+            "report_outcome",
+            {
+                "outcome": outcome,
+                "recall_id": recall_id,
+                "memory_id": memory_id,
+                "action_taken": action_taken,
+                "reason": reason,
+            },
+            default_scope=default_scope,
+            default_subject=default_subject,
+        )
+        return json.dumps(res)
 
-        report_outcome_sync.__name__ = "report_outcome"
+    report_outcome_sync.__name__ = "report_outcome"
 
-        def search_documents_sync(query: str, limit: int = 5) -> str:
-            """Search grounded PDF, DOCX, CSV, HTML, and Markdown workspace document chunks."""
-            res = execute_tool_sync(
-                scoped,
-                "search_documents",
-                {"query": query, "limit": limit},
-                default_scope=default_scope,
-                default_subject=default_subject,
-            )
-            return json.dumps(res)
+    def search_documents_sync(query: str, limit: int = 5) -> str:
+        """Search grounded PDF, DOCX, CSV, HTML, and Markdown workspace document chunks."""
+        res = execute_tool_sync(
+            scoped,
+            "search_documents",
+            {"query": query, "limit": limit},
+            default_scope=default_scope,
+            default_subject=default_subject,
+        )
+        return json.dumps(res)
 
-        search_documents_sync.__name__ = "search_documents"
+    search_documents_sync.__name__ = "search_documents"
 
-        funcs = [
-            recall_memory_sync,
-            remember_memory_sync,
-            report_outcome_sync,
-            search_documents_sync,
-        ]
+    return [
+        recall_memory_sync,
+        remember_memory_sync,
+        report_outcome_sync,
+        search_documents_sync,
+    ]
+
+
+def create_openai_agent_tools(
+    scoped: Any,
+    *,
+    default_scope: str | None = None,
+    default_subject: str | None = None,
+) -> list[Any]:
+    """Create ready-to-use tools for the OpenAI Agents SDK (`agents.Agent(tools=...)`).
+
+    Automatically wraps functions with `@agents.function_tool` when `openai-agents` is installed,
+    and falls back cleanly to typed async/sync Python callables with zero extra dependencies.
+    """
+    funcs = _build_plain_tool_functions(
+        scoped,
+        default_scope=default_scope,
+        default_subject=default_subject,
+    )
 
     try:
         from agents import function_tool  # type: ignore[import-not-found]

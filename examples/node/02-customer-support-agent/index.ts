@@ -1,10 +1,11 @@
-import { MemcellClient } from "@memcell/sdk";
+import { MemCell } from "@memcell/sdk";
 
 const token = process.env.MEMCELL_TOKEN || "mc_pat_mock_demo";
 const instance = process.env.MEMCELL_URL || "http://localhost:3000";
 const namespace = process.env.MEMCELL_WORKSPACE || "acme/support";
 
-const client = new MemcellClient({ token, baseUrl: instance });
+const client = new MemCell({ token, baseUrl: instance });
+const support = client.scope(namespace, { subject: "billing-support-triage" });
 
 interface SupportTicket {
   id: string;
@@ -13,69 +14,65 @@ interface SupportTicket {
   message: string;
 }
 
+async function setupWorkspacePolicies() {
+  console.log("Seeding baseline support workspace memories...");
+
+  // Enforced policy instruction: Refund authorization threshold
+  await support.remember({
+    title:
+      "Direct agent refunds over $200 require tier-2 supervisory confirmation",
+    type: "instruction",
+    scope: "workspace",
+    enforce: true,
+    appliesAt: ["refund", "billing"],
+  });
+
+  // Operational instruction: Response SLA
+  await support.remember({
+    title:
+      "Urgent tickets must be acknowledged within 5 minutes with incident ticket ID",
+    type: "instruction",
+    scope: "workspace",
+  });
+}
+
 async function processSupportTicket(ticket: SupportTicket) {
   console.log(
     `\n--- Processing Ticket: ${ticket.id} (${ticket.customerName}) ---`,
   );
   console.log(`Customer Message: "${ticket.message}"`);
 
-  // Recall workspace policies and guard constraints relevant to this ticket
-  const recall = await client.recall({
-    namespace,
-    intent: `Handle customer support ticket: ${ticket.message}`,
-    minConfidence: 0.7,
-  });
+  // Closed-loop execution: recalls enforced instructions, executes triage, and reports outcome
+  const execution = await support.wrapExecution(
+    {
+      action: `triage_ticket_${ticket.id.toLowerCase()}`,
+      query: `Handle customer support ticket: ${ticket.message}`,
+      minConfidence: 0.7,
+      externalRef: ticket.id,
+    },
+    async (ctx) => {
+      console.log(`\n[Recalled ${ctx.memories.length} policy instructions]`);
+      console.log(ctx.promptContext || "(No specific instructions matched)");
 
-  console.log(`\n[Recalled ${recall.memories.length} policy instructions]`);
-  console.log(recall.promptContext || "(No specific instructions matched)");
+      const enforcedRule = ctx.memories.find(
+        (m) => m.type === "instruction" && m.enforce,
+      );
 
-  // Simulated agent evaluation against recalled guard instructions
-  const hasGuard = recall.memories.some(
-    (m) => (m.type === "guard" || m.type === "instruction") && m.enforce,
+      if (enforcedRule && ticket.message.toLowerCase().includes("refund")) {
+        console.log(
+          `\n[Action]: Escalating to Human Tier-2 Lead per enforced instruction [${enforcedRule.id}].`,
+        );
+        return { status: "ESCALATED_TIER_2", ruleId: enforcedRule.id };
+      }
+
+      console.log("\n[Action]: Automated triage resolution dispatched.");
+      return { status: "RESOLVED_AUTO", ruleId: null };
+    },
   );
-  if (hasGuard && ticket.message.toLowerCase().includes("refund")) {
-    console.log(
-      "\n[Action]: Escalating to Human Tier-2 Lead per workspace guard memory.",
-    );
-    // Report outcome
-    const guardMem = recall.memories.find(
-      (m) => (m.type === "guard" || m.type === "instruction") && m.enforce,
-    );
-    if (guardMem) {
-      await client.report({
-        actionTaken: "Escalated high-value refund to Human Tier-2 Lead",
-        namespace,
-        memoryId: guardMem.id,
-        outcome: "worked",
-        reason: `Enforced supervisor escalation on high-value refund for ticket ${ticket.id}`,
-      });
-    }
-  } else {
-    console.log("\n[Action]: Automated triage resolution dispatched.");
-  }
-}
 
-async function setupWorkspacePolicies() {
-  console.log("Seeding baseline support workspace memories...");
-
-  // Guard policy: Refund authorization
-  await client.remember({
-    namespace,
-    title:
-      "Direct agent refunds over $200 require tier-2 supervisory confirmation",
-    type: "guard",
-    scope: "workspace",
-    enforce: true,
-  });
-
-  // Operational instruction: Response SLA
-  await client.remember({
-    namespace,
-    title:
-      "Urgent tickets must be acknowledged within 5 minutes with incident ticket ID",
-    type: "instruction",
-    scope: "workspace",
-  });
+  console.log(
+    `[Outcome Reported]: '${execution.report.outcome}' (decision=${execution.result.status})`,
+  );
 }
 
 async function main() {
@@ -100,4 +97,7 @@ async function main() {
   await processSupportTicket(ticket2);
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error("Support agent error:", err);
+  process.exit(1);
+});

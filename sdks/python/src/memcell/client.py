@@ -620,6 +620,7 @@ class _MemoriesNamespaceSync:
         is_pinned: bool | None = None,
         expires_at: Any | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryItem:
         owner, workspace = _parse_namespace(namespace)
@@ -646,6 +647,7 @@ class _MemoriesNamespaceSync:
             "isPinned": is_pinned,
             "expiresAt": exp_str,
             "scope": scope,
+            "requiredRoles": required_roles,
             "metadata": metadata,
         }
         resp = self._client._request(
@@ -654,6 +656,8 @@ class _MemoriesNamespaceSync:
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
+
+    remember = create
 
     def update(
         self,
@@ -1935,6 +1939,7 @@ class _MemoriesNamespaceAsync:
         is_pinned: bool | None = None,
         expires_at: Any | None = None,
         scope: str | None = None,
+        required_roles: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryItem:
         owner, workspace = _parse_namespace(namespace)
@@ -1961,6 +1966,7 @@ class _MemoriesNamespaceAsync:
             "isPinned": is_pinned,
             "expiresAt": exp_str,
             "scope": scope,
+            "requiredRoles": required_roles,
             "metadata": metadata,
         }
         resp = await self._client._request(
@@ -1969,6 +1975,8 @@ class _MemoriesNamespaceAsync:
             json={k: v for k, v in payload.items() if v is not None},
         )
         return _parse_memory_item(resp.get("memory") or {})
+
+    remember = create
 
     async def update(
         self,

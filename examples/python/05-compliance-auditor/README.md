@@ -1,12 +1,15 @@
-# Financial Compliance Auditor with Guard Memories (Python)
+# 05 — Financial Compliance Auditor (`enforce=True` & `wrap_execution`)
 
-Demonstrates how autonomous financial workflows use MemCell's enforced `guard` memories:
+## The Story
 
-1. Ingests absolute policy constraints with `type="guard"` and `enforce=True`.
-2. Queries MemCell with a high confidence threshold (`min_confidence=0.80`).
-3. Fails closed when transactions exceed operational limits or violate sanction guards.
+An automated treasury agent processes international wire transfers. Regulatory rules—such as requiring dual-officer signatures above \$10,000 or blocking sanctioned jurisdictions—must be enforced deterministically and every audit decision must leave an attribution trail.
 
----
+By storing compliance rules with `type="instruction", enforce=True` and executing each wire check inside `scoped.wrap_execution()`, the agent retrieves enforced policies prior to disbursement and automatically records `"worked"` or `"failed"` outcome telemetry for compliance auditing.
+
+## SDK Capabilities Demonstrated
+
+- **Enforced Instructions (`type="instruction", enforce=True`)**
+- **Closed-Loop Execution (`scoped.wrap_execution`)**
 
 ## Running this Example
 

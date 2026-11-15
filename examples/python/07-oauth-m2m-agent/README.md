@@ -1,10 +1,14 @@
-# OAuth 2.0 Machine-to-Machine (M2M) Agent (Python)
+# 07 — OAuth 2.0 Machine-to-Machine (M2M) Agent (Python)
 
-demonstrates how to connect an autonomous agent service to MemCell using OAuth 2.0 client credentials (`client_id` + `client_secret`):
+## The Story
 
-1. **First-Class Credentials**: Pass `client_id` and `client_secret` directly into `MemcellClient` or `AsyncMemcellClient` constructor arguments, or rely on ambient environment variables (`MEMCELL_CLIENT_ID`, `MEMCELL_CLIENT_SECRET`).
-2. **Transparent Token Lifecycle**: The SDK automatically exchanges credentials at `/oauth2/token`, caches the bearer token, and proactively refreshes it 60 seconds prior to expiry.
-3. **Concurrent Async Deduplication**: Prevents duplicate token requests by coalescing concurrent in-flight token requests.
+Headless Python workers and background agent services deployed in production authenticate with MemCell using OAuth 2.0 `client_credentials` (`client_id` + `client_secret`) instead of static personal access tokens.
+
+This example demonstrates how `MemCell` and `AsyncMemCell` handle M2M authentication natively:
+
+1. **First-Class Credentials**: Pass `client_id` and `client_secret` directly into the client constructor or via `MEMCELL_CLIENT_ID` / `MEMCELL_CLIENT_SECRET`.
+2. **Transparent Token Lifecycle**: Automatically exchanges credentials at `/oauth2/token`, caches the bearer token, and proactively refreshes it 60 seconds before expiry.
+3. **Concurrent Async Deduplication**: Coalesces concurrent token refresh calls so parallel coroutines share a single token exchange.
 
 ---
 

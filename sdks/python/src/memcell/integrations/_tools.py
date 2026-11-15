@@ -1,7 +1,79 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+
+class RecallMemoryInput(BaseModel):
+    query: str = Field(
+        description="Natural-language task intent or question to recall memories for."
+    )
+    type: Literal["instruction", "decision", "fact", "preference"] | None = Field(
+        default=None,
+        description="Optional memory type filter.",
+    )
+    limit: int | None = Field(
+        default=5,
+        description="Maximum memories to return (default 5).",
+    )
+
+
+class RememberMemoryInput(BaseModel):
+    title: str = Field(
+        description="Concise one-sentence instruction, decision, fact, or preference."
+    )
+    content: str | None = Field(
+        default=None,
+        description="Optional detailed operational specification or rationale.",
+    )
+    type: Literal["instruction", "decision", "fact", "preference"] | None = Field(
+        default="fact",
+        description="Memory category (defaults to fact).",
+    )
+    enforce: bool = Field(
+        default=False,
+        description="Set true when saving a standing instruction future runs must follow.",
+    )
+
+
+class ReportOutcomeInput(BaseModel):
+    outcome: Literal["worked", "failed", "avoided"] = Field(
+        description="Whether the recalled memory worked, failed, or was avoided."
+    )
+    recall_id: str | None = Field(
+        default=None,
+        description="The recall_id returned from a prior recall call.",
+    )
+    memory_id: str | None = Field(
+        default=None,
+        description="Specific memory ID to attribute the outcome to.",
+    )
+    action_taken: str | None = Field(
+        default=None,
+        description="Summary of the action executed.",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Explanation of why the approach worked or failed.",
+    )
+
+
+class SearchDocumentsInput(BaseModel):
+    query: str = Field(description="Natural-language search query across workspace documents.")
+    limit: int | None = Field(
+        default=5,
+        description="Maximum grounded chunks to return (default 5).",
+    )
+
+
+TOOL_ARG_MODELS: dict[str, type[BaseModel]] = {
+    "recall_memory": RecallMemoryInput,
+    "remember_memory": RememberMemoryInput,
+    "report_outcome": ReportOutcomeInput,
+    "search_documents": SearchDocumentsInput,
+}
 
 TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "recall_memory": {
