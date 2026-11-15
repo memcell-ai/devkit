@@ -10,7 +10,9 @@ const instance = process.env.MEMCELL_URL || "http://localhost:3000";
 const namespace = process.env.MEMCELL_WORKSPACE || "acme/operations";
 
 const client = new MemCell({ token, baseUrl: instance });
-const ops = client.scope(namespace, { subject: "quarterly-financial-reporting" });
+const ops = client.scope(namespace, {
+  subject: "quarterly-financial-reporting",
+});
 
 async function main() {
   console.log("=== MemCell + Vercel AI SDK Native Integration ===\n");
@@ -67,7 +69,9 @@ async function main() {
   console.log("\n[Model Output]:", generation.text);
 
   // 3. Native Vercel AI SDK Tools (`recall_memory`, `remember_memory`, `report_outcome`, `search_documents`)
-  console.log("\n2. Invoking MemCell Vercel AI SDK Tools (`createMemCellTools`)...");
+  console.log(
+    "\n2. Invoking MemCell Vercel AI SDK Tools (`createMemCellTools`)...",
+  );
   const tools = createMemCellTools(ops);
 
   const docSearch = await tools.search_documents.execute({

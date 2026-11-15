@@ -7,7 +7,9 @@ const instance = process.env.MEMCELL_URL || "http://localhost:3000";
 const namespace = process.env.MEMCELL_WORKSPACE || "acme/platform-governance";
 
 const client = new MemCell({ token, baseUrl: instance });
-const platform = client.scope(namespace, { subject: "canary-release-governance" });
+const platform = client.scope(namespace, {
+  subject: "canary-release-governance",
+});
 
 const SRE_RUNBOOK_MARKDOWN = `# Production Canary Release Runbook
 
@@ -57,7 +59,8 @@ async function main() {
     // Propose promoting this discovery from `user` scope to `workspace` scope
     const promo = await platform.memories.promote(created.id, {
       toScope: "workspace",
-      reason: "Eliminated cold-start p99 latency spikes across 12 canary deploys",
+      reason:
+        "Eliminated cold-start p99 latency spikes across 12 canary deploys",
     });
 
     return {
@@ -129,4 +132,3 @@ main().catch((err) => {
   console.error("Grounded RAG & promotions example failed:", err);
   process.exit(1);
 });
-

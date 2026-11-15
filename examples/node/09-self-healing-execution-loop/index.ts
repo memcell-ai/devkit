@@ -5,7 +5,9 @@ const instance = process.env.MEMCELL_URL || "http://localhost:3000";
 const namespace = process.env.MEMCELL_WORKSPACE || "acme/sre-self-healing";
 
 const client = new MemCell({ token, baseUrl: instance });
-const sre = client.scope(namespace, { subject: "partner-payout-webhook-dispatch" });
+const sre = client.scope(namespace, {
+  subject: "partner-payout-webhook-dispatch",
+});
 
 /**
  * Simulated external partner payout gateway:
@@ -21,13 +23,16 @@ async function callPartnerPayoutGateway(headers: Record<string, string>) {
 }
 
 async function main() {
-  console.log("=== 'Fail Once, Never Again': Self-Healing Multi-Agent Loop ===\n");
+  console.log(
+    "=== 'Fail Once, Never Again': Self-Healing Multi-Agent Loop ===\n",
+  );
   const sessionId = "inc_payout_dispatch_42";
 
   // 1. Seed an outdated assumption in workspace memory
   console.log("1. Seeding initial (outdated) API integration assumption...");
   const initialRes = await sre.remember({
-    title: "Dispatch POST /v2/payouts with standard Bearer authorization header",
+    title:
+      "Dispatch POST /v2/payouts with standard Bearer authorization header",
     type: "instruction",
     scope: "workspace",
     confidence: 0.85,
@@ -113,4 +118,3 @@ main().catch((err) => {
   console.error("Self-healing example failed:", err);
   process.exit(1);
 });
-

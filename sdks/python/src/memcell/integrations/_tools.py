@@ -61,9 +61,7 @@ class ReportOutcomeInput(BaseModel):
 
 
 class SearchDocumentsInput(BaseModel):
-    query: str = Field(
-        description="Natural-language search query across workspace documents."
-    )
+    query: str = Field(description="Natural-language search query across workspace documents.")
     limit: int | None = Field(
         default=5,
         description="Maximum grounded chunks to return (default 5).",
