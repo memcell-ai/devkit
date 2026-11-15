@@ -4,7 +4,9 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from ._tools import TOOL_SCHEMAS, execute_tool_sync
+from pydantic import BaseModel
+
+from ._tools import TOOL_ARG_MODELS, TOOL_SCHEMAS, execute_tool_sync
 
 
 class MemCellCrewTool:
@@ -16,11 +18,13 @@ class MemCellCrewTool:
         description: str,
         scoped: Any,
         *,
+        args_schema: type[BaseModel] | None = None,
         default_scope: str | None = None,
         default_subject: str | None = None,
     ) -> None:
         self.name = name
         self.description = description
+        self.args_schema = args_schema or TOOL_ARG_MODELS.get(name)
         self._scoped = scoped
         self._default_scope = default_scope
         self._default_subject = default_subject
@@ -65,10 +69,12 @@ def create_crewai_tools(
 
         crew_tools: list[Any] = []
         for w in wrappers:
+            schema_cls = w.args_schema
 
             class _NativeCrewTool(BaseTool):  # type: ignore[misc]
                 name: str = w.name
                 description: str = w.description
+                args_schema: type[BaseModel] = schema_cls  # type: ignore[assignment]
 
                 def _run(self, _w: MemCellCrewTool = w, **kwargs: Any) -> str:
                     return _w._run(**kwargs)

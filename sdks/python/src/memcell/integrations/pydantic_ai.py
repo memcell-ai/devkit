@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from .openai_agents import create_openai_agent_tools
+from .openai_agents import _build_plain_tool_functions
 
 
 def create_pydantic_ai_tools(
@@ -13,12 +13,11 @@ def create_pydantic_ai_tools(
     default_subject: str | None = None,
 ) -> list[Callable[..., Any]]:
     """Return typed plain Python tool functions ready for `pydantic_ai.Agent(..., tools=...)`."""
-    raw_tools = create_openai_agent_tools(
+    return _build_plain_tool_functions(
         scoped,
         default_scope=default_scope,
         default_subject=default_subject,
     )
-    return list(raw_tools)
 
 
 def register_memcell_tools(

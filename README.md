@@ -52,7 +52,7 @@ const memory = new MemCell({ apiKey: process.env.MEMCELL_API_KEY! });
 
 // Recall relevant memories before an agent acts:
 const { promptContext } = await memory.recall({
-  workspace: "acme/support",
+  namespace: "acme/support",
   query: "refund verification and escalation thresholds",
 });
 
@@ -73,7 +73,7 @@ async def main():
     async with AsyncMemCell(api_key="mc_live_...") as memory:
         # Recall relevant memories before an agent acts:
         res = await memory.recall(
-            workspace="acme/support",
+            namespace="acme/support",
             query="refund verification and escalation thresholds",
         )
         print(res.prompt_context)

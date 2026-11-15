@@ -5,7 +5,13 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from ._tools import TOOL_SCHEMAS, execute_tool_async, execute_tool_sync, is_async_scoped
+from ._tools import (
+    TOOL_ARG_MODELS,
+    TOOL_SCHEMAS,
+    execute_tool_async,
+    execute_tool_sync,
+    is_async_scoped,
+)
 
 
 def _extract_state_query(state: dict[str, Any]) -> str:
@@ -264,10 +270,12 @@ def create_langchain_tools(
 
         native_tools: list[Any] = []
         for desc in descriptors:
+            arg_model = TOOL_ARG_MODELS.get(desc.name)
             native_tools.append(
                 StructuredTool.from_function(
                     name=desc.name,
                     description=desc.description,
+                    args_schema=arg_model,
                     func=None if is_async_scoped(scoped) else (lambda d=desc, **kw: d.invoke(kw)),
                     coroutine=(lambda d=desc, **kw: d.ainvoke(kw)),
                 )

@@ -1,70 +1,64 @@
 import os
 
-from memcell import MemcellClient
+from memcell import MemCell
 
 token = os.getenv("MEMCELL_TOKEN", "mc_pat_mock_demo")
 instance = os.getenv("MEMCELL_URL", "http://localhost:3000")
 namespace = os.getenv("MEMCELL_WORKSPACE", "acme/compliance")
 
-client = MemcellClient(token=token, base_url=instance)
+client = MemCell(token=token, base_url=instance)
+compliance = client.scope(namespace, subject="international-wire-compliance")
 
 
 class ComplianceViolationError(Exception):
     pass
 
 
-def audit_wire_transaction(amount: float, beneficiary_country: str):
-    print(
-        f"\nAuditing wire transfer: ${amount:,.2f} to country: '{beneficiary_country}'..."
+def audit_wire_transaction(amount: float, beneficiary_country: str) -> str:
+    print(f"\nAuditing wire transfer: ${amount:,.2f} to '{beneficiary_country}'...")
+
+    def _evaluate(ctx) -> str:
+        print(f"  [Recalled {len(ctx.memories)} enforced compliance instructions]")
+        for mem in ctx.memories:
+            if mem.type == "instruction" and mem.enforce:
+                if (
+                    "high-risk jurisdiction" in mem.title.lower()
+                    and beneficiary_country in ["North Korea", "Iran", "Syria"]
+                ):
+                    raise ComplianceViolationError(
+                        f"Blocked by enforced instruction [{mem.id}]: Jurisdiction sanctions policy."
+                    )
+                if "10,000" in mem.title and amount > 10000:
+                    print(
+                        f"  [COMPLIANCE GATE]: Transaction exceeds $10,000. Re-routing for dual-officer signature per [{mem.id}]."
+                    )
+                    return "PENDING_DUAL_APPROVAL"
+
+        print("  [OK] Compliance audit passed. Wire approved for execution.")
+        return "APPROVED"
+
+    wrapped = compliance.wrap_execution(
+        action="audit_international_wire",
+        query=f"Authorize international wire payment of ${amount} to {beneficiary_country}",
+        fn=_evaluate,
     )
-
-    # High-stakes recall: require 0.80 minimum confidence floor
-    recall = client.recall(
-        namespace=namespace,
-        intent=f"Authorize international wire payment of ${amount} to {beneficiary_country}",
-        min_confidence=0.80,
-    )
-
-    print(f"Recalled {len(recall.memories)} compliance policy guards:")
-    print(recall.prompt_context)
-
-    # Verify enforced guards
-    for mem in recall.memories:
-        if (mem.type in ["guard", "instruction"]) and mem.enforce:
-            # Check sanction list policy
-            if (
-                "high-risk jurisdiction" in mem.title.lower()
-                and beneficiary_country in ["North Korea", "Iran", "Syria"]
-            ):
-                raise ComplianceViolationError(
-                    f"Blocked by guard [{mem.id}]: Jurisdiction sanctions policy."
-                )
-            # Check dual-approval threshold
-            if "10,000" in mem.title and amount > 10000:
-                print(
-                    f"[COMPLIANCE GATE]: Transaction exceeds $10,000. Re-routing for dual-officer signature per guard [{mem.id}]."
-                )
-                return "PENDING_APPROVAL"
-
-    print("[OK] Compliance audit passed. Wire approved for execution.")
-    return "APPROVED"
+    print(f"  [Outcome Reported]: '{wrapped.report.outcome}' -> status={wrapped.result}")
+    return wrapped.result
 
 
-def main():
-    print("=== Financial Compliance Auditor: Guard Memories ===\n")
+def main() -> None:
+    print("=== Financial Compliance Auditor: Enforced Instructions & Closed-Loop Audit ===\n")
 
-    # Seed strict compliance guards
-    client.remember(
-        namespace=namespace,
+    # Seed strict compliance instructions with enforce=True
+    compliance.remember(
         title="Direct disbursements exceeding $10,000 require dual-officer authorization",
-        type="guard",
+        type="instruction",
         scope="workspace",
         enforce=True,
     )
-    client.remember(
-        namespace=namespace,
+    compliance.remember(
         title="Prohibit any fund transfers to high-risk jurisdiction sanction lists",
-        type="guard",
+        type="instruction",
         scope="workspace",
         enforce=True,
     )

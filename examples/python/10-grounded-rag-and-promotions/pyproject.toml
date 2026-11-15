@@ -1,0 +1,10 @@
+[project]
+name = "memcell-example-python-grounded-rag-promotions"
+version = "0.1.0"
+description = "Grounded RAG document distillation, 4-tier governance promotions, and consolidation sweeps"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "memcell",
+]
+
